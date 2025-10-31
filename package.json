@@ -1,0 +1,53 @@
+{
+  "name": "altaviapp-platform",
+  "version": "1.0.0",
+  "description": "SaaS platform for school transport management with real-time tracking and safety controls",
+  "main": "index.js",
+  "scripts": {
+    "dev": "npm run convex:dev",
+    "build": "npm run convex:build",
+    "convex:dev": "npx convex dev",
+    "convex:build": "npx convex deploy",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix"
+  },
+  "keywords": [
+    "school-transport",
+    "fleet-management", 
+    "real-time-tracking",
+    "saas",
+    "convex",
+    "bubble"
+  ],
+  "author": "Altaviapp Team",
+  "license": "MIT",
+  "dependencies": {
+    "convex": "^1.5.0",
+    "@clerk/nextjs": "^4.27.0",
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.0.0",
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^4.2.1",
+    "openstreetmap": "^1.0.0",
+    "qrcode": "^1.5.3",
+    "date-fns": "^2.30.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/leaflet": "^1.9.8",
+    "eslint": "^8.0.0",
+    "eslint-config-next": "^14.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "jest": "^29.0.0",
+    "@testing-library/react": "^13.0.0",
+    "@testing-library/jest-dom": "^6.0.0"
+  }
+}

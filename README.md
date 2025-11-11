@@ -93,6 +93,203 @@ npm run dev
 
 ---
 
+## 🐳 **Running with Docker**
+
+### **Why Use Docker?**
+- ✅ **Isolated Environment**: No conflicts with other local projects
+- ✅ **Consistent Setup**: Same environment across all development machines
+- ✅ **Easy Testing**: Quick to spin up and tear down
+- ✅ **Port Management**: Runs on port 3001 to avoid conflicts
+
+### **Quick Start with Docker**
+
+#### **1. Create Environment File**
+```bash
+# Copy the example environment file
+cp .env.local.example .env.local
+
+# Edit .env.local with your actual credentials:
+# - NEXT_PUBLIC_CONVEX_URL (from Convex dashboard)
+# - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY (from Clerk dashboard)
+# - CLERK_SECRET_KEY (from Clerk dashboard)
+```
+
+#### **2. Build and Start**
+```bash
+# Build and start containers in detached mode
+docker-compose up --build -d
+
+# View logs
+docker-compose logs -f nextjs
+
+# The app will be available at:
+# 🌐 http://localhost:3001
+```
+
+#### **3. Stop and Clean Up**
+```bash
+# Stop containers
+docker-compose down
+
+# Remove containers, volumes, and images (full cleanup)
+docker-compose down -v --rmi all
+```
+
+### **Docker Commands Reference**
+
+```bash
+# Start services
+docker-compose up              # Start in foreground (see logs)
+docker-compose up -d           # Start in background
+
+# Build and start
+docker-compose up --build      # Rebuild images before starting
+docker-compose up --build -d   # Rebuild and start in background
+
+# View logs
+docker-compose logs            # View all logs
+docker-compose logs -f         # Follow logs (live updates)
+docker-compose logs nextjs     # View only Next.js logs
+
+# Stop services
+docker-compose stop            # Stop without removing containers
+docker-compose down            # Stop and remove containers
+docker-compose down -v         # Stop, remove containers and volumes
+
+# Rebuild
+docker-compose build           # Rebuild images
+docker-compose build --no-cache # Rebuild from scratch
+
+# Execute commands inside container
+docker-compose exec nextjs sh  # Open shell in container
+docker-compose exec nextjs npm test # Run tests inside container
+
+# View running containers
+docker ps                      # List running containers
+docker ps -a                   # List all containers
+
+# View resource usage
+docker stats                   # Live resource usage
+```
+
+### **Port Configuration**
+
+The Docker setup uses **port 3001** on your host machine to avoid conflicts with other projects:
+
+- **Host (Your Computer)**: `http://localhost:3001`
+- **Container (Internal)**: `http://localhost:3000`
+- **Mapping**: `3001:3000` in docker-compose.yml
+
+If you need to change the port, edit `docker-compose.yml`:
+```yaml
+ports:
+  - "3002:3000"  # Change 3002 to your preferred port
+```
+
+### **Hot-Reload & Development**
+
+The Docker setup includes hot-reload for efficient development:
+
+✅ **Source code is mounted as volumes**
+- Changes in `/mobile` instantly reflect in the container
+- No need to rebuild after code changes
+- Same development experience as running locally
+
+✅ **File watching enabled**
+- `WATCHPACK_POLLING=true` ensures Docker detects file changes
+- Works on Windows, Mac, and Linux
+
+### **Troubleshooting**
+
+#### **Problem: Port 3001 already in use**
+```bash
+# Check what's using port 3001
+sudo lsof -i :3001
+
+# Kill the process or change Docker port in docker-compose.yml
+```
+
+#### **Problem: Container won't start**
+```bash
+# View detailed logs
+docker-compose logs
+
+# Check container status
+docker ps -a
+
+# Rebuild from scratch
+docker-compose down -v
+docker-compose up --build
+```
+
+#### **Problem: Code changes not reflecting**
+```bash
+# Restart the container
+docker-compose restart nextjs
+
+# Or rebuild
+docker-compose up --build
+```
+
+#### **Problem: Out of memory**
+```bash
+# Increase Docker resources in Docker Desktop settings
+# Recommended: 4GB RAM, 2 CPUs minimum
+
+# Or adjust limits in docker-compose.yml
+```
+
+#### **Problem: Convex connection issues**
+```bash
+# Verify your .env.local has correct values
+cat .env.local | grep CONVEX
+
+# Ensure the container has internet access
+docker-compose exec nextjs ping -c 3 google.com
+
+# Check Convex dashboard for deployment status
+```
+
+### **Development Workflow: Docker vs Local**
+
+| Aspect | Local (`npm run dev`) | Docker (`docker-compose up`) |
+|--------|----------------------|------------------------------|
+| **Port** | 3000 | 3001 |
+| **Setup** | Requires Node.js 20+ | Only requires Docker |
+| **Speed** | Slightly faster | Slightly slower (virtualization) |
+| **Isolation** | No isolation | Fully isolated |
+| **Use Case** | Primary development | Testing, consistency, CI/CD |
+
+**Recommendation**: Use local for day-to-day development, Docker for testing and deployment verification.
+
+### **Docker Files Reference**
+
+- **`Dockerfile`** - Container image definition (Node 20 Alpine)
+- **`docker-compose.yml`** - Orchestration configuration (services, ports, volumes)
+- **`.dockerignore`** - Files excluded from Docker build context
+- **`.env.local`** - Environment variables (create from `.env.local.example`)
+
+### **Advanced: Production Docker Build**
+
+For production deployments, you can create a multi-stage build:
+
+```dockerfile
+# Future: Add production stage to Dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY . .
+RUN npm ci --production
+RUN npm run build:mobile
+
+FROM node:20-alpine AS production
+WORKDIR /app
+COPY --from=builder /app/mobile/.next ./mobile/.next
+COPY --from=builder /app/node_modules ./node_modules
+CMD ["npm", "run", "start:mobile"]
+```
+
+---
+
 ## 📁 **Project Structure**
 
 ```

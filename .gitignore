@@ -47,3 +47,8 @@ coverage/
 
 # Assets (if sensitive)
 # assets/private/
+
+# Docker
+.env.local
+docker-compose.override.yml
+*.dockerignore.bak

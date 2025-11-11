@@ -1,0 +1,58 @@
+services:
+  # Next.js PWA + Convex Development Server
+  nextjs:
+    container_name: altaviapp-nextjs
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"  # Host:Container - Using 3001 to avoid conflicts
+    volumes:
+      # Mount source code for hot-reload
+      - ./mobile:/app/mobile:cached
+      - ./convex:/app/convex:cached
+      - ./backend:/app/backend:cached
+      - ./frontend:/app/frontend:cached
+      - ./docs:/app/docs:cached
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./jest.config.js:/app/jest.config.js:ro
+      - ./.eslintrc.json:/app/.eslintrc.json:ro
+
+      # Prevent overwriting node_modules and build artifacts
+      - /app/node_modules
+      - /app/mobile/.next
+      - /app/.convex
+
+    env_file:
+      - .env.local
+
+    environment:
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true  # Enable polling for file changes in Docker
+
+    command: npm run dev
+
+    networks:
+      - altaviapp-network
+
+    restart: unless-stopped
+
+    # Allocate more resources if needed
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+networks:
+  altaviapp-network:
+    driver: bridge
+    name: altaviapp-network
+
+# Volumes (optional, for persistent data if needed later)
+volumes:
+  node_modules:

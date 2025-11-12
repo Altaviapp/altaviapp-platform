@@ -17,6 +17,26 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_institution", ["institutionId"]),
 
+  // User Passwords (for custom auth without Clerk)
+  userPasswords: defineTable({
+    userId: v.id("users"),
+    passwordHash: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  // User Sessions (for token-based auth)
+  userSessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    isActive: v.boolean(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_token", ["token"])
+    .index("by_active", ["isActive"]),
+
   // Institutions (Schools/Organizations)
   institutions: defineTable({
     name: v.string(),

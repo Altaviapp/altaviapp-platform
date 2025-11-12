@@ -9,7 +9,9 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as authApi from "../authApi.js";
 import type * as http from "../http.js";
+import type * as lib_authUtils from "../lib/authUtils.js";
 import type * as users from "../users.js";
 
 import type {
@@ -20,7 +22,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  authApi: typeof authApi;
   http: typeof http;
+  "lib/authUtils": typeof lib_authUtils;
   users: typeof users;
 }>;
 

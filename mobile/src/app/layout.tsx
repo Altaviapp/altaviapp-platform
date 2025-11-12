@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
+import { ConvexClientProvider } from '@/providers/ConvexClientProvider';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -36,7 +37,9 @@ export default function RootLayout({
           <link rel="apple-touch-icon" href="/icon-192x192.png" />
         </head>
         <body className={inter.className}>
-          {children}
+          <ConvexClientProvider>
+            {children}
+          </ConvexClientProvider>
         </body>
       </html>
     </ClerkProvider>

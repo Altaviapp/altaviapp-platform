@@ -11,6 +11,35 @@ Configurar un sistema de autenticación completo en Bubble.io que se conecta a t
 
 ---
 
+## ⚡ Importante: Cómo Funciona la Sesión en Bubble
+
+### ❌ NO Necesitas Cookies o localStorage
+
+Bubble.io tiene su propio sistema de sesión nativo que funciona automáticamente:
+
+- ✅ **"Log the user in"** crea una sesión de **12 meses** automáticamente
+- ✅ **Current User** está disponible en todas las páginas
+- ✅ La sesión persiste en navegación y refresh automáticamente
+- ✅ El token de Convex se guarda en el campo `token` del User
+
+### 🔑 Flujo de Autenticación
+
+```
+1. Usuario hace login → API de Convex valida credenciales
+2. Convex retorna token → Se guarda en User.token field
+3. "Log the user in" (Bubble) → Crea sesión de 12 meses
+4. Para API calls → Usa Current User's token del campo
+```
+
+### 💡 Lo Que Debes Saber
+
+- **NO uses cookies** - Bubble no puede leerlas confiablemente
+- **NO uses localStorage** - Bubble no tiene acceso nativo
+- **SÍ usa "Current User"** - Bubble lo mantiene automáticamente
+- **SÍ guarda el token en el User** - Para usarlo en API calls
+
+---
+
 ## 📋 Prerequisitos
 
 - ✅ Cuenta de Bubble.io activa
@@ -265,13 +294,14 @@ Value: application/json
 
 **Step 3: Log the user in**
 - User: `Result of Step 2 (User)`
+- Keep the user logged in: **Yes** (sesión dura 12 meses)
 
-**Step 4: Set Cookie** (Para persistencia de sesión)
-- Key: "auth_token"
-- Value: `Result of Step 1's token`
-
-**Step 5: Navigate to Dashboard**
+**Step 4: Navigate to Dashboard**
 - Destination: `Dashboard` page
+
+> **💡 Nota Importante**: NO necesitas cookies!
+> Bubble maneja la sesión automáticamente cuando usas "Log the user in".
+> El token se guarda en el campo `token` del User para usarlo en API calls.
 
 **Error Handling:**
 - Add: **Show alert** cuando `Result of Step 1's success` is "no"
@@ -320,13 +350,14 @@ Value: application/json
 
 **Step 4: Log the user in**
 - User: `Result of Step 2 or Step 3b`
+- Keep the user logged in: **Yes** (sesión dura 12 meses)
 
-**Step 5: Set Cookie**
-- Key: "auth_token"
-- Value: `Result of Step 1's token`
-
-**Step 6: Navigate to Dashboard**
+**Step 5: Navigate to Dashboard**
 - Destination: `Dashboard` page
+
+> **💡 Nota Importante**: NO necesitas cookies!
+> El token ya está guardado en `Current User's token` field.
+> Bubble mantiene la sesión automáticamente.
 
 **Error Handling:**
 - Add: **Show alert** cuando `Result of Step 1's success` is "no"
@@ -338,15 +369,29 @@ Value: application/json
 
 **Workflow "Page is loaded":**
 
-**Step 1: Get Cookie**
-- Key: "auth_token"
-
-**Step 2: Call API - Get Current User** (Solo cuando Cookie exists)
-- API: `Altaviapp Auth API - Get Current User`
-- token: `Get Cookie's value`
-
-**Step 3: Redirect to Login** (Cuando Step 2's success is "no" OR Cookie is empty)
+**Step 1: Redirect to Login (when user is NOT logged in)**
+- Only when: `Current User is logged out`
 - Destination: `Login` page
+
+> **💡 Cómo Funciona**:
+> - Bubble automáticamente mantiene `Current User` en todas las páginas
+> - NO necesitas verificar cookies o tokens manualmente
+> - Solo verifica si `Current User is logged out` → redirect
+
+**Opcional - Verificar Token Válido:**
+
+Si quieres validar que el token de Convex sigue válido:
+
+**Step 2: Call API - Get Current User** (opcional)
+- API: `Altaviapp Auth API - Get Current User`
+- token: `Current User's token`
+
+**Step 3: Handle expired token** (cuando Step 2 falla)
+- Show alert: "Tu sesión ha expirado"
+- Log the user out
+- Navigate to Login
+
+> **Nota**: Esta validación es opcional. Puedes validar el token cuando hagas la primera llamada API.
 
 **Elementos UI en Dashboard:**
 
@@ -356,20 +401,21 @@ Value: application/json
 
 **Workflow del botón "Cerrar Sesión":**
 
-**Step 1: Get Cookie**
-- Key: "auth_token"
-
-**Step 2: Call API - Logout User**
+**Step 1: Call API - Logout User** (opcional)
 - API: `Altaviapp Auth API - Logout User`
-- token: `Get Cookie's value`
+- token: `Current User's token`
 
-**Step 3: Delete Cookie**
-- Key: "auth_token"
+> **Nota**: Este paso es opcional. Invalida el token en Convex.
+> Si no lo llamas, el token seguirá válido hasta que expire (30 días).
 
-**Step 4: Log the user out**
+**Step 2: Log the user out**
+- Esta acción de Bubble invalida la sesión automáticamente
 
-**Step 5: Navigate to Login**
+**Step 3: Navigate to Login**
 - Destination: `Login` page
+
+> **💡 Simple**: Bubble maneja todo automáticamente.
+> NO necesitas cookies! "Log the user out" limpia la sesión.
 
 ---
 
@@ -409,6 +455,170 @@ Value: application/json
 2. Para tipo `User`:
    - **View all fields**: Solo cuando `This User` is `Current User`
    - **Modify all fields**: Solo cuando `This User` is `Current User`
+
+---
+
+## 🔗 Parte 5.5: Usando Tokens para API Calls Autenticadas
+
+### ¿Cómo Funcionan las Llamadas API Autenticadas?
+
+Cuando un usuario está autenticado en Bubble, el token de Convex está guardado en `Current User's token`. Debes incluir este token en todas las llamadas API que requieran autenticación.
+
+### Configurar API Call con Autenticación
+
+**Ejemplo: Get Vehicles (Lista de Vehículos)**
+
+1. En **API Connector**, agrega nuevo call:
+   - **Name**: `Get Vehicles`
+   - **Use as**: Data
+   - **Method**: GET
+   - **URL**: `https://abundant-mastiff-673.convex.site/vehicles`
+
+2. En **Headers**, agrega:
+   - **Key**: `Authorization`
+   - **Value type**: Private
+   - **Value**: `Bearer <token>`
+
+3. Agrega parámetro:
+   - **Name**: `token`
+   - **Type**: text
+   - **Private**: Yes
+
+4. Al hacer la llamada desde workflow:
+   - token: `Current User's token`
+
+### Ejemplo de Workflow con API Autenticada
+
+**Scenario**: Cargar lista de vehículos en página
+
+**Workflow "Page is loaded":**
+
+**Step 1: Get Vehicles**
+- API: `Get Vehicles`
+- token: `Current User's token`
+
+**Step 2: Display results**
+- Repeating Group: `Result of Step 1's vehicles`
+
+### Manejo de Errores de Autenticación
+
+Si la API retorna error 401 (No autorizado):
+
+**Causas comunes**:
+1. Token expirado (30 días)
+2. Token inválido
+3. Usuario no autenticado
+
+**Solución**:
+
+```
+When Result of API call has error 401:
+1. Show alert: "Tu sesión ha expirado"
+2. Log the user out
+3. Navigate to Login page
+```
+
+### Ejemplo Completo: CRUD de Vehículos con Auth
+
+**Crear Vehículo:**
+```
+API: POST /vehicles
+Headers: Authorization: Bearer <Current User's token>
+Body: {
+  "licensePlate": "ABC-123",
+  "brand": "Toyota",
+  "model": "Hiace",
+  ...
+}
+```
+
+**Leer Vehículos:**
+```
+API: GET /vehicles
+Headers: Authorization: Bearer <Current User's token>
+```
+
+**Actualizar Vehículo:**
+```
+API: PUT /vehicles/:id
+Headers: Authorization: Bearer <Current User's token>
+Body: {Updated data}
+```
+
+**Eliminar Vehículo:**
+```
+API: DELETE /vehicles/:id
+Headers: Authorization: Bearer <Current User's token>
+```
+
+> **💡 Pro Tip**: Crea un "Reusable Element" para manejo de errores de API que automáticamente redirija al login si el token expira.
+
+---
+
+## ⏰ Parte 5.6: Manejo de Expiración de Tokens
+
+### Duración de Tokens
+
+Los tokens de Convex duran **30 días** desde su creación.
+
+### Estrategias para Manejar Expiración
+
+#### Opción 1: Re-login Automático (Recomendado)
+
+**Workflow global "When API returns 401":**
+
+```
+Step 1: Check if error is 401
+Step 2: Show alert: "Tu sesión ha expirado. Redirigiendo a login..."
+Step 3: Log the user out
+Step 4: Navigate to Login page
+```
+
+El usuario simplemente hace login de nuevo y obtiene un nuevo token.
+
+#### Opción 2: Refresh Token (Avanzado)
+
+Requiere implementar un sistema de refresh tokens en Convex:
+
+1. Al hacer login, Convex retorna:
+   - `accessToken` (dura 1 hora)
+   - `refreshToken` (dura 30 días)
+
+2. Cuando accessToken expira:
+   - Llama endpoint `/auth/refresh` con refreshToken
+   - Obtén nuevo accessToken
+   - Actualiza `Current User's token`
+
+> **Nota**: Esta opción requiere modificar el backend de Convex.
+
+#### Opción 3: Validación Proactiva
+
+**Workflow "Page is loaded" (en páginas críticas):**
+
+```
+Step 1: Call API Get Current User
+- token: Current User's token
+
+Step 2: If Step 1 fails (401):
+- Show alert: "Por favor inicia sesión nuevamente"
+- Log the user out
+- Navigate to Login
+```
+
+### Recomendación
+
+Para MVP y simplicidad: **Usa Opción 1**.
+
+- Los usuarios hacen login cada 30 días máximo
+- Si usan la app regularmente, la sesión de Bubble (12 meses) los mantiene autenticados
+- Solo necesitan re-login si el token de Convex expira
+
+### Buenas Prácticas
+
+1. **Manejo de errores consistente**: Crea un reusable element para manejar 401
+2. **Mensajes claros**: "Tu sesión ha expirado" es mejor que "Error 401"
+3. **No guardes contraseñas**: NUNCA guardes la contraseña del usuario para re-login automático
+4. **Monitoreo**: Revisa logs para ver cuántos usuarios experimentan expiración
 
 ---
 
@@ -595,11 +805,12 @@ Antes de lanzar a producción, verifica:
 - [ ] API Connector configurado con todos los endpoints
 - [ ] Sign Up page creada con validaciones
 - [ ] Login page creada con manejo de errores
-- [ ] Dashboard con protección de ruta
+- [ ] Dashboard con protección de ruta (redirect si logged out)
 - [ ] Logout funcional
-- [ ] Cookies configuradas para persistencia
+- [ ] Token guardado en User field para API calls
 - [ ] Privacy rules configuradas
 - [ ] RBAC implementado para diferentes roles
+- [ ] Manejo de expiración de tokens (401 errors)
 - [ ] Testing completo en desktop
 - [ ] Testing completo en móvil
 - [ ] Error messages en español

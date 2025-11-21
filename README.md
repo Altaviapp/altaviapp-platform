@@ -28,7 +28,7 @@ Altaviapp is a comprehensive SaaS platform designed specifically for educational
 |-----------|------------|---------|
 | **Frontend** | [Bubble.io](https://bubble.io) | Visual development platform for admin dashboard and parent portal |
 | **Database** | [Convex](https://convex.dev) | Real-time database with live queries and serverless functions |
-| **Authentication** | [Clerk](https://clerk.dev) | User management and role-based access control |
+| **Authentication** | Custom Token-Based | User management, session tokens, and role-based access control |
 | **Maps** | [OpenStreetMap](https://openstreetmap.org) + [Leaflet](https://leafletjs.com) | Open-source mapping and routing |
 | **Mobile** | Progressive Web App (PWA) | Cross-platform mobile application for drivers |
 | **Notifications** | [WhatsApp Business API](https://developers.facebook.com/docs/whatsapp) | Automated parent notifications |
@@ -39,10 +39,9 @@ Altaviapp is a comprehensive SaaS platform designed specifically for educational
 ## 🚀 **Quick Start**
 
 ### **Prerequisites**
-- Node.js 18+ 
+- Node.js 18+
 - npm or yarn
 - Convex account
-- Clerk account
 - Bubble.io account (for admin interface)
 
 ### **1. Clone and Setup**
@@ -66,7 +65,6 @@ cp .env.example .env
 
 # Configure your environment variables
 # - Convex deployment URL
-# - Clerk authentication keys
 # - WhatsApp API credentials
 # - Bubble.io API endpoints
 ```

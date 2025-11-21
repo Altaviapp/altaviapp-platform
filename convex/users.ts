@@ -2,13 +2,12 @@
  * User Management Functions
  *
  * Handles:
- * - User sync from Clerk
  * - User CRUD operations
  * - User queries with RBAC
  */
 
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { getCurrentUser, requireAuth, requireRole, enforceInstitutionScope } from "./auth";
 
 /**
@@ -148,78 +147,5 @@ export const updateUser = mutation({
     await ctx.db.patch(args.userId, updates);
 
     return { success: true };
-  },
-});
-
-/**
- * Internal mutation to create/update user from Clerk webhook
- * Only callable from HTTP actions (webhooks)
- */
-export const syncUserFromClerk = internalMutation({
-  args: {
-    clerkId: v.string(),
-    email: v.string(),
-    name: v.string(),
-  },
-  handler: async (ctx, args) => {
-    // Check if user already exists
-    const existingUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
-
-    const now = Date.now();
-
-    if (existingUser) {
-      // Update existing user
-      await ctx.db.patch(existingUser._id, {
-        email: args.email,
-        name: args.name,
-        updatedAt: now,
-      });
-
-      return { userId: existingUser._id, created: false };
-    } else {
-      // Create new user with default role (parent)
-      // Admin will need to assign proper role and institution
-      const userId = await ctx.db.insert("users", {
-        clerkId: args.clerkId,
-        email: args.email,
-        name: args.name,
-        role: "parent", // Default role
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      return { userId, created: true };
-    }
-  },
-});
-
-/**
- * Internal mutation to delete user from Clerk webhook
- */
-export const deleteUserFromClerk = internalMutation({
-  args: {
-    clerkId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
-
-    if (user) {
-      // Soft delete: mark as inactive
-      await ctx.db.patch(user._id, {
-        isActive: false,
-        updatedAt: Date.now(),
-      });
-
-      return { success: true };
-    }
-
-    return { success: false, error: "User not found" };
   },
 });

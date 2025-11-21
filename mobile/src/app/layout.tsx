@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
+import { AuthProvider } from '@/providers/AuthProvider';
 import { ConvexClientProvider } from '@/providers/ConvexClientProvider';
 import './globals.css';
 
@@ -30,18 +30,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
-      <html lang="es" suppressHydrationWarning>
-        <head>
-          <link rel="icon" href="/favicon.ico" />
-          <link rel="apple-touch-icon" href="/icon-192x192.png" />
-        </head>
-        <body className={inter.className}>
+    <html lang="es" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+      </head>
+      <body className={inter.className}>
+        <AuthProvider>
           <ConvexClientProvider>
             {children}
           </ConvexClientProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+        </AuthProvider>
+      </body>
+    </html>
   );
 }

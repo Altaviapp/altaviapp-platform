@@ -28,7 +28,6 @@
   "author": "Altaviapp Team",
   "license": "MIT",
   "dependencies": {
-    "@clerk/nextjs": "^4.27.0",
     "@radix-ui/react-slot": "^1.0.2",
     "autoprefixer": "^10.4.16",
     "class-variance-authority": "^0.7.0",

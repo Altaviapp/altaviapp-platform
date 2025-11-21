@@ -7,7 +7,7 @@ Next.js 14 Progressive Web App for school bus drivers with real-time tracking an
 - **Framework**: Next.js 14 (App Router)
 - **UI Library**: shadcn/ui (Radix UI + Tailwind CSS)
 - **Styling**: Tailwind CSS with custom theme
-- **Authentication**: Clerk
+- **Authentication**: Custom token-based auth
 - **Database**: Convex (real-time)
 - **Language**: TypeScript (strict mode)
 - **PWA**: next-pwa
@@ -52,8 +52,6 @@ cp .env.local.example .env.local
 
 Required variables:
 - `NEXT_PUBLIC_CONVEX_URL` - Your Convex deployment URL
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Clerk public key
-- `CLERK_SECRET_KEY` - Clerk secret key
 
 ### 3. Run Development Server
 

@@ -28,7 +28,7 @@ This document defines **HOW to build** Altaviapp, providing technical implementa
 |-----------|------------|---------|---------|
 | **Database** | Convex | Latest | Real-time serverless database |
 | **Backend Functions** | Convex | Latest | Serverless queries/mutations |
-| **Authentication** | Clerk | Latest | User management, SSO, RBAC |
+| **Authentication** | Custom Token-Based | Latest | User management, session tokens, RBAC |
 | **Admin UI** | Bubble.io | Latest | No-code dashboard and parent portal |
 | **Driver App** | Next.js 14+ | 14.x | PWA for offline-capable mobile app |
 | **Language** | TypeScript | 5.x | Type safety (Next.js side) |
@@ -262,55 +262,53 @@ export class ValidationError extends ApiError {
 
 ## Authentication & Authorization
 
-### Clerk Integration
+### Custom Token-Based Authentication
 
-**Setup** (Next.js PWA):
+**Authentication Flow**:
+1. User registers/logs in via REST API endpoints
+2. Server validates credentials and generates session token
+3. Token stored in localStorage (PWA) or Bubble User field (Bubble.io)
+4. Token sent with each API request for authentication
+
+**REST Endpoints** (Convex):
 ```typescript
-// middleware.ts
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
-const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
-
-export default clerkMiddleware((auth, request) => {
-  if (!isPublicRoute(request)) {
-    auth().protect()
-  }
+// convex/http.ts - Authentication endpoints
+http.route({
+  path: '/auth/register',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const { email, password, name } = await request.json()
+    // Password hashing, user creation, token generation
+    return new Response(JSON.stringify({ success: true, token, user }))
+  })
 })
-
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)']
-}
-```
-
-**User Sync to Convex** (Webhook):
-```typescript
-// convex/http.ts
-import { httpRouter } from 'convex/server'
-import { internal } from './_generated/api'
-
-const http = httpRouter()
 
 http.route({
-  path: '/clerk-webhook',
+  path: '/auth/login',
   method: 'POST',
-  handler: async (ctx, request) => {
-    const payload = await request.json()
-
-    if (payload.type === 'user.created') {
-      await ctx.runMutation(internal.users.createFromClerk, {
-        clerkId: payload.data.id,
-        email: payload.data.email_addresses[0].email_address,
-        name: `${payload.data.first_name} ${payload.data.last_name}`,
-        role: 'parent' // Default role
-      })
-    }
-
-    return new Response(null, { status: 200 })
-  }
+  handler: httpAction(async (ctx, request) => {
+    const { email, password } = await request.json()
+    // Validate credentials, generate token
+    return new Response(JSON.stringify({ success: true, token, user }))
+  })
 })
 
-export default http
+http.route({
+  path: '/auth/me',
+  method: 'GET',
+  handler: httpAction(async (ctx, request) => {
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+    // Validate token, return user
+    return new Response(JSON.stringify({ success: true, user }))
+  })
+})
 ```
+
+**Session Management**:
+- Token format: Base64 encoded `{userId}_{timestamp}_{random}`
+- Token expiration: 30 days
+- Storage: localStorage (PWA), Bubble User field (Bubble.io)
+- Validation: On every API request via token lookup
 
 ### Role-Based Access Control (RBAC)
 
@@ -344,18 +342,16 @@ export function canAccessInstitution(
 
 **Convex Helper**:
 ```typescript
-// convex/lib/auth.ts
+// convex/auth.ts
 import { mutation, query } from './_generated/server'
 
 export async function getCurrentUser(ctx: any) {
-  const identity = await ctx.auth.getUserIdentity()
-  if (!identity) throw new Error('Not authenticated')
+  // For HTTP endpoints, token is passed via header
+  // For Convex queries/mutations, use ctx metadata
+  const userId = ctx.auth?.userId
+  if (!userId) throw new Error('Not authenticated')
 
-  const user = await ctx.db
-    .query('users')
-    .withIndex('by_clerk_id', q => q.eq('clerkId', identity.subject))
-    .first()
-
+  const user = await ctx.db.get(userId)
   if (!user) throw new Error('User not found')
 
   return user

@@ -418,7 +418,8 @@ npm run test:watch
 - **Accuracy**: ±10 meters
 - **Offline Support**: Data cached locally, synced when online
 
-### **📱 Driver PWA App**
+### **📱 Crew PWA App**
+- **Users**: Drivers (Conductores) and Monitors (Auxiliares)
 - **Installation**: One-click install on mobile devices
 - **Offline Mode**: Full functionality without internet
 - **Features**: Route navigation, student check-ins, emergency alerts
@@ -446,7 +447,7 @@ npm run test:watch
 npm run dev
 
 # Access points:
-# - Driver PWA: http://localhost:3000/driver
+# - Crew PWA: http://localhost:3000 (mobile/)
 # - Parent Portal: http://localhost:3000/parent
 # - API Documentation: http://localhost:3000/api/docs
 ```
@@ -600,7 +601,7 @@ refactor: improve database query performance
 
 ### **Version 1.0 (Current)** ✅
 - Core GPS tracking and route management
-- Driver PWA with offline support
+- Crew PWA (Driver + Monitor roles) with offline support
 - Parent portal with WhatsApp notifications
 - Admin dashboard with basic analytics
 - QR code student identification

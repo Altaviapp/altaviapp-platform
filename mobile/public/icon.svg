@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#FFA500"/>
+
+  <!-- School bus simplified icon -->
+  <g transform="translate(100, 150)">
+    <!-- Bus body -->
+    <rect x="0" y="40" width="312" height="160" rx="20" fill="#FFD700"/>
+
+    <!-- Windows -->
+    <rect x="20" y="60" width="60" height="60" rx="5" fill="#87CEEB"/>
+    <rect x="100" y="60" width="60" height="60" rx="5" fill="#87CEEB"/>
+    <rect x="180" y="60" width="60" height="60" rx="5" fill="#87CEEB"/>
+    <rect x="260" y="60" width="32" height="60" rx="5" fill="#87CEEB"/>
+
+    <!-- Wheels -->
+    <circle cx="60" cy="210" r="30" fill="#333"/>
+    <circle cx="60" cy="210" r="15" fill="#666"/>
+    <circle cx="252" cy="210" r="30" fill="#333"/>
+    <circle cx="252" cy="210" r="15" fill="#666"/>
+
+    <!-- Headlights -->
+    <circle cx="300" cy="100" r="8" fill="#FFF"/>
+    <circle cx="300" cy="140" r="8" fill="#FF0000"/>
+  </g>
+
+  <!-- Text -->
+  <text x="256" y="380" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#FFF" text-anchor="middle">ALTAVIAPP</text>
+</svg>

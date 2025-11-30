@@ -63,6 +63,7 @@ export const listUsers = query({
     role: v.optional(v.union(
       v.literal("super_admin"),
       v.literal("admin"),
+      v.literal("monitor"),
       v.literal("driver"),
       v.literal("parent")
     )),
@@ -104,6 +105,7 @@ export const updateUser = mutation({
     role: v.optional(v.union(
       v.literal("super_admin"),
       v.literal("admin"),
+      v.literal("monitor"),
       v.literal("driver"),
       v.literal("parent")
     )),

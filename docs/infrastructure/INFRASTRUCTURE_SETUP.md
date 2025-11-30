@@ -98,7 +98,7 @@ npm run dev
 ```
 
 #### Access Applications
-- **Driver PWA**: http://localhost:3000
+- **Crew PWA**: http://localhost:3000 (for Drivers and Monitors)
 - **Convex Dashboard**: https://dashboard.convex.dev/d/agreeable-toad-644
 - **Clerk Dashboard**: https://dashboard.clerk.com
 

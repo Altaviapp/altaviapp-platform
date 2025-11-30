@@ -1,46 +1,35 @@
-import { Button } from '@/components/ui/button';
+'use client';
 
-export default function Home() {
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+
+/**
+ * Root page - Redirects based on authentication status
+ */
+export default function RootPage() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading) {
+      if (user) {
+        // User is authenticated, redirect to dashboard
+        router.push('/dashboard');
+      } else {
+        // User is not authenticated, redirect to welcome
+        router.push('/welcome');
+      }
+    }
+  }, [user, loading, router]);
+
+  // Show loading state while checking auth
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold tracking-tight">
-            Altaviapp
-          </h1>
-          <p className="mt-2 text-lg text-muted-foreground">
-            Aplicación para conductores
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-lg border bg-card p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-2">
-              Bienvenido
-            </h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Esta es la aplicación PWA para conductores de transporte escolar.
-            </p>
-            <div className="flex gap-2">
-              <Button>Iniciar viaje</Button>
-              <Button variant="outline">Escanear QR</Button>
-            </div>
-          </div>
-
-          <div className="rounded-lg border bg-card p-6 shadow-sm">
-            <h3 className="text-lg font-semibold mb-2">
-              Próximos pasos:
-            </h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>✅ Next.js 14 + shadcn/ui configurado</li>
-              <li>• Configurar autenticación con Clerk</li>
-              <li>• Integrar Convex para datos en tiempo real</li>
-              <li>• Implementar escaneo de códigos QR</li>
-              <li>• Agregar seguimiento GPS en tiempo real</li>
-            </ul>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-primary to-primary-foreground/5 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-primary font-medium">Cargando...</p>
       </div>
-    </main>
+    </div>
   );
 }

@@ -36,5 +36,5 @@ ENV NODE_ENV=development
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
 
-# Start development server (runs both Convex dev and Next.js dev)
-CMD ["npm", "run", "dev"]
+# Start development server (only Next.js - Convex dev requires interactive auth)
+CMD ["npm", "run", "dev:mobile"]

@@ -1,6 +1,11 @@
-# Altaviapp - Driver PWA
+# Altaviapp - Crew PWA
 
-Next.js 14 Progressive Web App for school bus drivers with real-time tracking and student check-in.
+Next.js 14 Progressive Web App for school bus crew (drivers and monitors) with real-time tracking and student check-in.
+
+## Roles
+
+- **Conductor (Driver)**: Vehicle operator, controls trip lifecycle, GPS tracking
+- **Auxiliar (Monitor)**: Route assistant, student check-in/out, incident reporting
 
 ## Tech Stack
 

@@ -2,43 +2,41 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  // Users and Authentication
-  users: defineTable({
-    clerkId: v.string(),
-    email: v.string(),
+  // Clients (Parent organization that owns multiple institutions)
+  clients: defineTable({
     name: v.string(),
-    role: v.union(v.literal("super_admin"), v.literal("admin"), v.literal("driver"), v.literal("parent")),
-    institutionId: v.optional(v.id("institutions")),
+    legalName: v.optional(v.string()),
+    taxId: v.optional(v.string()), // RUC Ecuador
+    contactPerson: v.string(),
+    contactEmail: v.string(),
+    contactPhone: v.string(), // +593XXXXXXXXX
+    address: v.string(),
+    city: v.string(),
+    province: v.string(),
+    country: v.string(), // Default: "EC"
+    subscriptionPlan: v.union(
+      v.literal("trial"),
+      v.literal("basic"),
+      v.literal("professional"),
+      v.literal("enterprise")
+    ),
+    subscriptionStatus: v.union(
+      v.literal("active"),
+      v.literal("suspended"),
+      v.literal("cancelled")
+    ),
+    maxInstitutions: v.number(), // Default: 3
+    maxUsers: v.number(), // Default: 10
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_clerk_id", ["clerkId"])
-    .index("by_email", ["email"])
-    .index("by_institution", ["institutionId"]),
-
-  // User Passwords (for custom auth without Clerk)
-  userPasswords: defineTable({
-    userId: v.id("users"),
-    passwordHash: v.string(),
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"]),
-
-  // User Sessions (for token-based auth)
-  userSessions: defineTable({
-    userId: v.id("users"),
-    token: v.string(),
-    createdAt: v.number(),
-    expiresAt: v.number(),
-    isActive: v.boolean(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_token", ["token"])
-    .index("by_active", ["isActive"]),
+    .index("by_tax_id", ["taxId"])
+    .index("by_status", ["subscriptionStatus"]),
 
   // Institutions (Schools/Organizations)
   institutions: defineTable({
+    clientId: v.id("clients"),
     name: v.string(),
     type: v.union(v.literal("school"), v.literal("corporate")),
     address: v.string(),
@@ -52,8 +50,112 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_client", ["clientId"])
     .index("by_city", ["city"])
     .index("by_status", ["isActive"]),
+
+  // Users and Authentication
+  users: defineTable({
+    clientId: v.optional(v.id("clients")),
+    institutionId: v.optional(v.id("institutions")),
+    email: v.string(),
+    passwordHash: v.string(), // Bcrypt hashed password
+
+    // Email Verification
+    emailVerified: v.boolean(),
+    emailVerifiedAt: v.optional(v.number()),
+    emailVerificationToken: v.optional(v.string()), // 8-digit code
+    tokenExpiresAt: v.optional(v.number()),
+
+    invitationId: v.optional(v.id("invitations")),
+
+    name: v.string(),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    phone: v.optional(v.string()),
+
+    role: v.union(
+      v.literal("super_admin"),
+      v.literal("admin"),
+      v.literal("monitor"),
+      v.literal("driver"),
+      v.literal("parent")
+    ),
+
+    // Multi-institution support
+    accessibleInstitutionIds: v.array(v.id("institutions")),
+
+    // Security
+    lastLogin: v.optional(v.number()),
+    failedLoginAttempts: v.number(), // Default: 0
+    accountLockedUntil: v.optional(v.number()),
+
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_client", ["clientId"])
+    .index("by_institution", ["institutionId"])
+    .index("by_verification_token", ["emailVerificationToken"]),
+
+  // Invitations (for parent/driver/admin onboarding)
+  invitations: defineTable({
+    institutionId: v.id("institutions"),
+    role: v.union(
+      v.literal("parent"),
+      v.literal("driver"),
+      v.literal("monitor"),
+      v.literal("admin")
+    ),
+    email: v.string(),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    phone: v.optional(v.string()),
+
+    invitationCode: v.string(), // 8-digit code: 12345678
+    codeExpiresAt: v.number(), // 7 days
+
+    createdBy: v.id("users"), // Admin who created the invitation
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("expired"),
+      v.literal("cancelled")
+    ),
+
+    acceptedAt: v.optional(v.number()),
+    acceptedByUserId: v.optional(v.id("users")),
+
+    bulkImportId: v.optional(v.string()), // For grouping CSV imports
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_institution", ["institutionId"])
+    .index("by_email", ["email"])
+    .index("by_code", ["invitationCode"])
+    .index("by_status", ["status"])
+    .index("by_bulk_import", ["bulkImportId"]),
+
+  // Sessions (renamed from userSessions)
+  sessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    expiresAt: v.number(), // 30 days
+    lastUsedAt: v.optional(v.number()),
+
+    // Security metadata
+    userAgent: v.optional(v.string()),
+    ipAddress: v.optional(v.string()),
+
+    isActive: v.boolean(),
+    revokedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_token", ["token"])
+    .index("by_active", ["isActive"]),
 
   // Vehicles
   vehicles: defineTable({
@@ -80,6 +182,24 @@ export default defineSchema({
     licenseExpiry: v.number(),
     phone: v.string(),
     emergencyContact: v.string(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_institution", ["institutionId"]),
+
+  // Monitors (Auxiliares - responsible for student check-in/out)
+  monitors: defineTable({
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    idNumber: v.string(), // Cédula de identidad
+    phone: v.string(),
+    emergencyContact: v.string(),
+    // Certifications
+    firstAidCertified: v.optional(v.boolean()),
+    firstAidCertExpiry: v.optional(v.number()),
+    childCareCertified: v.optional(v.boolean()),
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -114,6 +234,7 @@ export default defineSchema({
     type: v.union(v.literal("pickup"), v.literal("dropoff")),
     vehicleId: v.id("vehicles"),
     driverId: v.id("drivers"),
+    monitorId: v.optional(v.id("monitors")), // Optional - routes may not have a monitor
     isActive: v.boolean(),
     scheduledStartTime: v.string(),
     scheduledEndTime: v.string(),
@@ -122,7 +243,8 @@ export default defineSchema({
   })
     .index("by_institution", ["institutionId"])
     .index("by_vehicle", ["vehicleId"])
-    .index("by_driver", ["driverId"]),
+    .index("by_driver", ["driverId"])
+    .index("by_monitor", ["monitorId"]),
 
   // Route Stops
   routeStops: defineTable({
@@ -157,6 +279,7 @@ export default defineSchema({
   trips: defineTable({
     routeId: v.id("routes"),
     driverId: v.id("drivers"),
+    monitorId: v.optional(v.id("monitors")), // Optional - inherited from route or null
     vehicleId: v.id("vehicles"),
     status: v.union(v.literal("scheduled"), v.literal("in_progress"), v.literal("completed"), v.literal("cancelled")),
     startTime: v.optional(v.number()),
@@ -167,6 +290,7 @@ export default defineSchema({
   })
     .index("by_route", ["routeId"])
     .index("by_driver", ["driverId"])
+    .index("by_monitor", ["monitorId"])
     .index("by_date", ["scheduledDate"]),
 
   // GPS Tracking
@@ -186,16 +310,21 @@ export default defineSchema({
     tripId: v.id("trips"),
     studentId: v.id("students"),
     stopId: v.id("routeStops"),
+    // Who performed the check-in (audit trail)
+    performedById: v.id("users"),
+    performedByRole: v.union(v.literal("driver"), v.literal("monitor"), v.literal("admin")),
     checkinType: v.union(v.literal("pickup"), v.literal("dropoff")),
     timestamp: v.number(),
     latitude: v.number(),
     longitude: v.number(),
     qrScanned: v.boolean(),
+    manualReason: v.optional(v.string()), // Reason if not QR scanned
     notes: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_trip", ["tripId"])
     .index("by_student", ["studentId"])
+    .index("by_performer", ["performedById"])
     .index("by_date", ["timestamp"]),
 
   // Incidents and Reports

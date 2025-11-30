@@ -1,7 +1,7 @@
 {
-  "name": "Altaviapp - Conductor",
+  "name": "Altaviapp Crew",
   "short_name": "Altaviapp",
-  "description": "Aplicación para conductores de transporte escolar con seguimiento GPS y gestión de estudiantes en tiempo real",
+  "description": "Aplicación para tripulación de transporte escolar (conductores y auxiliares) con seguimiento GPS y gestión de estudiantes en tiempo real",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

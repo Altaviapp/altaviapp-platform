@@ -8,29 +8,25 @@
  */
 
 /**
- * Hash password using SHA-256
- * Note: In production, consider using bcrypt or similar
+ * Hash password using bcrypt
+ * SALT_ROUNDS = 10 provides good balance between security and performance
  */
+import bcrypt from 'bcryptjs';
+
+const SALT_ROUNDS = 10;
+
 export async function hashPassword(password: string): Promise<string> {
-  // Simple hash for development
-  // In production, use a proper password hashing library
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + "altaviapp_salt_2025");
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  return hashHex;
+  return await bcrypt.hash(password, SALT_ROUNDS);
 }
 
 /**
- * Verify password against hash
+ * Verify password against bcrypt hash
  */
 export async function verifyPassword(
   password: string,
   hash: string
 ): Promise<boolean> {
-  const passwordHash = await hashPassword(password);
-  return passwordHash === hash;
+  return await bcrypt.compare(password, hash);
 }
 
 /**

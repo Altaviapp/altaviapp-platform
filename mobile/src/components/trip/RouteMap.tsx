@@ -1,0 +1,231 @@
+/**
+ * RouteMap Component
+ *
+ * Main Leaflet map with route polyline, stop markers, and bus marker
+ */
+
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Polyline, Marker, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+import type { Stop } from '@/types';
+import type { GPSLocation } from '@/lib/mockData/gpsLocations';
+import { StopMarker } from './StopMarker';
+import { MapControls } from './MapControls';
+
+export interface RouteMapProps {
+  /** Array of stops in the route */
+  stops: Stop[];
+  /** Current stop index */
+  currentStopIndex: number;
+  /** Current GPS location */
+  currentLocation: GPSLocation | null;
+  /** Height of map container */
+  height?: string;
+  /** Whether to show controls */
+  showControls?: boolean;
+  /** Trip ID for unique map instance */
+  tripId?: string;
+}
+
+/**
+ * Component to handle map centering and zoom
+ */
+function MapController({ stops, currentLocation }: { stops: Stop[]; currentLocation: GPSLocation | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (stops.length === 0) return;
+
+    // Create bounds from all stops
+    const bounds = L.latLngBounds(
+      stops.map(stop => [stop.latitude, stop.longitude])
+    );
+
+    // Fit map to show all stops
+    map.fitBounds(bounds, { padding: [50, 50] });
+  }, [stops, map]);
+
+  // Center on current location when it updates
+  useEffect(() => {
+    if (currentLocation) {
+      map.setView([currentLocation.latitude, currentLocation.longitude], 15);
+    }
+  }, [currentLocation, map]);
+
+  return null;
+}
+
+/**
+ * Create custom bus icon
+ */
+function createBusIcon(heading: number = 0) {
+  const svgIcon = `
+    <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <g transform="rotate(${heading} 20 20)">
+        <circle cx="20" cy="20" r="18" fill="#DBF227" stroke="#042940" stroke-width="2"/>
+        <path
+          d="M20 8 L28 20 L20 15 L12 20 Z"
+          fill="#042940"
+        />
+        <circle cx="20" cy="20" r="3" fill="#042940"/>
+      </g>
+    </svg>
+  `;
+
+  return L.divIcon({
+    html: svgIcon,
+    className: 'custom-bus-marker',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+  });
+}
+
+/**
+ * Route map with stops and current location
+ */
+export function RouteMap({
+  stops,
+  currentStopIndex,
+  currentLocation,
+  height = '400px',
+  showControls = true,
+  tripId,
+}: RouteMapProps) {
+  const [map, setMap] = useState<any>(null);
+  const [isClient, setIsClient] = useState(false);
+
+  // Only render map on client (Leaflet requires window)
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return (
+      <div
+        className="bg-gray-100 flex items-center justify-center"
+        style={{ height }}
+      >
+        <p className="text-gray-600">Cargando mapa...</p>
+      </div>
+    );
+  }
+
+  if (stops.length === 0) {
+    return (
+      <div
+        className="bg-gray-100 flex items-center justify-center"
+        style={{ height }}
+      >
+        <p className="text-gray-600">No hay paradas para mostrar</p>
+      </div>
+    );
+  }
+
+  // Default center (first stop or current location)
+  const center: [number, number] = currentLocation
+    ? [currentLocation.latitude, currentLocation.longitude]
+    : [stops[0].latitude, stops[0].longitude];
+
+  // Route polyline coordinates
+  const routeCoordinates: [number, number][] = stops.map(stop => [
+    stop.latitude,
+    stop.longitude,
+  ]);
+
+  // Map control handlers
+  const handleZoomIn = () => {
+    if (map) {
+      map.zoomIn();
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (map) {
+      map.zoomOut();
+    }
+  };
+
+  const handleCenterLocation = () => {
+    if (map && currentLocation) {
+      map.setView(
+        [currentLocation.latitude, currentLocation.longitude],
+        15
+      );
+    }
+  };
+
+  return (
+    <div className="relative" style={{ height }}>
+      <MapContainer
+        key={tripId || 'map'}
+        center={center}
+        zoom={13}
+        style={{ height: '100%', width: '100%' }}
+        ref={setMap}
+        zoomControl={false}
+      >
+        {/* Map Tiles (OpenStreetMap) */}
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        {/* Route Polyline */}
+        <Polyline
+          positions={routeCoordinates}
+          pathOptions={{
+            color: '#042940',
+            weight: 4,
+            opacity: 0.7,
+          }}
+        />
+
+        {/* Stop Markers */}
+        {stops.map((stop, index) => {
+          let status: 'completed' | 'current' | 'upcoming';
+
+          if (index < currentStopIndex) {
+            status = 'completed';
+          } else if (index === currentStopIndex) {
+            status = 'current';
+          } else {
+            status = 'upcoming';
+          }
+
+          return (
+            <StopMarker
+              key={stop._id}
+              stop={stop}
+              status={status}
+              stopNumber={index + 1}
+            />
+          );
+        })}
+
+        {/* Current Bus Location */}
+        {currentLocation && (
+          <Marker
+            position={[currentLocation.latitude, currentLocation.longitude]}
+            icon={createBusIcon(currentLocation.heading)}
+          />
+        )}
+
+        {/* Map Controller (auto-center and fit bounds) */}
+        <MapController stops={stops} currentLocation={currentLocation} />
+      </MapContainer>
+
+      {/* Custom Controls */}
+      {showControls && (
+        <MapControls
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onCenterLocation={currentLocation ? handleCenterLocation : undefined}
+        />
+      )}
+    </div>
+  );
+}

@@ -8,16 +8,19 @@ const withPWA = require('next-pwa')({
 
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
 
-  // Enable experimental features for PWA
-  experimental: {
-    optimizeCss: true,
-  },
+  // Next.js 16 uses Turbopack by default
+  // Empty config to silence webpack config warning from next-pwa
+  turbopack: {},
 
-  // Optimize images
+  // Optimize images (updated for Next.js 16)
   images: {
-    domains: ['localhost'],
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+      },
+    ],
     formats: ['image/avif', 'image/webp'],
   },
 

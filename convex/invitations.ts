@@ -328,13 +328,9 @@ export const verifyInvitationCode = query({
     }
 
     // Check expiration
+    // Note: We can't update the status in a query - the acceptInvitation mutation
+    // will handle marking expired invitations when someone tries to use them
     if (isTokenExpired(invitation.codeExpiresAt)) {
-      // Auto-expire
-      await ctx.db.patch(invitation._id, {
-        status: "expired",
-        updatedAt: Date.now(),
-      });
-
       return {
         success: false,
         valid: false,

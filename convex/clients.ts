@@ -254,16 +254,19 @@ export const listClients = query({
     // Verify current user is super_admin
     await verifyRole(ctx, args.userId, "super_admin");
 
-    let query = ctx.db.query("clients");
+    let clients;
+    const subscriptionStatus = args.subscriptionStatus;
 
-    if (args.subscriptionStatus) {
-      query = query
+    if (subscriptionStatus) {
+      clients = await ctx.db
+        .query("clients")
         .withIndex("by_status", (q) =>
-          q.eq("subscriptionStatus", args.subscriptionStatus)
-        );
+          q.eq("subscriptionStatus", subscriptionStatus)
+        )
+        .collect();
+    } else {
+      clients = await ctx.db.query("clients").collect();
     }
-
-    let clients = await query.collect();
 
     // Filter by isActive if provided
     if (args.isActive !== undefined) {

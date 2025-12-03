@@ -11,8 +11,7 @@
 
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { requireAuth, requireRole, enforceInstitutionScope } from "./auth";
-import { Id } from "./_generated/dataModel";
+import { verifyUser, verifyRole, verifyInstitutionAccess } from "./lib/simpleAuth";
 
 /**
  * Create a new monitor profile
@@ -21,7 +20,8 @@ import { Id } from "./_generated/dataModel";
  */
 export const createMonitor = mutation({
   args: {
-    userId: v.id("users"),
+    userId: v.id("users"), // Current user making the request
+    targetUserId: v.id("users"), // User to create monitor profile for
     institutionId: v.id("institutions"),
     idNumber: v.string(),
     phone: v.string(),
@@ -32,10 +32,10 @@ export const createMonitor = mutation({
   },
   handler: async (ctx, args) => {
     // Require admin or higher
-    await requireRole(ctx, "admin");
+    await verifyRole(ctx, args.userId, "admin");
 
     // Verify user exists and has monitor role
-    const user = await ctx.db.get(args.userId);
+    const user = await ctx.db.get(args.targetUserId);
     if (!user) {
       throw new Error("Usuario no encontrado");
     }
@@ -46,7 +46,7 @@ export const createMonitor = mutation({
     // Check if monitor profile already exists
     const existingMonitor = await ctx.db
       .query("monitors")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", args.targetUserId))
       .first();
 
     if (existingMonitor) {
@@ -56,7 +56,7 @@ export const createMonitor = mutation({
     const now = Date.now();
 
     const monitorId = await ctx.db.insert("monitors", {
-      userId: args.userId,
+      userId: args.targetUserId,
       institutionId: args.institutionId,
       idNumber: args.idNumber,
       phone: args.phone,
@@ -78,14 +78,15 @@ export const createMonitor = mutation({
  */
 export const getMonitorByUserId = query({
   args: {
-    userId: v.id("users"),
+    userId: v.id("users"), // Current user making the request
+    targetUserId: v.id("users"), // User to get monitor profile for
   },
   handler: async (ctx, args) => {
-    const currentUser = await requireAuth(ctx);
+    const currentUser = await verifyUser(ctx, args.userId);
 
     const monitor = await ctx.db
       .query("monitors")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", args.targetUserId))
       .first();
 
     if (!monitor) {
@@ -93,7 +94,7 @@ export const getMonitorByUserId = query({
     }
 
     // Monitors can view their own profile
-    if (currentUser._id === args.userId) {
+    if (currentUser._id === args.targetUserId) {
       return monitor;
     }
 
@@ -116,10 +117,11 @@ export const getMonitorByUserId = query({
  */
 export const getMonitorById = query({
   args: {
+    userId: v.id("users"), // Current user making the request
     monitorId: v.id("monitors"),
   },
   handler: async (ctx, args) => {
-    const currentUser = await requireAuth(ctx);
+    const currentUser = await verifyUser(ctx, args.userId);
 
     const monitor = await ctx.db.get(args.monitorId);
 
@@ -151,20 +153,17 @@ export const getMonitorById = query({
  */
 export const listMonitorsByInstitution = query({
   args: {
-    institutionId: v.optional(v.id("institutions")),
+    userId: v.id("users"), // Current user making the request
+    institutionId: v.id("institutions"),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    // Enforce institution scope
-    const scopedInstitutionId = await enforceInstitutionScope(ctx, args.institutionId);
-
-    if (!scopedInstitutionId) {
-      throw new Error("Se requiere ID de institución");
-    }
+    // Verify user has access to this institution
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
 
     let monitors = await ctx.db
       .query("monitors")
-      .withIndex("by_institution", (q) => q.eq("institutionId", scopedInstitutionId))
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
       .collect();
 
     // Filter by active status if specified
@@ -198,6 +197,7 @@ export const listMonitorsByInstitution = query({
  */
 export const updateMonitor = mutation({
   args: {
+    userId: v.id("users"), // Current user making the request
     monitorId: v.id("monitors"),
     idNumber: v.optional(v.string()),
     phone: v.optional(v.string()),
@@ -208,7 +208,7 @@ export const updateMonitor = mutation({
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const currentUser = await requireAuth(ctx);
+    const currentUser = await verifyUser(ctx, args.userId);
 
     const monitor = await ctx.db.get(args.monitorId);
     if (!monitor) {
@@ -231,7 +231,7 @@ export const updateMonitor = mutation({
       }
     }
 
-    const updates: Record<string, any> = {
+    const updates: Record<string, unknown> = {
       updatedAt: Date.now(),
     };
 
@@ -254,10 +254,11 @@ export const updateMonitor = mutation({
  */
 export const deactivateMonitor = mutation({
   args: {
+    userId: v.id("users"), // Current user making the request
     monitorId: v.id("monitors"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, "admin");
+    await verifyRole(ctx, args.userId, "admin");
 
     const monitor = await ctx.db.get(args.monitorId);
     if (!monitor) {
@@ -278,11 +279,12 @@ export const deactivateMonitor = mutation({
  */
 export const assignMonitorToRoute = mutation({
   args: {
+    userId: v.id("users"), // Current user making the request
     monitorId: v.id("monitors"),
     routeId: v.id("routes"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, "admin");
+    await verifyRole(ctx, args.userId, "admin");
 
     const monitor = await ctx.db.get(args.monitorId);
     if (!monitor) {
@@ -317,10 +319,11 @@ export const assignMonitorToRoute = mutation({
  */
 export const removeMonitorFromRoute = mutation({
   args: {
+    userId: v.id("users"), // Current user making the request
     routeId: v.id("routes"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, "admin");
+    await verifyRole(ctx, args.userId, "admin");
 
     const route = await ctx.db.get(args.routeId);
     if (!route) {
@@ -341,10 +344,11 @@ export const removeMonitorFromRoute = mutation({
  */
 export const getMonitorRoutes = query({
   args: {
+    userId: v.id("users"), // Current user making the request
     monitorId: v.id("monitors"),
   },
   handler: async (ctx, args) => {
-    const currentUser = await requireAuth(ctx);
+    const currentUser = await verifyUser(ctx, args.userId);
 
     const monitor = await ctx.db.get(args.monitorId);
     if (!monitor) {
@@ -370,10 +374,11 @@ export const getMonitorRoutes = query({
  */
 export const getMonitorTripsToday = query({
   args: {
+    userId: v.id("users"), // Current user making the request
     monitorId: v.id("monitors"),
   },
   handler: async (ctx, args) => {
-    const currentUser = await requireAuth(ctx);
+    const currentUser = await verifyUser(ctx, args.userId);
 
     const monitor = await ctx.db.get(args.monitorId);
     if (!monitor) {

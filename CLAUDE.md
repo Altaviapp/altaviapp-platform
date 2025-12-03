@@ -19,6 +19,48 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 
 ---
 
+## Claude Development Rules
+
+**These rules govern how Claude approaches all development work:**
+
+### Planning & Verification
+1. **Think first, plan in writing** - Before coding, analyze the problem, read relevant codebase files, and write a plan to `tasks/todo.md`
+2. **Checkable todo list** - The plan must include a list of todo items that can be checked off as completed
+3. **User approval required** - Before beginning implementation, check in with the user to verify the plan
+
+### Implementation
+4. **Track progress** - Work through todo items one by one, marking each as complete when done
+5. **High-level explanations** - At every step, provide a brief high-level explanation of what changes were made
+6. **Simplicity is paramount** - Make every task and code change as simple as possible. Avoid massive or complex changes. Every change should impact as little code as possible
+
+### Completion
+7. **Review section** - After completing work, add a review section to `tasks/todo.md` with a summary of changes and relevant information
+
+### Mindset
+8. **NEVER BE LAZY** - Do not be lazy. If there is a bug, find the root cause and fix it properly. No temporary fixes. You are a senior developer. Never take shortcuts
+9. **MINIMAL IMPACT** - Make all fixes and code changes as simple as humanly possible. Changes should only impact code directly relevant to the task. Impact as little code as possible. The goal is zero introduced bugs. It's all about simplicity
+
+---
+
+## Development Method: PRD + Wireframes + Schema
+
+For each module implementation, load context from these documents:
+
+| Document | Location | Purpose |
+|----------|----------|---------|
+| **PRD** | [docs/PRD.md](docs/PRD.md) | WHAT to build (requirements) |
+| **Wireframes** | [docs/design/](docs/design/) | HOW it looks (UI/UX) |
+| **Schema** | [docs/database/DATABASE_SCHEMA.md](docs/database/DATABASE_SCHEMA.md) | DATA structure |
+| **Tech Spec** | [Technical-Specification.md](Technical-Specification.md) | HOW to build (patterns) |
+
+**Available Wireframe Documents:**
+- [docs/design/ADMIN_WIREFRAMES.md](docs/design/ADMIN_WIREFRAMES.md) - Admin Dashboard UI
+- [docs/design/PARENT_WIREFRAMES.md](docs/design/PARENT_WIREFRAMES.md) - Parent Portal UI
+- [docs/design/CREW_WIREFRAMES.md](docs/design/CREW_WIREFRAMES.md) - Crew App UI (PWA)
+- [docs/design/AUTH_WIREFRAMES.md](docs/design/AUTH_WIREFRAMES.md) - Authentication Flows
+
+---
+
 ## Core Commands
 
 ### `@state current`
@@ -35,7 +77,7 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 - Completed modules (from git log)
 - Blockers or pending decisions
 - Next recommended module
-- Environment status (Convex, Clerk, dependencies)
+- Environment status (Convex, dependencies)
 
 **When to use**:
 - Starting work session
@@ -50,22 +92,23 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 **Available Modules** (by phase):
 
 **Phase 1 - Foundation:**
-- `@implement auth` - Clerk integration, user sync, RBAC
+- `@implement auth` - Custom token-based auth, user management, RBAC
 - `@implement api-core` - REST API framework, response format, error handling
 - `@implement institutions` - Multi-tenant setup, institution CRUD
 
 **Phase 2 - Backend APIs:**
-- `@implement fleet-api` - Vehicles, drivers CRUD endpoints
+- `@implement fleet-api` - Vehicles, drivers, monitors CRUD endpoints
 - `@implement routes-api` - Routes, stops, assignments, geofencing
 - `@implement students-api` - Students CRUD, QR generation
 - `@implement trips-api` - Trip management, GPS tracking
 - `@implement checkins-api` - Student check-in/out, notifications
 - `@implement incidents-api` - Safety reports, emergency alerts
 
-**Phase 3 - Frontends:**
-- `@implement bubble-admin` - Admin dashboard (Bubble.io)
-- `@implement bubble-parent` - Parent portal (Bubble.io)
-- `@implement driver-pwa` - Driver mobile app (Next.js PWA)
+**Phase 3 - Frontends (Next.js PWA):**
+- `@implement admin-app` - Admin Dashboard (Next.js PWA)
+- `@implement parent-app` - Parent Portal (Next.js PWA)
+- `@implement crew-app` - Crew App (Next.js PWA)
+- `@implement auth-flows` - Complete authentication UI
 
 **Usage**:
 ```bash
@@ -75,12 +118,13 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 
 **Process**:
 1. Load relevant sections from [docs/PRD.md](docs/PRD.md)
-2. Load relevant tables from [docs/database/DATABASE_SCHEMA.md](docs/database/DATABASE_SCHEMA.md)
-3. Apply patterns from [Technical-Specification.md](Technical-Specification.md)
-4. Apply universal requirements (see below)
-5. Confirm approach with user
-6. Implement with incremental commits
-7. Update active context in this file
+2. Load wireframes from [docs/design/](docs/design/) (matching module)
+3. Load relevant tables from [docs/database/DATABASE_SCHEMA.md](docs/database/DATABASE_SCHEMA.md)
+4. Apply patterns from [Technical-Specification.md](Technical-Specification.md)
+5. Apply universal requirements (see below)
+6. Confirm approach with user
+7. Implement with incremental commits
+8. Update active context in this file
 
 ---
 
@@ -125,21 +169,6 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 
 ---
 
-### `@bubble-setup <feature>`
-**Purpose**: Generate Bubble.io API integration instructions
-
-**Usage**:
-```bash
-@bubble-setup vehicles   # Generate Bubble setup for vehicles
-@bubble-setup tracking   # Generate Bubble setup for GPS tracking
-```
-
-**Output**: Step-by-step non-technical guide for connecting Bubble to API endpoints
-
-**Reference**: [docs/bubble/BUBBLE_SETUP_GUIDE.md](docs/bubble/BUBBLE_SETUP_GUIDE.md)
-
----
-
 ## Universal Requirements Checklist
 
 **Every module implementation MUST apply these requirements:**
@@ -153,6 +182,7 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 ### Role-Based Access Control (RBAC)
 - [ ] `super_admin` (level 1000) - Full platform access
 - [ ] `admin` (level 500) - Institution management
+- [ ] `monitor` (level 150) - Student check-in, incident reporting
 - [ ] `driver` (level 100) - Trip operations only
 - [ ] `parent` (level 10) - Read-only, own students only
 - [ ] Role verification before all mutations
@@ -183,11 +213,25 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 
 ### Tech Stack Standards
 - [ ] Convex for database and real-time
-- [ ] Clerk for authentication
-- [ ] Next.js 14+ for PWA (driver app)
-- [ ] Bubble.io for admin/parent UI
+- [ ] Custom token-based authentication (bcrypt + sessions)
+- [ ] Next.js 14+ PWA for all frontends (Admin, Parent, Crew)
+- [ ] Turborepo for monorepo management
+- [ ] pnpm for package management
+- [ ] shadcn/ui for UI components
+- [ ] Google Maps API for all geospatial features
 - [ ] TypeScript strict mode
 - [ ] Zod for input validation
+- [ ] Service Workers for offline support (all apps)
+
+### Google Maps API Features
+- [ ] Maps JavaScript API - Interactive maps in all apps
+- [ ] Directions API - Route calculation and optimization
+- [ ] Geocoding API - Address to coordinates conversion
+- [ ] Distance Matrix API - Travel time and distance calculations
+- [ ] Places API - Address autocomplete and search
+- [ ] Geolocation API - Device location tracking
+- [ ] Roads API - Snap GPS points to roads
+- [ ] @react-google-maps/api for React integration
 
 ### Performance Requirements
 - [ ] GPS location updates: < 1 second
@@ -198,17 +242,20 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 
 ### Security
 - [ ] HTTPS everywhere
-- [ ] JWT token validation (Clerk)
+- [ ] Session token validation (custom auth)
+- [ ] Password hashing (bcrypt)
 - [ ] Input sanitization (Zod schemas)
 - [ ] No sensitive data in logs
 - [ ] XSS prevention
 - [ ] CSRF protection
 
-### Offline Support (PWA only)
+### Offline Support (All PWA Apps)
 - [ ] Service worker for offline mode
 - [ ] IndexedDB for local data cache
-- [ ] Background sync for check-ins
-- [ ] GPS data queuing when offline
+- [ ] Background sync for data changes
+- [ ] Offline-first architecture
+- [ ] PWA manifest for installability
+- [ ] Push notifications support
 
 ### Error Handling
 - [ ] Standard error response format
@@ -251,8 +298,8 @@ This document defines the AI agent workflow for developing Altaviapp, following 
 ```
 MODULE: auth
 ├── Git commits (10-15 commits)
-│   ├── feat(auth): initialize Clerk integration
-│   ├── feat(auth): add user sync webhook
+│   ├── feat(auth): initialize token-based auth
+│   ├── feat(auth): add session management
 │   ├── feat(auth): implement RBAC helpers
 │   └── ...
 └── PR #1: feat: implement authentication module
@@ -292,9 +339,9 @@ git checkout -b feature/module-name
 # User tests locally during implementation
 
 # Incremental commits example:
-# Commit 1: feat(auth): initialize Clerk SDK
-# Commit 2: feat(auth): add webhook handler
-# Commit 3: feat(auth): create user sync mutation
+# Commit 1: feat(auth): initialize session management
+# Commit 2: feat(auth): add login/register endpoints
+# Commit 3: feat(auth): create user mutations
 # Commit 4: feat(schema): add users table indexes
 # Commit 5: feat(auth): implement RBAC middleware
 # ...
@@ -365,12 +412,27 @@ institutions (from Phase 1)
 ```
 All Phase 2 APIs complete
   ↓
-  ├─→ bubble-admin (Week 10-11)
-  ├─→ bubble-parent (Week 11)
-  └─→ driver-pwa (Week 12)
+  ├─→ admin-app (Week 10-11)
+  ├─→ parent-app (Week 11)
+  └─→ crew-app (Week 12)
 ```
 
 **Can parallelize**: All three frontends (different branches)
+
+**Project Structure**:
+```
+/apps/
+├── admin/     # Admin Dashboard (Next.js PWA)
+├── parent/    # Parent Portal (Next.js PWA)
+└── crew/      # Crew App (Next.js PWA) - Base para todas las apps
+/packages/
+├── ui/        # Shared UI components (shadcn/ui)
+├── auth/      # Shared auth utilities
+├── pwa/       # Shared PWA utilities (service worker, manifest)
+└── convex-client/  # Shared Convex hooks & types
+```
+
+**Base de desarrollo**: El código existente en `/mobile/` (Crew App) sirve como base para todas las apps PWA.
 
 **Full dependency map**: See [docs/modules/IMPLEMENTATION_ORDER.md](docs/modules/IMPLEMENTATION_ORDER.md)
 
@@ -400,16 +462,19 @@ All Phase 2 APIs complete
 - `incidents` - Incident management
 - `ui` - UI components
 - `pwa` - PWA-specific
-- `bubble` - Bubble.io integration
+- `admin` - Admin Dashboard
+- `parent` - Parent Portal
+- `crew` - Crew App
 
 **Examples**:
 ```bash
-feat(auth): add Clerk webhook handler
+feat(auth): add session management
 feat(schema): add vehicles table with indexes
 feat(api): implement standard error response format
 fix(trips): correct GPS tracking interval
 refactor(routes): optimize geofencing calculation
-docs(bubble): add vehicle management setup guide
+feat(admin): add fleet management dashboard
+feat(crew): implement trip checklist
 test(checkins): add QR validation tests
 ```
 
@@ -500,10 +565,14 @@ git pull origin main
 - [docs/database/DATABASE_SCHEMA.md](docs/database/DATABASE_SCHEMA.md) - Data model (DATA structure)
 - [docs/dev/Tech-Stack-Standard.md](docs/dev/Tech-Stack-Standard.md) - Ceibatic tech standards
 
-### API & Integration
+### Wireframes (UI/UX)
+- [docs/design/ADMIN_WIREFRAMES.md](docs/design/ADMIN_WIREFRAMES.md) - Admin Dashboard UI
+- [docs/design/PARENT_WIREFRAMES.md](docs/design/PARENT_WIREFRAMES.md) - Parent Portal UI
+- [docs/design/CREW_WIREFRAMES.md](docs/design/CREW_WIREFRAMES.md) - Crew App UI (PWA)
+- [docs/design/AUTH_WIREFRAMES.md](docs/design/AUTH_WIREFRAMES.md) - Authentication flows
+
+### API Reference
 - [docs/api/API_ENDPOINTS.md](docs/api/API_ENDPOINTS.md) - Complete API reference
-- [docs/bubble/BUBBLE_SETUP_GUIDE.md](docs/bubble/BUBBLE_SETUP_GUIDE.md) - Bubble.io setup (non-technical)
-- [docs/bubble/WORKFLOW_TEMPLATES.md](docs/bubble/WORKFLOW_TEMPLATES.md) - Bubble workflow examples
 
 ### Implementation Guides
 - [docs/modules/IMPLEMENTATION_ORDER.md](docs/modules/IMPLEMENTATION_ORDER.md) - Module dependencies

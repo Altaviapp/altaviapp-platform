@@ -1,8 +1,28 @@
-# Admin Dashboard Wireframes
+# Admin Dashboard Wireframes (PWA)
 **Altaviapp - School Transport Management Platform**
-**Versión**: 1.0
+**Versión**: 1.1
 **Fecha**: Enero 2025
-**Propósito**: Guía de wireframes para diseño de producto
+**Propósito**: Guía de wireframes para el dashboard de administración (PWA)
+
+---
+
+## Características de la PWA
+
+### Instalación
+- Instalable en desktop (Windows, Mac, Linux)
+- Instalable en móvil (iOS, Android)
+- Ícono en pantalla de inicio/escritorio
+- Funciona como app nativa
+
+### Performance
+- Carga en < 3 segundos
+- Modo offline básico (ver datos cacheados)
+- Sincronización automática al reconectar
+
+### Diseño
+- Desktop-first (1280px+)
+- Responsive para tablet (768px-1024px)
+- Responsive para móvil (360px-414px)
 
 ---
 

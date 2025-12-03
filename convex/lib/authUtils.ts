@@ -1,64 +1,147 @@
 /**
  * Authentication Utilities
  *
- * Simple authentication system for Bubble.io integration
- * - Password hashing using Web Crypto API
- * - Token generation and validation
- * - Session management
+ * Password hashing using Web Crypto API (PBKDF2)
+ * Works in Convex's restricted runtime without Node.js
  */
+
+const ITERATIONS = 100000;
+const KEY_LENGTH = 256;
+const SALT_LENGTH = 16;
 
 /**
- * Hash password using bcrypt
- * SALT_ROUNDS = 10 provides good balance between security and performance
+ * Generate random bytes using Web Crypto API
  */
-import bcrypt from 'bcryptjs';
-
-const SALT_ROUNDS = 10;
-
-export async function hashPassword(password: string): Promise<string> {
-  return await bcrypt.hash(password, SALT_ROUNDS);
+function getRandomBytes(length: number): Uint8Array {
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  return array;
 }
 
 /**
- * Verify password against bcrypt hash
+ * Convert ArrayBuffer to hex string
+ */
+function bufferToHex(buffer: ArrayBuffer | Uint8Array): string {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Convert hex string to Uint8Array
+ */
+function hexToBuffer(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes;
+}
+
+/**
+ * Hash password using PBKDF2 with Web Crypto API
+ * Returns: salt:hash (both as hex strings)
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = getRandomBytes(SALT_LENGTH);
+  const encoder = new TextEncoder();
+  const passwordBuffer = encoder.encode(password);
+
+  // Import password as key
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    passwordBuffer,
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+
+  // Derive bits using PBKDF2
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: salt.buffer as ArrayBuffer,
+      iterations: ITERATIONS,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    KEY_LENGTH
+  );
+
+  const saltHex = bufferToHex(salt);
+  const hashHex = bufferToHex(derivedBits);
+
+  return `${saltHex}:${hashHex}`;
+}
+
+/**
+ * Verify password against stored hash
  */
 export async function verifyPassword(
   password: string,
-  hash: string
+  storedHash: string
 ): Promise<boolean> {
-  return await bcrypt.compare(password, hash);
+  try {
+    const [saltHex, hashHex] = storedHash.split(":");
+    if (!saltHex || !hashHex) {
+      return false;
+    }
+
+    const salt = hexToBuffer(saltHex);
+    const encoder = new TextEncoder();
+    const passwordBuffer = encoder.encode(password);
+
+    // Import password as key
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      passwordBuffer,
+      "PBKDF2",
+      false,
+      ["deriveBits"]
+    );
+
+    // Derive bits using same parameters
+    const derivedBits = await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        salt: salt.buffer as ArrayBuffer,
+        iterations: ITERATIONS,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      KEY_LENGTH
+    );
+
+    const computedHashHex = bufferToHex(derivedBits);
+
+    // Constant-time comparison to prevent timing attacks
+    return computedHashHex === hashHex;
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Generate authentication token
- * Simple token for session management
  */
 export function generateToken(userId: string): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 15);
   const token = `${userId}_${timestamp}_${random}`;
-
-  // Base64 encode for cleaner token
   return btoa(token);
 }
 
 /**
  * Parse token to get user ID
- * Returns null if token is invalid
  */
 export function parseToken(token: string): string | null {
   try {
     const decoded = atob(token);
     const parts = decoded.split("_");
-
     if (parts.length !== 3) {
       return null;
     }
-
-    // parts[0] = userId
-    // parts[1] = timestamp
-    // parts[2] = random
-
     return parts[0];
   } catch {
     return null;
@@ -90,9 +173,7 @@ export function isValidPassword(password: string): boolean {
   if (password.length < 8) {
     return false;
   }
-
   const hasLetter = /[a-zA-Z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
-
   return hasLetter && hasNumber;
 }

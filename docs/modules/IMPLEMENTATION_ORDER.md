@@ -37,9 +37,10 @@ This document defines the recommended implementation order for Altaviapp modules
 | 7 | trips-api | 2 | 5-7 days | routes-api, students-api |
 | 8 | checkins-api | 2 | 3-5 days | trips-api |
 | 9 | incidents-api | 2 | 3-4 days | trips-api |
-| 10 | bubble-admin | 3 | 7-10 days | All Phase 2 |
-| 11 | bubble-parent | 3 | 4-5 days | All Phase 2 |
-| 12 | driver-pwa | 3 | 7-10 days | All Phase 2 |
+| 10 | admin-app | 3 | 7-10 days | All Phase 2 |
+| 11 | parent-app | 3 | 4-5 days | All Phase 2 |
+| 12 | crew-app | 3 | 7-10 days | All Phase 2 |
+| 13 | auth-flows | 3 | 3-5 days | admin-app |
 
 **Total**: ~50-70 working days (10-14 weeks)
 
@@ -54,24 +55,26 @@ Must be implemented first. No dependencies outside this phase.
 **Dependencies**: None (start here)
 
 **What to implement**:
-- Clerk SDK integration
-- Clerk webhook handler (/auth/sync)
-- User sync to Convex database
+- Custom token-based authentication
+- Session management (bcrypt + sessions)
+- User registration and login endpoints
 - getCurrentUser() helper
 - requireRole() helper
 - requireInstitutionAccess() helper
-- JWT token validation
+- Invitation system for user onboarding
 
 **Completion criteria**:
-- [ ] Users can sign in with Clerk
-- [ ] New users auto-create in Convex
+- [ ] Users can register and sign in
+- [ ] Sessions are managed securely
 - [ ] Role-based helpers work correctly
 - [ ] Institution access control enforced
+- [ ] Invitations system functional
 
 **Files to create**:
-- `convex/http.ts` - Webhook handler
-- `convex/lib/auth.ts` - Auth helpers
-- `middleware.ts` - Clerk middleware (Next.js)
+- `convex/auth.ts` - Auth mutations
+- `convex/authApi.ts` - HTTP endpoints
+- `convex/lib/authUtils.ts` - Auth helpers
+- `convex/invitations.ts` - Invitation system
 
 **Command**: `@implement auth`
 
@@ -92,7 +95,7 @@ Must be implemented first. No dependencies outside this phase.
 **Completion criteria**:
 - [ ] Standard response format working
 - [ ] Error handling consistent across endpoints
-- [ ] CORS configured for Bubble.io
+- [ ] CORS configured for frontend apps
 - [ ] Validation working with Zod
 
 **Files to create**:
@@ -385,91 +388,146 @@ Core business logic. **Cannot start until Phase 1 is 100% complete.**
 
 User interfaces. **Cannot start until Phase 2 is 100% complete.**
 
-### Module 10: bubble-admin
+**Architecture**: Monorepo with 3 Next.js PWA applications
+```
+/apps/
+├── admin/     # Admin Dashboard (Next.js PWA)
+├── parent/    # Parent Portal (Next.js PWA)
+└── crew/      # Crew App (Next.js PWA) - Base de desarrollo
+/packages/
+├── ui/        # Shared UI components (shadcn/ui)
+├── auth/      # Shared auth utilities
+├── pwa/       # Shared PWA utilities (service worker, manifest, offline)
+└── convex-client/  # Shared Convex hooks & types
+```
+
+**Base de Desarrollo**: El código existente en `/mobile/` (Crew App) sirve como base para todas las apps. Reutilizar:
+- Estructura de proyecto Next.js 14+
+- Configuración PWA (manifest, service worker)
+- Componentes UI (shadcn/ui)
+- Hooks de autenticación
+- Providers (Auth, Convex)
+
+**Wireframe Documents**:
+- [docs/design/ADMIN_WIREFRAMES.md](../design/ADMIN_WIREFRAMES.md)
+- [docs/design/PARENT_WIREFRAMES.md](../design/PARENT_WIREFRAMES.md)
+- [docs/design/CREW_WIREFRAMES.md](../design/CREW_WIREFRAMES.md)
+- [docs/design/AUTH_WIREFRAMES.md](../design/AUTH_WIREFRAMES.md)
+
+---
+
+### Module 10: admin-app
 **Duration**: 7-10 days
 **Dependencies**: All Phase 2 modules
+**Base**: Reutilizar estructura de `/mobile/` (Crew App)
 
 **What to implement**:
-- Admin dashboard pages (Bubble.io):
+- Admin dashboard PWA (Next.js):
   - Dashboard overview (metrics, alerts)
-  - Fleet management (vehicles, drivers)
+  - Fleet management (vehicles, drivers, monitors)
   - Route management (routes, stops, assignments)
   - Student management (students, QR codes)
   - Trip monitoring (active trips, history)
   - Incident management (reports, investigations)
   - Reports and analytics
   - Settings and configuration
-- API connector setup
-- Workflows for all CRUD operations
-- Real-time data display
+  - Invitation management (super_admin)
+- PWA features (installable, offline-capable)
+- Real-time data display with Convex
 - Filters and search
+- Responsive design (desktop-first, mobile-friendly)
 
 **Completion criteria**:
 - [ ] All pages functional
-- [ ] All API calls working
+- [ ] All Convex queries/mutations working
 - [ ] CRUD operations complete
 - [ ] Real-time data updating
-- [ ] Responsive design
+- [ ] PWA installable
+- [ ] Offline mode básico (view cached data)
 - [ ] Admin can manage entire system
 
 **Files to create**:
-- Bubble.io app pages (no code files)
-- Documentation: Update BUBBLE_SETUP_GUIDE.md with actual page structures
+- `apps/admin/src/app/*` - Admin pages
+- `apps/admin/src/components/*` - Admin components
+- `apps/admin/public/manifest.json` - PWA manifest
+- `apps/admin/public/sw.js` - Service worker
+- `packages/ui/*` - Shared UI components
 
-**Command**: `@implement bubble-admin`
+**Command**: `@implement admin-app`
 
-**Reference**: [docs/bubble/BUBBLE_SETUP_GUIDE.md](../bubble/BUBBLE_SETUP_GUIDE.md)
+**Reference**: [docs/design/ADMIN_WIREFRAMES.md](../design/ADMIN_WIREFRAMES.md)
 
 ---
 
-### Module 11: bubble-parent
+### Module 11: parent-app
 **Duration**: 4-5 days
 **Dependencies**: All Phase 2 modules
+**Base**: Reutilizar estructura de `/mobile/` (Crew App)
 
 **What to implement**:
-- Parent portal pages (Bubble.io):
-  - Login/signup
+- Parent portal PWA (Next.js):
+  - Login/signup via invitation
   - Student dashboard
   - Real-time tracking (map view)
   - Notification history
   - Trip history
   - Contact information
+- PWA features (installable, offline-capable)
 - Real-time GPS display (auto-refresh every 15s)
 - Route progress visualization
 - ETA calculation
-- WhatsApp notification history
+- Push notifications
+- Mobile-first design (instalable en teléfono)
 
 **Completion criteria**:
-- [ ] Parents can log in
+- [ ] Parents can log in via invitation
 - [ ] Can view their students
 - [ ] Can track bus in real-time
 - [ ] Notifications display correctly
 - [ ] Map updates automatically
-- [ ] Mobile-responsive
+- [ ] PWA installable
+- [ ] Push notifications working
+- [ ] Offline mode (view last known location)
 
 **Files to create**:
-- Bubble.io app pages
-- Documentation updates
+- `apps/parent/src/app/*` - Parent pages
+- `apps/parent/src/components/*` - Parent components
+- `apps/parent/public/manifest.json` - PWA manifest
+- `apps/parent/public/sw.js` - Service worker
 
-**Command**: `@implement bubble-parent`
+**Command**: `@implement parent-app`
 
-**Note**: Can be parallelized with bubble-admin (different Bubble apps or pages)
+**Reference**: [docs/design/PARENT_WIREFRAMES.md](../design/PARENT_WIREFRAMES.md)
+
+**Note**: Can be parallelized with admin-app (different apps)
 
 ---
 
-### Module 12: driver-pwa
+### Module 12: crew-app
 **Duration**: 7-10 days
 **Dependencies**: All Phase 2 modules
+**Base**: Ya existe en `/mobile/` - migrar a `/apps/crew/`
 
-**What to implement**:
-- Driver mobile PWA (Next.js):
-  - Login page
+**Estado Actual**:
+El código base ya existe en `/mobile/` con:
+- Estructura Next.js 14+ App Router
+- Páginas de auth (login, welcome, permissions)
+- Dashboard con role-based UI (driver/monitor)
+- Componentes de viaje (checklist, active trip, map)
+- Hooks de autenticación
+- Mock data para desarrollo
+
+**What to implement** (completar/migrar):
+- Crew mobile PWA (Next.js):
+  - Login page ✅ (existe)
   - Route selection page
-  - Active trip page
-  - Pre-trip checklist page
+  - Active trip page ✅ (existe parcialmente)
+  - Pre-trip checklist page (driver only) ✅ (existe)
   - Student check-in page (QR scanner)
-  - Incident report page
+  - Incident report page (monitor only)
   - Trip history page
+  - Profile and settings ✅ (existe parcialmente)
+- Conectar con Convex real (reemplazar mocks)
 - GPS tracking (continuous background updates)
 - QR code scanner (camera access)
 - Offline functionality:
@@ -478,11 +536,12 @@ User interfaces. **Cannot start until Phase 2 is 100% complete.**
   - Background sync for check-ins
   - Queued GPS updates
 - Push notifications
-- PWA manifest
-- Install prompt
+- Role-based UI (driver vs monitor) ✅ (existe)
 
 **Completion criteria**:
-- [ ] Driver can log in
+- [ ] Migrado a `/apps/crew/`
+- [ ] Mocks reemplazados con Convex queries
+- [ ] Crew can log in
 - [ ] Can select and start routes
 - [ ] GPS tracking functional
 - [ ] QR scanner working
@@ -490,17 +549,56 @@ User interfaces. **Cannot start until Phase 2 is 100% complete.**
 - [ ] Data syncs when back online
 - [ ] Can install as app
 - [ ] Push notifications working
+- [ ] Role-based features work correctly
+
+**Files to migrate/create**:
+- Migrar `/mobile/src/*` → `apps/crew/src/*`
+- `apps/crew/src/lib/offline-storage.ts`
+- `apps/crew/src/lib/gps-tracker.ts`
+- `apps/crew/src/lib/qr-scanner.ts`
+- Actualizar `apps/crew/public/sw.js`
+- Actualizar `apps/crew/public/manifest.json`
+
+**Command**: `@implement crew-app`
+
+**Reference**: [docs/design/CREW_WIREFRAMES.md](../design/CREW_WIREFRAMES.md)
+
+---
+
+### Module 13: auth-flows
+**Duration**: 3-5 days
+**Dependencies**: admin-app (shared components)
+
+**What to implement**:
+- Complete authentication UI:
+  - Landing page
+  - Subscription plan selection
+  - Registration form (new admin + institution)
+  - Login page
+  - Invitation code entry
+  - Set password (post-invitation)
+  - Email verification
+  - Password reset flow
+  - Invitation management (super_admin)
+- Shared auth components in packages/auth
+
+**Completion criteria**:
+- [ ] New account registration working
+- [ ] Invitation flow working
+- [ ] Password reset working
+- [ ] Email verification working
+- [ ] Super admin can manage invitations
+- [ ] All auth flows match wireframes
 
 **Files to create**:
-- `app/driver/*` - Driver app pages
-- `components/driver/*` - Driver components
-- `lib/offline-storage.ts`
-- `lib/gps-tracker.ts`
-- `lib/qr-scanner.ts`
-- `public/sw.js` - Service worker
-- `public/manifest.json` - PWA manifest
+- `packages/auth/src/*` - Shared auth components
+- `apps/admin/src/app/(auth)/*` - Auth pages
+- `apps/parent/src/app/(auth)/*` - Auth pages
+- `apps/crew/src/app/(auth)/*` - Auth pages
 
-**Command**: `@implement driver-pwa`
+**Command**: `@implement auth-flows`
+
+**Reference**: [docs/design/AUTH_WIREFRAMES.md](../design/AUTH_WIREFRAMES.md)
 
 **End of Phase 3** ✅
 
@@ -535,9 +633,10 @@ Phase 2 (Backend)
 Phase 3 (Frontends)
   [All Phase 2 complete]
     ↓
-    ├─→ bubble-admin
-    ├─→ bubble-parent
-    └─→ driver-pwa
+    ├─→ admin-app
+    ├─→ parent-app
+    ├─→ crew-app
+    └─→ auth-flows
 ```
 
 ### Mermaid Diagram
@@ -554,24 +653,16 @@ graph TD
     G --> H[checkins-api]
     G --> I[incidents-api]
 
-    D --> J[bubble-admin]
-    E --> J
-    F --> J
-    G --> J
+    I --> J[admin-app]
     H --> J
-    I --> J
 
-    D --> K[bubble-parent]
-    E --> K
-    F --> K
-    G --> K
+    I --> K[parent-app]
     H --> K
 
-    D --> L[driver-pwa]
-    E --> L
-    F --> L
-    G --> L
+    I --> L[crew-app]
     H --> L
+
+    J --> M[auth-flows]
 ```
 
 ---
@@ -587,11 +678,12 @@ graph TD
   - Merge both before starting `routes-api`
 
 **Phase 3**:
-- `bubble-admin` and `bubble-parent` (separate Bubble apps/pages)
-  - Branch 1: `feature/bubble-admin`
-  - Branch 2: `feature/bubble-parent`
-- `driver-pwa` can run in parallel with Bubble work
-  - Branch 3: `feature/driver-pwa`
+- `admin-app`, `parent-app`, and `crew-app` can run in parallel
+  - Branch 1: `feature/admin-app`
+  - Branch 2: `feature/parent-app`
+  - Branch 3: `feature/crew-app`
+- `auth-flows` depends on shared components from admin-app
+  - Branch 4: `feature/auth-flows` (after packages/ui setup)
 
 ### Cannot Be Parallelized (Sequential)
 
@@ -617,9 +709,10 @@ fleet-api (5d) →
 routes-api (7d) →
 trips-api (7d) →
 checkins-api (5d) →
-bubble-admin (10d)
+admin-app (10d) →
+auth-flows (5d)
 
-Total Critical Path: ~45 days (9 weeks)
+Total Critical Path: ~50 days (10 weeks)
 ```
 
 **With parallelization**:
@@ -658,15 +751,16 @@ Total Critical Path: ~45 days (9 weeks)
 - [ ] incidents-api (3-4 days) [parallel with checkins-api]
 
 ### Week 8-9
-- [ ] bubble-admin (7-10 days)
+- [ ] admin-app (7-10 days)
 
 ### Week 10
-- [ ] bubble-parent (4-5 days)
+- [ ] parent-app (4-5 days)
 
 ### Week 11-12
-- [ ] driver-pwa (7-10 days) [parallel with Bubble work]
+- [ ] crew-app (7-10 days) [parallel with admin/parent work]
+- [ ] auth-flows (3-5 days) [after shared components ready]
 
-**Total**: 12 weeks (3 months)
+**Total**: 12-13 weeks (3 months)
 
 ---
 
@@ -674,8 +768,8 @@ Total Critical Path: ~45 days (9 weeks)
 
 ### Potential Blockers
 
-1. **Clerk setup delays** (Module 1)
-   - Mitigation: Set up Clerk account and keys before starting
+1. **Auth system complexity** (Module 1)
+   - Mitigation: Auth system already implemented, review existing code
 
 2. **Convex schema issues** (Module 3)
    - Mitigation: Schema already defined, just need to deploy
@@ -686,8 +780,8 @@ Total Critical Path: ~45 days (9 weeks)
 4. **GPS tracking accuracy** (Module 7)
    - Mitigation: Test on real devices early
 
-5. **Bubble.io API connector limits** (Modules 10-11)
-   - Mitigation: Understand Bubble limits, optimize API calls
+5. **Monorepo setup complexity** (Phase 3)
+   - Mitigation: Set up Turborepo + pnpm early, test shared packages
 
 6. **PWA offline sync complexity** (Module 12)
    - Mitigation: Prototype service worker early
@@ -696,7 +790,7 @@ Total Critical Path: ~45 days (9 weeks)
 
 - **Start each module with spike/prototype** for complex features
 - **Test on real devices** for GPS and QR features
-- **Get Bubble.io familiarity** before Phase 3
+- **Set up monorepo structure early** before Phase 3
 - **Set up CI/CD early** to catch integration issues
 - **Regular testing** after each module completion
 
@@ -743,9 +837,10 @@ Total Critical Path: ~45 days (9 weeks)
 @implement incidents-api
 
 # Phase 3
-@implement bubble-admin
-@implement bubble-parent
-@implement driver-pwa
+@implement admin-app
+@implement parent-app
+@implement crew-app
+@implement auth-flows
 ```
 
 ---

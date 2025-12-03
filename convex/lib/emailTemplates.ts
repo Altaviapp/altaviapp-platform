@@ -4,9 +4,9 @@
  * Generates professional HTML emails for:
  * - User invitations (parent/driver/admin)
  * - Email verification
- * - Password reset (future)
+ * - Password reset
  *
- * Following Alquemist pattern: Backend generates HTML, Frontend (Bubble) sends
+ * Backend generates HTML, Frontend sends via email service.
  */
 
 interface EmailTemplate {
@@ -27,8 +27,8 @@ export function generateInvitationEmail(params: {
 }): EmailTemplate {
   const { firstName, invitationCode, role, institutionName, invitedBy } = params;
 
-  // Get Bubble app URL from environment (fallback to localhost for dev)
-  const appUrl = process.env.BUBBLE_APP_URL || 'http://localhost:3000';
+  // Get app URL from environment (fallback to localhost for dev)
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const invitationLink = `${appUrl}/signup-invitation?code=${invitationCode}`;
 
   const roleSpanish = role === 'parent' ? 'Padre de Familia' :
@@ -124,8 +124,8 @@ export function generateEmailVerificationEmail(params: {
 }): EmailTemplate {
   const { firstName, verificationToken } = params;
 
-  const appUrl = process.env.BUBBLE_APP_URL || 'http://localhost:3000';
-  const verificationLink = `${appUrl}/verify-email?token=${verificationToken}`;
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const verificationLink = `${appUrl}/verify-email?code=${verificationToken}`;
 
   const html = `
 <!DOCTYPE html>
@@ -211,8 +211,8 @@ export function generatePasswordResetEmail(params: {
 }): EmailTemplate {
   const { firstName, resetToken } = params;
 
-  const appUrl = process.env.BUBBLE_APP_URL || 'http://localhost:3000';
-  const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const resetLink = `${appUrl}/reset-password?code=${resetToken}`;
 
   const html = `
 <!DOCTYPE html>

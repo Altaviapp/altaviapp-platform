@@ -1,8 +1,30 @@
-# Parent Portal Wireframes
+# Parent Portal Wireframes (PWA)
 **Altaviapp - School Transport Management Platform**
-**Versión**: 1.0
+**Versión**: 1.1
 **Fecha**: Enero 2025
-**Propósito**: Guía de wireframes para el portal de padres
+**Propósito**: Guía de wireframes para el portal de padres (PWA)
+
+---
+
+## Características de la PWA
+
+### Instalación
+- Instalable en iOS y Android
+- Ícono en pantalla de inicio
+- Funciona como app nativa
+- Actualizaciones automáticas
+
+### Performance
+- Carga en < 2 segundos
+- GPS tracking en tiempo real
+- Notificaciones push
+- Modo offline (ver última ubicación conocida)
+
+### Diseño
+- Mobile-first (360-414px)
+- Responsive para tablet
+- Alto contraste para uso en exteriores
+- Botones grandes para fácil interacción
 
 ---
 

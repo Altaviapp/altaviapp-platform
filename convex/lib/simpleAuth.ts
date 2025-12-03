@@ -1,8 +1,8 @@
 /**
  * Simple Authentication Helpers
  *
- * Simple auth verification for Bubble.io integration.
- * Bubble passes userId (backend_user_id) in API calls.
+ * Auth verification by userId (used internally after token validation).
+ * Frontend passes userId from session token.
  *
  * Role hierarchy:
  * - super_admin (1000): Platform-wide access

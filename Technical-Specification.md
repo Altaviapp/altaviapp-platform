@@ -12,11 +12,12 @@
 This document defines **HOW to build** Altaviapp, providing technical implementation patterns, architecture decisions, and code examples. This complements [docs/PRD.md](docs/PRD.md) (WHAT to build) and [docs/database/DATABASE_SCHEMA.md](docs/database/DATABASE_SCHEMA.md) (DATA structure).
 
 **Technology Philosophy**:
-- **Dual-Frontend**: Bubble.io (80% standard UI) + Next.js PWA (20% complex features)
+- **Unified PWA**: All frontends are Next.js 14+ PWA (Admin, Parent, Crew)
 - **Serverless-First**: Convex for database and real-time
 - **Type-Safe**: TypeScript strict mode throughout
-- **Offline-Capable**: PWA with service workers for driver app
+- **Offline-Capable**: PWA with service workers for all apps
 - **Real-Time**: Live queries for GPS tracking and notifications
+- **Monorepo**: Turborepo for shared components and utilities
 
 ---
 
@@ -29,113 +30,140 @@ This document defines **HOW to build** Altaviapp, providing technical implementa
 | **Database** | Convex | Latest | Real-time serverless database |
 | **Backend Functions** | Convex | Latest | Serverless queries/mutations |
 | **Authentication** | Custom Token-Based | Latest | User management, session tokens, RBAC |
-| **Admin UI** | Bubble.io | Latest | No-code dashboard and parent portal |
-| **Driver App** | Next.js 14+ | 14.x | PWA for offline-capable mobile app |
-| **Language** | TypeScript | 5.x | Type safety (Next.js side) |
-| **Styling** | Tailwind CSS | 3.x | Utility-first CSS (Next.js) |
-| **Maps** | Leaflet + OSM | 1.9.x | Interactive maps, route planning |
+| **Admin App** | Next.js 14+ | 14.x | PWA Admin Dashboard |
+| **Parent App** | Next.js 14+ | 14.x | PWA Parent Portal |
+| **Crew App** | Next.js 14+ | 14.x | PWA for drivers/monitors |
+| **Language** | TypeScript | 5.x | Type safety (strict mode) |
+| **Styling** | Tailwind CSS | 3.x | Utility-first CSS |
+| **UI Components** | shadcn/ui | Latest | Accessible component library |
+| **Maps** | Google Maps API | Latest | Maps, Directions, Geocoding, Places |
+| **Maps React** | @react-google-maps/api | 2.x | React bindings for Google Maps |
 | **QR Codes** | qrcode | 1.5.x | Student QR generation |
 | **Validation** | Zod | 3.x | Schema validation |
-| **Forms** | React Hook Form | Latest | Form state management (Next.js) |
+| **Forms** | React Hook Form | Latest | Form state management |
 | **Notifications** | WhatsApp Business API | Latest | Parent notifications |
-| **Deployment (Next.js)** | Vercel | Latest | PWA hosting |
-| **Deployment (Bubble)** | Bubble.io Cloud | Latest | No-code app hosting |
+| **Build Tool** | Turborepo | Latest | Monorepo management |
+| **Package Manager** | pnpm | 8.x | Fast, disk-efficient package manager |
+| **Deployment** | Vercel | Latest | All PWA hosting |
 
 ---
 
-## Dual-Frontend Architecture
+## Unified PWA Architecture
 
-### When to Use Each Frontend
+### Monorepo Structure
 
-#### Bubble.io (Primary - 80% of UI)
-**Use for:**
-- ✅ Admin dashboard (fleet management, route planning, reports)
-- ✅ Parent portal (student info, real-time tracking)
-- ✅ Standard CRUD operations (create, read, update, delete)
-- ✅ Data entry forms
-- ✅ List/table views
-- ✅ Basic dashboards and metrics
-- ✅ Simple workflows
-- ✅ Rapid prototyping and iteration
+All frontends are Next.js 14+ PWA applications organized in a Turborepo monorepo:
 
-**Advantages:**
-- Non-technical users can modify UI
-- 10x faster development than code
-- Built-in responsive design
-- No deployment pipeline needed
-- Visual debugging
+```
+/altaviapp-platform/
+├── apps/
+│   ├── admin/          # Admin Dashboard PWA
+│   │   ├── app/        # Next.js App Router
+│   │   ├── components/ # Admin-specific components
+│   │   └── public/     # PWA manifest, icons
+│   ├── parent/         # Parent Portal PWA
+│   │   ├── app/        # Next.js App Router
+│   │   ├── components/ # Parent-specific components
+│   │   └── public/     # PWA manifest, icons
+│   └── crew/           # Crew App PWA (Base de desarrollo)
+│       ├── app/        # Next.js App Router
+│       ├── components/ # Crew-specific components
+│       └── public/     # PWA manifest, icons
+├── packages/
+│   ├── ui/             # Shared UI components (shadcn/ui)
+│   ├── auth/           # Shared auth utilities
+│   ├── maps/           # Google Maps components
+│   ├── pwa/            # Shared PWA utilities
+│   └── convex-client/  # Convex hooks and types
+├── convex/             # Backend (shared)
+└── turbo.json          # Turborepo configuration
+```
 
-**Limitations:**
-- Limited customization for complex UI
-- No offline mode
-- Performance constraints for heavy data processing
-- No TypeScript or compile-time checks
+### App Characteristics
 
-#### Next.js PWA (Advanced - 20% of features)
-**Use for:**
-- ✅ Driver mobile app (offline-first with GPS tracking)
-- ✅ QR code scanner (camera access)
-- ✅ Offline data sync
-- ✅ Service workers and IndexedDB
-- ✅ Complex real-time features
-- ✅ High-performance requirements
+| App | Target Users | Primary Device | Key Features |
+|-----|--------------|----------------|--------------|
+| **Admin** | super_admin, admin | Desktop/Tablet | Fleet management, routes, reports, user management |
+| **Parent** | parent | Mobile | Real-time tracking, notifications, student info |
+| **Crew** | driver, monitor | Mobile | GPS tracking, QR scanning, check-ins, offline mode |
 
-**Advantages:**
-- Full control over UI/UX
-- Offline-first capabilities
-- TypeScript type safety
-- Service workers for background sync
-- Native device access (camera, GPS, notifications)
+### PWA Features by App
 
-**Limitations:**
-- Slower development than Bubble
-- Requires code deployment
-- More complex to maintain
+**All Apps:**
+- ✅ Installable (Add to Home Screen)
+- ✅ Service Worker for caching
+- ✅ Responsive design
+- ✅ Push notifications
+- ✅ TypeScript strict mode
+
+**Admin App (Desktop-first):**
+- ✅ Full dashboard experience
+- ✅ Data tables and charts
+- ✅ Route planning with Google Maps
+- ✅ Bulk operations (CSV import)
+- ✅ Reports and analytics
+
+**Parent App (Mobile-first):**
+- ✅ Real-time GPS tracking
+- ✅ Push notifications for arrivals
+- ✅ Student information
+- ✅ Trip history
+- ✅ Basic offline (cached data)
+
+**Crew App (Offline-first):**
+- ✅ Offline data sync (IndexedDB)
+- ✅ Background sync for check-ins
+- ✅ GPS tracking (every 15s)
+- ✅ QR code scanner (camera)
+- ✅ Geofencing alerts
 
 ### Architecture Diagram
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                    USERS                             │
-│         (Schools in Ecuador - Spanish)               │
-└────────────────┬────────────┬────────────────────────┘
-                 │            │
-        ┌────────┴────┐  ┌────┴─────────┐
-        │             │  │              │
-        ↓             ↓  ↓              ↓
-┌───────────────┐  ┌────────────┐  ┌──────────────┐
-│  BUBBLE.IO    │  │ BUBBLE.IO  │  │  NEXT.JS PWA │
-│  Admin        │  │ Parent     │  │  Driver App  │
-│  Dashboard    │  │ Portal     │  │              │
-│               │  │            │  │  - GPS Track │
-│  - Fleet Mgmt │  │ - Tracking │  │  - QR Scan   │
-│  - Routes     │  │ - Alerts   │  │  - Offline   │
-│  - Reports    │  │ - Student  │  │  - Check-ins │
-└───────┬───────┘  └─────┬──────┘  └──────┬───────┘
-        │                │                 │
-        └────────────────┴─────────────────┘
-                         │
-                         ↓
-              ┌──────────────────────┐
-              │   REST API v1        │
-              │   /api/v1/*          │
-              │                      │
-              │  - Standard Format   │
-              │  - Error Handling    │
-              │  - Validation (Zod)  │
-              └──────────┬───────────┘
-                         │
-             ┌───────────┴──────────────┐
-             │                          │
-             ↓                          ↓
-    ┌────────────────┐        ┌─────────────────┐
-    │  CLERK AUTH    │        │  CONVEX DB      │
-    │                │        │                 │
-    │  - Users       │        │  - Real-time    │
-    │  - Sessions    │        │  - 19 Tables    │
-    │  - RBAC        │        │  - Live Queries │
-    │  - JWT         │        │  - Mutations    │
-    └────────────────┘        └─────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                         USERS                                 │
+│              (Schools in Ecuador - Spanish)                   │
+└───────────────┬──────────────┬───────────────┬───────────────┘
+                │              │               │
+                ↓              ↓               ↓
+┌───────────────────┐  ┌───────────────┐  ┌──────────────────┐
+│   ADMIN PWA       │  │  PARENT PWA   │  │    CREW PWA      │
+│   Next.js 14+     │  │  Next.js 14+  │  │    Next.js 14+   │
+│                   │  │               │  │                  │
+│  - Fleet Mgmt     │  │  - Tracking   │  │  - GPS Track     │
+│  - Routes         │  │  - Alerts     │  │  - QR Scan       │
+│  - Reports        │  │  - Students   │  │  - Offline       │
+│  - Users          │  │  - History    │  │  - Check-ins     │
+│  Desktop-first    │  │  Mobile-first │  │  Offline-first   │
+└─────────┬─────────┘  └───────┬───────┘  └────────┬─────────┘
+          │                    │                    │
+          └────────────────────┼────────────────────┘
+                               │
+            ┌──────────────────┴───────────────────┐
+            │                                      │
+            ↓                                      ↓
+┌───────────────────────┐            ┌────────────────────────┐
+│   GOOGLE MAPS API     │            │      CONVEX            │
+│                       │            │                        │
+│  - Maps JavaScript    │            │  - Real-time DB        │
+│  - Directions API     │            │  - Live Queries        │
+│  - Geocoding API      │            │  - Mutations           │
+│  - Distance Matrix    │            │  - HTTP Actions (API)  │
+│  - Places API         │            │  - File Storage        │
+│  - Roads API          │            │                        │
+└───────────────────────┘            └───────────┬────────────┘
+                                                 │
+                                     ┌───────────┴───────────┐
+                                     │                       │
+                                     ↓                       ↓
+                          ┌─────────────────┐    ┌──────────────────┐
+                          │  CUSTOM AUTH    │    │   EXTERNAL       │
+                          │                 │    │                  │
+                          │  - bcrypt       │    │  - WhatsApp API  │
+                          │  - Sessions     │    │  - Email (SMTP)  │
+                          │  - RBAC         │    │  - Push (FCM)    │
+                          │  - Invitations  │    │                  │
+                          └─────────────────┘    └──────────────────┘
 ```
 
 ---
@@ -267,7 +295,7 @@ export class ValidationError extends ApiError {
 **Authentication Flow**:
 1. User registers/logs in via REST API endpoints
 2. Server validates credentials and generates session token
-3. Token stored in localStorage (PWA) or Bubble User field (Bubble.io)
+3. Token stored in localStorage (all PWA apps)
 4. Token sent with each API request for authentication
 
 **REST Endpoints** (Convex):
@@ -307,7 +335,7 @@ http.route({
 **Session Management**:
 - Token format: Base64 encoded `{userId}_{timestamp}_{random}`
 - Token expiration: 30 days
-- Storage: localStorage (PWA), Bubble User field (Bubble.io)
+- Storage: localStorage (all PWA apps)
 - Validation: On every API request via token lookup
 
 ### Role-Based Access Control (RBAC)
@@ -699,6 +727,380 @@ class GPSTracker {
 
 export const gpsTracker = new GPSTracker()
 ```
+
+---
+
+## Google Maps Integration
+
+### API Services Configuration
+
+**Required APIs** (enable in Google Cloud Console):
+- Maps JavaScript API - Interactive maps
+- Directions API - Route calculation
+- Geocoding API - Address ↔ Coordinates
+- Distance Matrix API - Distance/time calculations
+- Places API - Address autocomplete
+- Roads API - Snap to road for GPS traces
+
+### Setup and Configuration
+
+```typescript
+// lib/google-maps.ts
+import { Loader } from '@googlemaps/js-api-loader'
+
+const loader = new Loader({
+  apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+  version: 'weekly',
+  libraries: ['places', 'geometry', 'drawing']
+})
+
+export async function initGoogleMaps() {
+  return await loader.load()
+}
+
+// packages/maps/src/config.ts
+export const GOOGLE_MAPS_CONFIG = {
+  apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+  defaultCenter: { lat: -0.1807, lng: -78.4678 }, // Quito, Ecuador
+  defaultZoom: 12,
+  language: 'es',
+  region: 'EC'
+}
+```
+
+### Map Component (React)
+
+```tsx
+// packages/maps/src/components/GoogleMap.tsx
+'use client'
+import { GoogleMap, useJsApiLoader, Marker, Polyline } from '@react-google-maps/api'
+import { GOOGLE_MAPS_CONFIG } from '../config'
+
+interface MapProps {
+  center?: google.maps.LatLngLiteral
+  markers?: Array<{ position: google.maps.LatLngLiteral; label?: string }>
+  route?: google.maps.LatLngLiteral[]
+  onMapClick?: (e: google.maps.MapMouseEvent) => void
+}
+
+export function Map({ center, markers = [], route, onMapClick }: MapProps) {
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_CONFIG.apiKey,
+    libraries: ['places', 'geometry']
+  })
+
+  if (!isLoaded) return <div className="h-full animate-pulse bg-muted" />
+
+  return (
+    <GoogleMap
+      mapContainerClassName="w-full h-full min-h-[400px]"
+      center={center || GOOGLE_MAPS_CONFIG.defaultCenter}
+      zoom={GOOGLE_MAPS_CONFIG.defaultZoom}
+      onClick={onMapClick}
+      options={{
+        disableDefaultUI: false,
+        zoomControl: true,
+        streetViewControl: false,
+        mapTypeControl: false
+      }}
+    >
+      {markers.map((marker, idx) => (
+        <Marker key={idx} position={marker.position} label={marker.label} />
+      ))}
+
+      {route && route.length > 1 && (
+        <Polyline
+          path={route}
+          options={{
+            strokeColor: '#4F46E5',
+            strokeOpacity: 0.8,
+            strokeWeight: 4
+          }}
+        />
+      )}
+    </GoogleMap>
+  )
+}
+```
+
+### Directions API (Route Calculation)
+
+```typescript
+// packages/maps/src/services/directions.ts
+export async function calculateRoute(
+  origin: google.maps.LatLngLiteral,
+  destination: google.maps.LatLngLiteral,
+  waypoints?: google.maps.LatLngLiteral[]
+): Promise<google.maps.DirectionsResult> {
+  const directionsService = new google.maps.DirectionsService()
+
+  const result = await directionsService.route({
+    origin,
+    destination,
+    waypoints: waypoints?.map(wp => ({ location: wp, stopover: true })),
+    optimizeWaypoints: true,
+    travelMode: google.maps.TravelMode.DRIVING,
+    region: 'EC'
+  })
+
+  return result
+}
+
+// Usage in route planning
+export async function optimizeStopOrder(
+  origin: google.maps.LatLngLiteral,
+  stops: Array<{ id: string; position: google.maps.LatLngLiteral }>
+): Promise<string[]> {
+  const result = await calculateRoute(
+    origin,
+    origin, // Return to origin
+    stops.map(s => s.position)
+  )
+
+  // Returns optimized order of stop IDs
+  const optimizedOrder = result.routes[0].waypoint_order
+  return optimizedOrder.map(idx => stops[idx].id)
+}
+```
+
+### Geocoding API (Address Resolution)
+
+```typescript
+// packages/maps/src/services/geocoding.ts
+export async function geocodeAddress(
+  address: string
+): Promise<google.maps.LatLngLiteral | null> {
+  const geocoder = new google.maps.Geocoder()
+
+  try {
+    const result = await geocoder.geocode({
+      address,
+      region: 'EC',
+      componentRestrictions: { country: 'EC' }
+    })
+
+    if (result.results.length > 0) {
+      const location = result.results[0].geometry.location
+      return { lat: location.lat(), lng: location.lng() }
+    }
+    return null
+  } catch (error) {
+    console.error('Geocoding error:', error)
+    return null
+  }
+}
+
+export async function reverseGeocode(
+  position: google.maps.LatLngLiteral
+): Promise<string | null> {
+  const geocoder = new google.maps.Geocoder()
+
+  try {
+    const result = await geocoder.geocode({ location: position })
+    if (result.results.length > 0) {
+      return result.results[0].formatted_address
+    }
+    return null
+  } catch (error) {
+    console.error('Reverse geocoding error:', error)
+    return null
+  }
+}
+```
+
+### Distance Matrix API (ETA Calculations)
+
+```typescript
+// packages/maps/src/services/distance.ts
+export interface DistanceResult {
+  distance: { text: string; value: number } // value in meters
+  duration: { text: string; value: number } // value in seconds
+}
+
+export async function getDistanceMatrix(
+  origins: google.maps.LatLngLiteral[],
+  destinations: google.maps.LatLngLiteral[]
+): Promise<DistanceResult[][]> {
+  const service = new google.maps.DistanceMatrixService()
+
+  const result = await service.getDistanceMatrix({
+    origins,
+    destinations,
+    travelMode: google.maps.TravelMode.DRIVING,
+    unitSystem: google.maps.UnitSystem.METRIC,
+    region: 'EC'
+  })
+
+  return result.rows.map(row =>
+    row.elements.map(element => ({
+      distance: element.distance,
+      duration: element.duration
+    }))
+  )
+}
+
+// Calculate ETA to next stop
+export async function calculateETA(
+  currentPosition: google.maps.LatLngLiteral,
+  nextStop: google.maps.LatLngLiteral
+): Promise<{ minutes: number; distance: string }> {
+  const matrix = await getDistanceMatrix([currentPosition], [nextStop])
+  const result = matrix[0][0]
+
+  return {
+    minutes: Math.ceil(result.duration.value / 60),
+    distance: result.distance.text
+  }
+}
+```
+
+### Places API (Address Autocomplete)
+
+```tsx
+// packages/maps/src/components/AddressAutocomplete.tsx
+'use client'
+import { useRef, useEffect, useState } from 'react'
+import { Input } from '@/components/ui/input'
+
+interface AddressAutocompleteProps {
+  onPlaceSelect: (place: google.maps.places.PlaceResult) => void
+  placeholder?: string
+}
+
+export function AddressAutocomplete({
+  onPlaceSelect,
+  placeholder = 'Ingresa una dirección...'
+}: AddressAutocompleteProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null)
+
+  useEffect(() => {
+    if (!inputRef.current || autocomplete) return
+
+    const ac = new google.maps.places.Autocomplete(inputRef.current, {
+      componentRestrictions: { country: 'EC' },
+      fields: ['formatted_address', 'geometry', 'name'],
+      types: ['address']
+    })
+
+    ac.addListener('place_changed', () => {
+      const place = ac.getPlace()
+      if (place.geometry) {
+        onPlaceSelect(place)
+      }
+    })
+
+    setAutocomplete(ac)
+  }, [onPlaceSelect, autocomplete])
+
+  return (
+    <Input
+      ref={inputRef}
+      type="text"
+      placeholder={placeholder}
+      className="w-full"
+    />
+  )
+}
+```
+
+### Real-Time Vehicle Tracking Map
+
+```tsx
+// apps/parent/components/TrackingMap.tsx
+'use client'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import { Map } from '@altaviapp/maps'
+import { useEffect, useState } from 'react'
+
+interface TrackingMapProps {
+  tripId: string
+  studentStopId: string
+}
+
+export function TrackingMap({ tripId, studentStopId }: TrackingMapProps) {
+  const trip = useQuery(api.trips.getActiveTrip, { tripId })
+  const [vehiclePosition, setVehiclePosition] = useState<google.maps.LatLngLiteral | null>(null)
+  const [eta, setEta] = useState<string | null>(null)
+
+  // Real-time vehicle position from Convex live query
+  useEffect(() => {
+    if (trip?.currentLocation) {
+      setVehiclePosition({
+        lat: trip.currentLocation.latitude,
+        lng: trip.currentLocation.longitude
+      })
+    }
+  }, [trip?.currentLocation])
+
+  // Calculate ETA when position updates
+  useEffect(() => {
+    if (vehiclePosition && trip?.nextStop) {
+      calculateETA(vehiclePosition, {
+        lat: trip.nextStop.latitude,
+        lng: trip.nextStop.longitude
+      }).then(result => {
+        setEta(`${result.minutes} min (${result.distance})`)
+      })
+    }
+  }, [vehiclePosition, trip?.nextStop])
+
+  const markers = []
+
+  // Vehicle marker
+  if (vehiclePosition) {
+    markers.push({
+      position: vehiclePosition,
+      label: '🚌',
+      icon: '/icons/bus-marker.png'
+    })
+  }
+
+  // Student's stop marker
+  if (trip?.stops) {
+    const studentStop = trip.stops.find(s => s.id === studentStopId)
+    if (studentStop) {
+      markers.push({
+        position: { lat: studentStop.latitude, lng: studentStop.longitude },
+        label: '📍'
+      })
+    }
+  }
+
+  return (
+    <div className="relative h-[400px] rounded-lg overflow-hidden">
+      <Map
+        center={vehiclePosition || undefined}
+        markers={markers}
+        route={trip?.routePath}
+      />
+      {eta && (
+        <div className="absolute bottom-4 left-4 bg-white px-3 py-2 rounded-lg shadow-lg">
+          <p className="text-sm font-medium">Llegada estimada: {eta}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+### API Quotas and Best Practices
+
+| API | Free Tier | Cost After | Optimization |
+|-----|-----------|------------|--------------|
+| Maps JavaScript | Unlimited loads | $7/1000 | Cache map instances |
+| Directions | $5/1000 requests | $10/1000 | Cache common routes |
+| Geocoding | $5/1000 requests | $5/1000 | Cache addresses |
+| Distance Matrix | $5/1000 elements | $10/1000 | Batch requests |
+| Places | $17/1000 requests | - | Limit autocomplete |
+
+**Best Practices:**
+- Enable billing with budget alerts
+- Use Places Session Tokens for autocomplete
+- Cache frequently accessed routes
+- Batch Distance Matrix requests
+- Use `fields` parameter to request only needed data
 
 ---
 
@@ -1181,19 +1583,19 @@ export const archiveOldGPSData = internalMutation({
 ```bash
 # .env.local (Development)
 NEXT_PUBLIC_CONVEX_URL=https://your-dev.convex.cloud
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_***
-CLERK_SECRET_KEY=sk_test_***
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIza***
 WHATSAPP_API_URL=https://graph.facebook.com/v18.0
 WHATSAPP_API_TOKEN=***
 APP_URL=http://localhost:3000
+SESSION_SECRET=your-session-secret-32-chars-min
 
 # Production
 NEXT_PUBLIC_CONVEX_URL=https://your-prod.convex.cloud
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_***
-CLERK_SECRET_KEY=sk_live_***
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIza***
 WHATSAPP_API_URL=https://graph.facebook.com/v18.0
 WHATSAPP_API_TOKEN=***
 APP_URL=https://altaviapp.com
+SESSION_SECRET=your-production-secret-32-chars
 ```
 
 ### CI/CD Pipeline (GitHub Actions)
@@ -1215,31 +1617,55 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install
 
       - name: Run tests
-        run: npm test
+        run: pnpm test
 
       - name: Deploy Convex
-        run: npx convex deploy --prod
+        run: pnpm convex deploy --prod
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
-      - name: Build Next.js PWA
-        run: npm run build
+      - name: Build all apps
+        run: pnpm build
         env:
           NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
 
-      - name: Deploy to Vercel
+      - name: Deploy Admin to Vercel
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
+          working-directory: apps/admin
+          vercel-args: '--prod'
+
+      - name: Deploy Parent to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PARENT_PROJECT_ID }}
+          working-directory: apps/parent
+          vercel-args: '--prod'
+
+      - name: Deploy Crew to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_CREW_PROJECT_ID }}
+          working-directory: apps/crew
           vercel-args: '--prod'
 ```
 
@@ -1249,12 +1675,14 @@ jobs:
 
 This technical specification provides all HOW-TO patterns for implementing Altaviapp:
 
-✅ **Dual-Frontend**: Bubble.io (80%) + Next.js PWA (20%)
+✅ **Unified PWA**: Three Next.js 14+ PWA apps (Admin, Parent, Crew)
+✅ **Monorepo**: Turborepo with shared packages (ui, auth, maps, pwa)
 ✅ **API Design**: Standard REST format, error handling, validation
-✅ **Authentication**: Clerk integration with RBAC
+✅ **Authentication**: Custom token-based auth with bcrypt + RBAC
 ✅ **Real-Time**: Convex live queries for GPS tracking
 ✅ **Offline-First**: Service workers, IndexedDB, background sync
 ✅ **GPS Tracking**: 15-second updates, geofencing, error handling
+✅ **Google Maps**: Directions, Geocoding, Places, Distance Matrix APIs
 ✅ **QR System**: Generation, scanning, validation
 ✅ **WhatsApp**: Template-based notifications
 ✅ **Multi-Tenancy**: Row-level security, institution isolation
@@ -1266,4 +1694,5 @@ This technical specification provides all HOW-TO patterns for implementing Altav
 **See Also**:
 - [docs/PRD.md](docs/PRD.md) - WHAT to build
 - [docs/database/DATABASE_SCHEMA.md](docs/database/DATABASE_SCHEMA.md) - DATA structure
+- [docs/design/](docs/design/) - Wireframes (Admin, Parent, Crew, Auth)
 - [CLAUDE.md](CLAUDE.md) - AGENT workflow

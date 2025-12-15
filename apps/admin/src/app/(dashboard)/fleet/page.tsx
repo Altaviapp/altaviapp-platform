@@ -1,43 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Bus, Users, UserCheck, Plus, Search, MoreHorizontal, Edit, Trash2, Eye, Wrench, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bus, Users, UserCheck, Plus, Search, MoreHorizontal, Edit, Trash2, Eye, Wrench, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-// Mock vehicles data
-const vehicles = [
-  { id: 1, plate: 'ABC-1234', model: 'Toyota Coaster', year: 2022, capacity: 30, status: 'active', driver: 'Juan Pérez', route: 'Ruta Centro' },
-  { id: 2, plate: 'XYZ-5678', model: 'Mitsubishi Rosa', year: 2021, capacity: 25, status: 'maintenance', driver: null, route: null },
-  { id: 3, plate: 'DEF-9012', model: 'Hino Dutro', year: 2023, capacity: 35, status: 'active', driver: 'María González', route: 'Ruta Norte' },
-  { id: 4, plate: 'GHI-3456', model: 'Toyota Coaster', year: 2020, capacity: 30, status: 'inactive', driver: null, route: null },
-  { id: 5, plate: 'JKL-7890', model: 'Hyundai County', year: 2022, capacity: 28, status: 'active', driver: 'Carlos Ruiz', route: 'Ruta Sur' },
-];
-
-// Mock drivers data
-const drivers = [
-  { id: 1, name: 'Juan Pérez', cedula: '1234567890', phone: '+593 99 123 4567', vehicle: 'ABC-1234', status: 'on_route', licenseExpiry: '15/08/2026' },
-  { id: 2, name: 'María González', cedula: '0987654321', phone: '+593 98 765 4321', vehicle: 'DEF-9012', status: 'on_route', licenseExpiry: '20/06/2025' },
-  { id: 3, name: 'Carlos Ruiz', cedula: '1122334455', phone: '+593 97 555 6666', vehicle: 'JKL-7890', status: 'available', licenseExpiry: '10/12/2025' },
-  { id: 4, name: 'Ana Torres', cedula: '5544332211', phone: '+593 96 888 9999', vehicle: null, status: 'inactive', licenseExpiry: '01/03/2024' },
-];
-
-// Mock monitors data
-const monitors = [
-  { id: 1, name: 'Laura Sánchez', cedula: '1111222233', phone: '+593 99 111 2222', route: 'Ruta Centro', status: 'on_route' },
-  { id: 2, name: 'Pedro Gómez', cedula: '4444555566', phone: '+593 98 333 4444', route: 'Ruta Norte', status: 'on_route' },
-  { id: 3, name: 'Sofía Mora', cedula: '7777888899', phone: '+593 97 555 6666', route: null, status: 'available' },
-];
-
-const tabs = [
-  { id: 'vehicles', label: 'Vehículos', icon: Bus, count: vehicles.length },
-  { id: 'drivers', label: 'Conductores', icon: UserCheck, count: drivers.length },
-  { id: 'monitors', label: 'Monitores', icon: Users, count: monitors.length },
-];
+import { useVehicles, useDrivers, useMonitors } from '@/hooks';
 
 const statusConfig = {
   active: { label: 'Activo', color: 'bg-success text-white' },
   maintenance: { label: 'Mantenimiento', color: 'bg-warning text-white' },
+  out_of_service: { label: 'Fuera de servicio', color: 'bg-gray-400 text-white' },
   inactive: { label: 'Inactivo', color: 'bg-gray-400 text-white' },
   on_route: { label: 'En ruta', color: 'bg-success text-white' },
   available: { label: 'Disponible', color: 'bg-info text-white' },
@@ -46,7 +18,49 @@ const statusConfig = {
 export default function FleetPage() {
   const [activeTab, setActiveTab] = useState('vehicles');
   const [searchQuery, setSearchQuery] = useState('');
-  const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  // Real data from Convex
+  const { vehicles, isLoading: vehiclesLoading } = useVehicles();
+  const { drivers, isLoading: driversLoading } = useDrivers();
+  const { monitors, isLoading: monitorsLoading } = useMonitors();
+
+  const tabs = [
+    { id: 'vehicles', label: 'Vehículos', icon: Bus, count: vehicles.length },
+    { id: 'drivers', label: 'Conductores', icon: UserCheck, count: drivers.length },
+    { id: 'monitors', label: 'Monitores', icon: Users, count: monitors.length },
+  ];
+
+  // Filter data based on search
+  const filteredVehicles = useMemo(() => {
+    if (!searchQuery) return vehicles;
+    const query = searchQuery.toLowerCase();
+    return vehicles.filter(v =>
+      v.licensePlate?.toLowerCase().includes(query) ||
+      v.brand?.toLowerCase().includes(query) ||
+      v.model?.toLowerCase().includes(query)
+    );
+  }, [vehicles, searchQuery]);
+
+  const filteredDrivers = useMemo(() => {
+    if (!searchQuery) return drivers;
+    const query = searchQuery.toLowerCase();
+    return drivers.filter(d =>
+      d.user?.name?.toLowerCase().includes(query) ||
+      d.phone?.toLowerCase().includes(query)
+    );
+  }, [drivers, searchQuery]);
+
+  const filteredMonitors = useMemo(() => {
+    if (!searchQuery) return monitors;
+    const query = searchQuery.toLowerCase();
+    return monitors.filter(m =>
+      m.user?.name?.toLowerCase().includes(query) ||
+      m.phone?.toLowerCase().includes(query)
+    );
+  }, [monitors, searchQuery]);
+
+  const isLoading = activeTab === 'vehicles' ? vehiclesLoading : activeTab === 'drivers' ? driversLoading : monitorsLoading;
 
   return (
     <div className="space-y-6">
@@ -113,211 +127,248 @@ export default function FleetPage() {
         </select>
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="bg-white rounded-lg shadow p-12 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-3 text-gray-500">Cargando datos...</span>
+        </div>
+      )}
+
       {/* Vehicles Table */}
-      {activeTab === 'vehicles' && (
+      {!isLoading && activeTab === 'vehicles' && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Placa</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Modelo</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Capacidad</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Conductor</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ruta</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {vehicles.map((vehicle) => {
-                  const status = statusConfig[vehicle.status as keyof typeof statusConfig];
-                  return (
-                    <tr key={vehicle.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-900">{vehicle.plate}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="text-gray-900">{vehicle.model}</p>
-                          <p className="text-sm text-gray-500">{vehicle.year}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{vehicle.capacity} pasajeros</td>
-                      <td className="px-4 py-3">
-                        <span className={cn('px-2 py-1 text-xs rounded-full', status.color)}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{vehicle.driver || '-'}</td>
-                      <td className="px-4 py-3 text-gray-600">{vehicle.route || '-'}</td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="relative">
-                          <button
-                            onClick={() => setOpenMenu(openMenu === vehicle.id ? null : vehicle.id)}
-                            className="p-2 hover:bg-gray-100 rounded-lg"
-                          >
-                            <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                          </button>
-                          {openMenu === vehicle.id && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                              <Link href={`/fleet/vehicles/${vehicle.id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Eye className="w-4 h-4" /> Ver detalles
-                              </Link>
-                              <Link href={`/fleet/vehicles/${vehicle.id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Edit className="w-4 h-4" /> Editar
-                              </Link>
-                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Wrench className="w-4 h-4" /> Mantenimiento
-                              </button>
-                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
-                                <Trash2 className="w-4 h-4" /> Eliminar
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-sm text-gray-500">Mostrando 1-{vehicles.length} de {vehicles.length}</p>
-            <div className="flex gap-2">
-              <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled>
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled>
-                <ChevronRight className="w-5 h-5" />
-              </button>
+          {filteredVehicles.length === 0 ? (
+            <div className="text-center py-12">
+              <Bus className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay vehículos</h3>
+              <p className="text-gray-500 mb-4">Agrega vehículos para comenzar</p>
+              <Link href="/fleet/vehicles/new" className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg">
+                <Plus className="w-5 h-5" /> Nuevo Vehículo
+              </Link>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Placa</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Modelo</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Capacidad</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredVehicles.map((vehicle) => {
+                      const status = statusConfig[vehicle.status as keyof typeof statusConfig] || statusConfig.inactive;
+                      return (
+                        <tr key={vehicle._id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <span className="font-medium text-gray-900">{vehicle.licensePlate}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div>
+                              <p className="text-gray-900">{vehicle.brand} {vehicle.model}</p>
+                              <p className="text-sm text-gray-500">{vehicle.year}</p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{vehicle.capacity} pasajeros</td>
+                          <td className="px-4 py-3">
+                            <span className={cn('px-2 py-1 text-xs rounded-full', status.color)}>
+                              {status.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="relative">
+                              <button
+                                onClick={() => setOpenMenu(openMenu === vehicle._id ? null : vehicle._id)}
+                                className="p-2 hover:bg-gray-100 rounded-lg"
+                              >
+                                <MoreHorizontal className="w-5 h-5 text-gray-500" />
+                              </button>
+                              {openMenu === vehicle._id && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                                  <Link href={`/fleet/vehicles/${vehicle._id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                                    <Eye className="w-4 h-4" /> Ver detalles
+                                  </Link>
+                                  <Link href={`/fleet/vehicles/${vehicle._id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                                    <Edit className="w-4 h-4" /> Editar
+                                  </Link>
+                                  <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                                    <Wrench className="w-4 h-4" /> Mantenimiento
+                                  </button>
+                                  <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
+                                    <Trash2 className="w-4 h-4" /> Eliminar
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+                <p className="text-sm text-gray-500">Mostrando {filteredVehicles.length} de {vehicles.length}</p>
+                <div className="flex gap-2">
+                  <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled>
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled>
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* Drivers Table */}
-      {activeTab === 'drivers' && (
+      {!isLoading && activeTab === 'drivers' && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nombre</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Cédula</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teléfono</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Vehículo</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Venc. Licencia</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {drivers.map((driver) => {
-                  const status = statusConfig[driver.status as keyof typeof statusConfig];
-                  return (
-                    <tr key={driver.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">{driver.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{driver.cedula}</td>
-                      <td className="px-4 py-3 text-gray-600">{driver.phone}</td>
-                      <td className="px-4 py-3 text-gray-600">{driver.vehicle || '-'}</td>
-                      <td className="px-4 py-3 text-gray-600">{driver.licenseExpiry}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn('px-2 py-1 text-xs rounded-full', status.color)}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="relative">
-                          <button
-                            onClick={() => setOpenMenu(openMenu === driver.id + 100 ? null : driver.id + 100)}
-                            className="p-2 hover:bg-gray-100 rounded-lg"
-                          >
-                            <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                          </button>
-                          {openMenu === driver.id + 100 && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                              <Link href={`/fleet/drivers/${driver.id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Eye className="w-4 h-4" /> Ver detalles
-                              </Link>
-                              <Link href={`/fleet/drivers/${driver.id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Edit className="w-4 h-4" /> Editar
-                              </Link>
-                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
-                                <Trash2 className="w-4 h-4" /> Eliminar
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {filteredDrivers.length === 0 ? (
+            <div className="text-center py-12">
+              <UserCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay conductores</h3>
+              <p className="text-gray-500 mb-4">Agrega conductores para comenzar</p>
+              <Link href="/fleet/drivers/new" className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg">
+                <Plus className="w-5 h-5" /> Nuevo Conductor
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nombre</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teléfono</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Licencia</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredDrivers.map((driver) => {
+                    const isActive = driver.isActive !== false;
+                    return (
+                      <tr key={driver._id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{driver.user?.name || 'Sin nombre'}</td>
+                        <td className="px-4 py-3 text-gray-600">{driver.phone || '-'}</td>
+                        <td className="px-4 py-3 text-gray-600">{driver.licenseNumber || '-'}</td>
+                        <td className="px-4 py-3">
+                          <span className={cn('px-2 py-1 text-xs rounded-full', isActive ? 'bg-success text-white' : 'bg-gray-400 text-white')}>
+                            {isActive ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="relative">
+                            <button
+                              onClick={() => setOpenMenu(openMenu === driver._id ? null : driver._id)}
+                              className="p-2 hover:bg-gray-100 rounded-lg"
+                            >
+                              <MoreHorizontal className="w-5 h-5 text-gray-500" />
+                            </button>
+                            {openMenu === driver._id && (
+                              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                                <Link href={`/fleet/drivers/${driver._id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                                  <Eye className="w-4 h-4" /> Ver detalles
+                                </Link>
+                                <Link href={`/fleet/drivers/${driver._id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                                  <Edit className="w-4 h-4" /> Editar
+                                </Link>
+                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
+                                  <Trash2 className="w-4 h-4" /> Eliminar
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
       {/* Monitors Table */}
-      {activeTab === 'monitors' && (
+      {!isLoading && activeTab === 'monitors' && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nombre</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Cédula</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teléfono</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ruta Asignada</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {monitors.map((monitor) => {
-                  const status = statusConfig[monitor.status as keyof typeof statusConfig];
-                  return (
-                    <tr key={monitor.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">{monitor.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{monitor.cedula}</td>
-                      <td className="px-4 py-3 text-gray-600">{monitor.phone}</td>
-                      <td className="px-4 py-3 text-gray-600">{monitor.route || '-'}</td>
-                      <td className="px-4 py-3">
-                        <span className={cn('px-2 py-1 text-xs rounded-full', status.color)}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="relative">
-                          <button
-                            onClick={() => setOpenMenu(openMenu === monitor.id + 200 ? null : monitor.id + 200)}
-                            className="p-2 hover:bg-gray-100 rounded-lg"
-                          >
-                            <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                          </button>
-                          {openMenu === monitor.id + 200 && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                              <Link href={`/fleet/monitors/${monitor.id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Eye className="w-4 h-4" /> Ver detalles
-                              </Link>
-                              <Link href={`/fleet/monitors/${monitor.id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Edit className="w-4 h-4" /> Editar
-                              </Link>
-                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
-                                <Trash2 className="w-4 h-4" /> Eliminar
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {filteredMonitors.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay monitores</h3>
+              <p className="text-gray-500 mb-4">Agrega monitores para comenzar</p>
+              <Link href="/fleet/monitors/new" className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg">
+                <Plus className="w-5 h-5" /> Nuevo Monitor
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nombre</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teléfono</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Certificaciones</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredMonitors.map((monitor) => {
+                    const isActive = monitor.isActive !== false;
+                    return (
+                      <tr key={monitor._id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{monitor.user?.name || 'Sin nombre'}</td>
+                        <td className="px-4 py-3 text-gray-600">{monitor.phone || '-'}</td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {monitor.firstAidCertified && <span className="text-success text-sm">Primeros auxilios</span>}
+                          {monitor.childCareCertified && <span className="text-info text-sm ml-2">Cuidado infantil</span>}
+                          {!monitor.firstAidCertified && !monitor.childCareCertified && '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={cn('px-2 py-1 text-xs rounded-full', isActive ? 'bg-success text-white' : 'bg-gray-400 text-white')}>
+                            {isActive ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="relative">
+                            <button
+                              onClick={() => setOpenMenu(openMenu === monitor._id ? null : monitor._id)}
+                              className="p-2 hover:bg-gray-100 rounded-lg"
+                            >
+                              <MoreHorizontal className="w-5 h-5 text-gray-500" />
+                            </button>
+                            {openMenu === monitor._id && (
+                              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                                <Link href={`/fleet/monitors/${monitor._id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                                  <Eye className="w-4 h-4" /> Ver detalles
+                                </Link>
+                                <Link href={`/fleet/monitors/${monitor._id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                                  <Edit className="w-4 h-4" /> Editar
+                                </Link>
+                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
+                                  <Trash2 className="w-4 h-4" /> Eliminar
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

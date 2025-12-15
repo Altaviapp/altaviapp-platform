@@ -16,101 +16,10 @@ const typeLabels: Record<string, { label: string; color: string }> = {
   ambas: { label: 'Ida/Retorno', color: 'bg-green-100 text-green-700' },
 };
 
-// ============================================
-// MOCK DATA - Rutas con estudiantes optimizados por proximidad
-// ============================================
-
-// Estudiantes mock con coordenadas de hogar (simulando asignación por proximidad)
-const mockStudents = [
-  // Zona Norte - asignados a Ruta Norte
-  { id: 's1', firstName: 'Sofía', lastName: 'González', grade: '5to A', lat: -0.1620, lng: -78.4780, stopId: 'n1', routeId: '1' },
-  { id: 's2', firstName: 'Mateo', lastName: 'Pérez', grade: '6to B', lat: -0.1635, lng: -78.4765, stopId: 'n1', routeId: '1' },
-  { id: 's3', firstName: 'Valentina', lastName: 'Torres', grade: '5to A', lat: -0.1680, lng: -78.4720, stopId: 'n2', routeId: '1' },
-  { id: 's4', firstName: 'Sebastián', lastName: 'Morales', grade: '7mo A', lat: -0.1695, lng: -78.4710, stopId: 'n2', routeId: '1' },
-  { id: 's5', firstName: 'Isabella', lastName: 'Ruiz', grade: '6to A', lat: -0.1750, lng: -78.4680, stopId: 'n3', routeId: '1' },
-  { id: 's6', firstName: 'Daniel', lastName: 'Castro', grade: '5to B', lat: -0.1760, lng: -78.4670, stopId: 'n3', routeId: '1' },
-  { id: 's7', firstName: 'Camila', lastName: 'Mendoza', grade: '8vo A', lat: -0.1800, lng: -78.4650, stopId: 'n4', routeId: '1' },
-  { id: 's8', firstName: 'Nicolás', lastName: 'Vargas', grade: '7mo B', lat: -0.1810, lng: -78.4640, stopId: 'n4', routeId: '1' },
-  { id: 's9', firstName: 'Luciana', lastName: 'Flores', grade: '6to A', lat: -0.1815, lng: -78.4635, stopId: 'n4', routeId: '1' },
-
-  // Zona Sur - asignados a Ruta Sur
-  { id: 's10', firstName: 'Emilio', lastName: 'Salazar', grade: '5to A', lat: -0.2700, lng: -78.5350, stopId: 's1', routeId: '2' },
-  { id: 's11', firstName: 'Martina', lastName: 'Aguirre', grade: '6to B', lat: -0.2720, lng: -78.5340, stopId: 's1', routeId: '2' },
-  { id: 's12', firstName: 'Lucas', lastName: 'Herrera', grade: '7mo A', lat: -0.2600, lng: -78.5280, stopId: 's2', routeId: '2' },
-  { id: 's13', firstName: 'Victoria', lastName: 'Paredes', grade: '5to B', lat: -0.2610, lng: -78.5270, stopId: 's2', routeId: '2' },
-  { id: 's14', firstName: 'Gabriel', lastName: 'Romero', grade: '8vo A', lat: -0.2450, lng: -78.5200, stopId: 's3', routeId: '2' },
-  { id: 's15', firstName: 'Antonella', lastName: 'Silva', grade: '6to A', lat: -0.2460, lng: -78.5190, stopId: 's3', routeId: '2' },
-  { id: 's16', firstName: 'Joaquín', lastName: 'Vega', grade: '7mo B', lat: -0.2300, lng: -78.5100, stopId: 's4', routeId: '2' },
-];
-
-// Paradas mock con coordenadas (orden optimizado por Google Directions API)
-const mockStops = {
-  // Ruta Norte - paradas optimizadas
-  '1': [
-    { id: 'n1', name: 'Residencial El Bosque', address: 'Av. El Inca y De los Shyris', lat: -0.1630, lng: -78.4770, order: 1, students: 2, scheduledTime: '06:35' },
-    { id: 'n2', name: 'Parque La Carolina Norte', address: 'Av. Amazonas y República', lat: -0.1690, lng: -78.4715, order: 2, students: 2, scheduledTime: '06:45' },
-    { id: 'n3', name: 'Centro Comercial Quicentro', address: 'Av. Naciones Unidas', lat: -0.1755, lng: -78.4675, order: 3, students: 2, scheduledTime: '06:55' },
-    { id: 'n4', name: 'Plaza de las Américas', address: 'Av. América y Colón', lat: -0.1808, lng: -78.4643, order: 4, students: 3, scheduledTime: '07:05' },
-    { id: 'n5', name: 'Escuela Central', address: 'Av. 10 de Agosto', lat: -0.1900, lng: -78.4950, order: 5, students: 0, scheduledTime: '07:20' },
-  ],
-  // Ruta Sur - paradas optimizadas
-  '2': [
-    { id: 's1', name: 'Terminal Quitumbe', address: 'Av. Mariscal Sucre', lat: -0.2710, lng: -78.5345, order: 1, students: 2, scheduledTime: '06:20' },
-    { id: 's2', name: 'Estación Morán Valverde', address: 'Av. Morán Valverde', lat: -0.2605, lng: -78.5275, order: 2, students: 2, scheduledTime: '06:35' },
-    { id: 's3', name: 'Centro Comercial El Recreo', address: 'Av. Pedro Vicente Maldonado', lat: -0.2455, lng: -78.5195, order: 3, students: 2, scheduledTime: '06:50' },
-    { id: 's4', name: 'Parque Lineal Sur', address: 'Av. Napo', lat: -0.2300, lng: -78.5100, order: 4, students: 1, scheduledTime: '07:05' },
-    { id: 's5', name: 'Escuela Central', address: 'Av. 10 de Agosto', lat: -0.1900, lng: -78.4950, order: 5, students: 0, scheduledTime: '07:30' },
-  ],
-};
-
-// Rutas mock con datos completos
-const mockRoutes = [
-  {
-    _id: '1',
-    name: 'Ruta Norte - Escuela Central',
-    type: 'pickup' as const,
-    vehicleId: 'v1',
-    vehiclePlate: 'ABC-1234',
-    vehicleModel: 'Toyota Coaster',
-    vehicleCapacity: 30,
-    driverId: 'd1',
-    driverName: 'Juan Pérez',
-    driverPhone: '+593 99 123 4567',
-    monitorId: 'm1',
-    monitorName: 'Ana Torres',
-    monitorPhone: '+593 98 765 4321',
-    isActive: true,
-    scheduledStartTime: '06:30',
-    scheduledEndTime: '07:30',
-    stopsCount: 5,
-    studentsCount: 9,
-    stops: mockStops['1'],
-    students: mockStudents.filter(s => s.routeId === '1'),
-  },
-  {
-    _id: '2',
-    name: 'Ruta Sur - Escuela Central',
-    type: 'pickup' as const,
-    vehicleId: 'v2',
-    vehiclePlate: 'XYZ-5678',
-    vehicleModel: 'Hyundai County',
-    vehicleCapacity: 25,
-    driverId: 'd2',
-    driverName: 'María González',
-    driverPhone: '+593 99 234 5678',
-    monitorId: null,
-    monitorName: null,
-    monitorPhone: null,
-    isActive: true,
-    scheduledStartTime: '06:15',
-    scheduledEndTime: '07:30',
-    stopsCount: 5,
-    studentsCount: 7,
-    stops: mockStops['2'],
-    students: mockStudents.filter(s => s.routeId === '2'),
-  },
-];
-
+/**
+ * Routes Page
+ * Connected to real Convex data
+ */
 export default function RoutesPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,14 +27,8 @@ export default function RoutesPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
-  // Use real hook - will show loading state while connecting
-  const { routes: realRoutes, isLoading, isEmpty } = useRoutes();
-
-  // Use mock data when real data is empty (for testing)
-  const allRoutes = useMemo(() => {
-    if (isEmpty) return mockRoutes;
-    return realRoutes;
-  }, [realRoutes, isEmpty]);
+  // Real data from Convex
+  const { routes: allRoutes, isLoading } = useRoutes();
 
   // Filter by status locally
   const routes = useMemo(() => {
@@ -419,6 +322,3 @@ export default function RoutesPage() {
     </div>
   );
 }
-
-// Export mock data for use in detail page
-export { mockRoutes, mockStudents, mockStops };

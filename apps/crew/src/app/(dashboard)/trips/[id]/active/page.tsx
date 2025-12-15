@@ -5,9 +5,8 @@ import { useEffect, useCallback, useState } from 'react';
 import { ArrowLeft, X, QrCode, Users, Bus } from 'lucide-react';
 import Link from 'next/link';
 
-import { useActiveTrip, useConvexAuth, useGPSTracking } from '@/hooks';
+import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition } from '@/hooks';
 import type { GeofenceAlert, GPSSourceType } from '@/hooks';
-import { mockTodayTrips, mockStudents } from '@/lib/mockData';
 // Import components directly to avoid loading RouteMap (Leaflet) during SSR
 import { TripHeader } from '@/components/trip/TripHeader';
 import { TripProgress } from '@/components/trip/TripProgress';
@@ -34,6 +33,12 @@ export default function ActiveTripPage() {
   const [isRelayModalOpen, setIsRelayModalOpen] = useState(false);
   const [currentVehiclePlate, setCurrentVehiclePlate] = useState('');
   const [gpsSourceType, setGpsSourceType] = useState<GPSSourceType>('mobile');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Get real trip data from Convex
+  const { trip: convexTrip, isLoading: tripLoading } = useTrip(tripId as Id<"trips"> | null);
+  const { completeTrip } = useTripOperations();
+  const { getPosition } = useCurrentPosition();
 
   // Use real auth with fallback for UI testing
   const { isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor } = useConvexAuth();
@@ -48,9 +53,11 @@ export default function ActiveTripPage() {
   };
 
   // Check if user can perform check-in for this trip (monitors always, drivers only if no monitor)
-  // TODO: Get actual trip.monitorId from backend
   const tripMonitorId = null; // For now, assume no monitor assigned (driver can check-in)
   const canCheckin = getCanPerformCheckin(tripMonitorId);
+
+  // Trip is active if status is in_progress
+  const isActive = convexTrip?.status === 'in_progress';
 
   // Handle geofence alerts from GPS tracking
   const handleGeofenceAlert = useCallback((alerts: GeofenceAlert[]) => {
@@ -80,36 +87,42 @@ export default function ActiveTripPage() {
     onGeofenceAlert: handleGeofenceAlert,
   });
 
-  // Active trip state management
-  const {
-    trip,
-    isActive,
-    isLoading,
-    currentStop,
-    nextStop,
-    currentStopIndex,
-    currentLocation,
-    studentsOnBoard,
-    totalStudents,
-    elapsedFormatted,
-    progress,
-    distanceToNextStop,
-    etaToNextStop,
-    currentSpeed,
-    startTrip,
-    finishTrip,
-    moveToNextStop,
-  } = useActiveTrip(tripId);
+  // Derived state
+  const isLoading = tripLoading;
+  const currentStopIndex = 0; // TODO: Track from backend
+  const studentsOnBoard: string[] = []; // TODO: Get from checkins
+  const totalStudents = 3; // TODO: Get from trip students
+  const progress = 0;
+  const distanceToNextStop = 0;
+  const etaToNextStop = '';
+  const currentSpeed = gpsPosition?.speed ? Math.round(gpsPosition.speed * 3.6) : 0;
 
-  // Initialize trip if not already active
+  // Trip data for UI
+  const tripStartTime = convexTrip?.startTime;
+  const routeName = convexTrip?.route?.name ?? 'Ruta';
+  const routeType = convexTrip?.route?.type;
+  const vehiclePlate = convexTrip?.vehicle?.licensePlate ?? 'N/A';
+  const tripStops = convexTrip?.stops ?? [];
+
+  // Format elapsed time
+  const elapsedFormatted = (() => {
+    const hours = Math.floor(elapsedSeconds / 3600);
+    const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+    const secs = elapsedSeconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  })();
+
+  // Elapsed time counter
   useEffect(() => {
-    if (!isLoading && !isActive) {
-      const tripData = mockTodayTrips.find(t => t._id === tripId);
-      if (tripData) {
-        startTrip(tripData);
-      }
-    }
-  }, [isLoading, isActive, tripId, startTrip]);
+    if (!isActive || !tripStartTime) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - tripStartTime) / 1000);
+      setElapsedSeconds(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isActive, tripStartTime]);
 
   // Start GPS tracking when trip is active (for drivers only)
   useEffect(() => {
@@ -137,33 +150,47 @@ export default function ActiveTripPage() {
   }, [gpsIsTracking, stopGPSTracking]);
 
   // Handle finish trip
-  const handleFinishTrip = () => {
+  const handleFinishTrip = async () => {
     if (confirm('¿Estás seguro de que deseas finalizar el viaje?')) {
       // Stop GPS tracking before finishing
       if (gpsIsTracking) {
         stopGPSTracking();
       }
-      finishTrip();
-      router.push('/dashboard');
+
+      try {
+        // Get current position for trip completion
+        const position = await getPosition();
+        const latitude = position?.latitude ?? gpsPosition?.latitude ?? -0.1828;
+        const longitude = position?.longitude ?? gpsPosition?.longitude ?? -78.4847;
+
+        // Complete trip in Convex
+        await completeTrip(tripId as Id<"trips">, latitude, longitude);
+        router.push('/dashboard');
+      } catch (error) {
+        console.error('Error completing trip:', error);
+        alert(`Error al finalizar viaje: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      }
     }
   };
 
   // Loading state
-  if (isLoading || !trip) {
+  if (isLoading || !convexTrip) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Iniciando viaje...</p>
+          <p className="text-gray-600">Cargando viaje...</p>
         </div>
       </div>
     );
   }
 
-  // Get students for next stop
-  const nextStopStudents = nextStop
-    ? mockStudents.filter(s => nextStop.students?.includes(s._id))
-    : [];
+  // Get next stop from trip data
+  const nextStop = tripStops[currentStopIndex + 1] ?? null;
+  const currentStop = tripStops[currentStopIndex] ?? null;
+
+  // Students for next stop (will come from backend later)
+  const nextStopStudents: { _id: string; firstName: string; lastName: string }[] = [];
 
   // Handle quick actions
   const handleCheckIn = () => {
@@ -200,10 +227,7 @@ export default function ActiveTripPage() {
   // Handle relay mode
   const handleOpenRelay = () => {
     // Set current vehicle plate from trip data
-    const tripData = mockTodayTrips.find(t => t._id === tripId);
-    if (tripData) {
-      setCurrentVehiclePlate(tripData.vehicle?.plate || 'N/A');
-    }
+    setCurrentVehiclePlate(vehiclePlate);
     setIsRelayModalOpen(true);
   };
 
@@ -228,13 +252,28 @@ export default function ActiveTripPage() {
     alert(`Vehículo cambiado exitosamente. ${newVehicle.gpsSourceType === 'mobile' ? 'Usando GPS del celular.' : 'Usando GPS externo del vehículo.'}`);
   };
 
-  const totalStops = trip.stops?.length || 0;
+  // Move to next stop (local state only for now)
+  const moveToNextStop = () => {
+    // TODO: Update backend with stop progress
+    alert('Avanzando a siguiente parada');
+  };
+
+  const totalStops = tripStops.length;
+
+  // Create trip object for TripHeader (minimal mock structure)
+  const tripForHeader = {
+    _id: tripId,
+    route: { name: routeName, type: routeType || 'dropoff' as const },
+    type: routeType === 'pickup' ? 'inbound' : 'outbound',
+    vehicle: { plate: vehiclePlate },
+    stops: tripStops,
+  } as any; // Type cast for now
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Trip Header */}
       <TripHeader
-        trip={trip}
+        trip={tripForHeader}
         elapsedFormatted={elapsedFormatted}
       />
 
@@ -250,7 +289,7 @@ export default function ActiveTripPage() {
       {/* GPS Status - use real GPS data when available */}
       <GPSStatus
         speed={gpsPosition?.speed !== null ? Math.round((gpsPosition?.speed ?? 0) * 3.6) : currentSpeed}
-        accuracy={gpsPosition?.accuracy ?? currentLocation?.accuracy}
+        accuracy={gpsPosition?.accuracy}
         isActive={gpsIsTracking || isActive}
         tripId={tripId}
       />
@@ -282,7 +321,17 @@ export default function ActiveTripPage() {
         {/* Next Stop Card */}
         {nextStop ? (
           <NextStopCard
-            stop={nextStop}
+            stop={{
+              _id: nextStop._id,
+              routeId: String(nextStop.routeId),
+              order: nextStop.order,
+              name: nextStop.name,
+              address: nextStop.address,
+              latitude: nextStop.latitude,
+              longitude: nextStop.longitude,
+              estimatedArrivalTime: nextStop.scheduledTime,
+              students: [],
+            }}
             stopNumber={currentStopIndex + 2}
             distanceKm={distanceToNextStop}
             eta={etaToNextStop}

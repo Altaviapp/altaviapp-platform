@@ -4,46 +4,78 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-
-// Mock data for dropdowns
-const mockRoutes = [
-  { value: '1', label: 'Ruta Centro' },
-  { value: '2', label: 'Ruta Norte' },
-  { value: '3', label: 'Ruta Sur' },
-];
+import { useMonitorMutations, useRoutes, useUsers } from '@/hooks';
 
 /**
  * New Monitor Page
- * Monitors assist drivers with student check-ins
+ * Connected to real Convex data
+ *
+ * Note: Creating a monitor requires selecting an existing user with role "monitor"
  */
 export default function NewMonitorPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Real hooks
+  const { createMonitor } = useMonitorMutations();
+  const { routes } = useRoutes();
+  const { users } = useUsers({ role: 'monitor' });
+
+  // Build options
+  const routeOptions = routes.map(r => ({
+    value: r._id,
+    label: r.name,
+  }));
+
+  // Users with monitor role who don't have a monitor profile yet
+  const userOptions = users.map(u => ({
+    value: u._id,
+    label: `${u.name} (${u.email})`,
+  }));
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    cedula: '',
-    birthDate: '',
+    userId: '',
+    idNumber: '',
     phone: '',
-    email: '',
-    address: '',
-    routeId: '',
-    status: 'active',
-    emergencyContactName: '',
-    emergencyContactRelation: '',
-    emergencyContactPhone: '',
+    emergencyContact: '',
+    firstAidCertified: false,
+    firstAidCertExpiry: '',
+    childCareCertified: false,
   });
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/fleet?tab=monitors');
+    setIsSubmitting(true);
+    setError(null);
+
+    if (!formData.userId) {
+      setError('Debe seleccionar un usuario');
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await createMonitor(formData.userId as any, {
+        idNumber: formData.idNumber,
+        phone: formData.phone,
+        emergencyContact: formData.emergencyContact,
+        firstAidCertified: formData.firstAidCertified,
+        firstAidCertExpiry: formData.firstAidCertExpiry ? new Date(formData.firstAidCertExpiry).getTime() : undefined,
+        childCareCertified: formData.childCareCertified,
+      });
+      router.push('/fleet?tab=monitors');
+    } catch (err) {
+      console.error('Error creating monitor:', err);
+      setError(err instanceof Error ? err.message : 'Error al crear el monitor');
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -63,49 +95,45 @@ export default function NewMonitorPage() {
         backHref="/fleet?tab=monitors"
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Información Personal */}
-        <FormSection title="Información Personal">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Nombres"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange('firstName')}
-              placeholder="Nombres completos"
-              required
-            />
-            <FormField
-              label="Apellidos"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange('lastName')}
-              placeholder="Apellidos completos"
-              required
-            />
-          </FormFieldRow>
+      {error && (
+        <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg text-error">
+          {error}
+        </div>
+      )}
 
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Selección de Usuario */}
+        <FormSection title="Usuario">
+          <div className="p-4 bg-info/10 rounded-lg mb-4">
+            <p className="text-sm text-info">
+              Seleccione un usuario existente con rol de monitor para crear su perfil.
+              El usuario debe haber sido creado previamente en la sección de Usuarios.
+            </p>
+          </div>
+          <FormField
+            label="Usuario"
+            name="userId"
+            type="select"
+            value={formData.userId}
+            onChange={handleChange('userId')}
+            options={userOptions}
+            placeholder="Seleccionar usuario"
+            required
+          />
+        </FormSection>
+
+        {/* Información de Contacto */}
+        <FormSection title="Información de Contacto">
           <FormFieldRow cols={2}>
             <FormField
               label="Cédula de Identidad"
-              name="cedula"
-              value={formData.cedula}
-              onChange={handleChange('cedula')}
+              name="idNumber"
+              value={formData.idNumber}
+              onChange={handleChange('idNumber')}
               placeholder="10 dígitos"
               hint="Ejemplo: 1234567890"
               required
             />
-            <FormField
-              label="Fecha de Nacimiento"
-              name="birthDate"
-              type="date"
-              value={formData.birthDate}
-              onChange={handleChange('birthDate')}
-              required
-            />
-          </FormFieldRow>
-
-          <FormFieldRow cols={2}>
             <FormField
               label="Teléfono"
               name="phone"
@@ -116,79 +144,57 @@ export default function NewMonitorPage() {
               hint="Formato: +593XXXXXXXXX"
               required
             />
-            <FormField
-              label="Email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange('email')}
-              placeholder="correo@ejemplo.com"
-            />
           </FormFieldRow>
 
           <FormField
-            label="Dirección"
-            name="address"
-            value={formData.address}
-            onChange={handleChange('address')}
-            placeholder="Dirección completa"
+            label="Contacto de Emergencia"
+            name="emergencyContact"
+            value={formData.emergencyContact}
+            onChange={handleChange('emergencyContact')}
+            placeholder="Nombre y teléfono del contacto"
+            required
           />
         </FormSection>
 
-        {/* Asignaciones */}
-        <FormSection title="Asignaciones">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Ruta Asignada"
-              name="routeId"
-              type="select"
-              value={formData.routeId}
-              onChange={handleChange('routeId')}
-              options={mockRoutes}
-              placeholder="Seleccionar ruta"
-            />
-            <FormField
-              label="Estado"
-              name="status"
-              type="select"
-              value={formData.status}
-              onChange={handleChange('status')}
-              options={[
-                { value: 'active', label: 'Activo' },
-                { value: 'inactive', label: 'Inactivo' },
-              ]}
-              required
-            />
-          </FormFieldRow>
-        </FormSection>
+        {/* Certificaciones */}
+        <FormSection title="Certificaciones">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <input
+                type="checkbox"
+                id="firstAidCertified"
+                checked={formData.firstAidCertified}
+                onChange={(e) => setFormData(prev => ({ ...prev, firstAidCertified: e.target.checked }))}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <label htmlFor="firstAidCertified" className="text-sm">
+                <span className="font-medium text-gray-900">Certificado en Primeros Auxilios</span>
+              </label>
+            </div>
 
-        {/* Contacto de Emergencia */}
-        <FormSection title="Contacto de Emergencia">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Nombre Completo"
-              name="emergencyContactName"
-              value={formData.emergencyContactName}
-              onChange={handleChange('emergencyContactName')}
-              placeholder="Nombre del contacto"
-            />
-            <FormField
-              label="Relación"
-              name="emergencyContactRelation"
-              value={formData.emergencyContactRelation}
-              onChange={handleChange('emergencyContactRelation')}
-              placeholder="Ej: Esposa, Hermano"
-            />
-          </FormFieldRow>
+            {formData.firstAidCertified && (
+              <FormField
+                label="Fecha de Vencimiento (Primeros Auxilios)"
+                name="firstAidCertExpiry"
+                type="date"
+                value={formData.firstAidCertExpiry}
+                onChange={handleChange('firstAidCertExpiry')}
+              />
+            )}
 
-          <FormField
-            label="Teléfono"
-            name="emergencyContactPhone"
-            type="tel"
-            value={formData.emergencyContactPhone}
-            onChange={handleChange('emergencyContactPhone')}
-            placeholder="+593XXXXXXXXX"
-          />
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <input
+                type="checkbox"
+                id="childCareCertified"
+                checked={formData.childCareCertified}
+                onChange={(e) => setFormData(prev => ({ ...prev, childCareCertified: e.target.checked }))}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <label htmlFor="childCareCertified" className="text-sm">
+                <span className="font-medium text-gray-900">Certificado en Cuidado Infantil</span>
+              </label>
+            </div>
+          </div>
         </FormSection>
 
         {/* Form Actions */}
@@ -197,7 +203,7 @@ export default function NewMonitorPage() {
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Monitor"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

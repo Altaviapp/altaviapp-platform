@@ -1,57 +1,49 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Download, Printer, Share2 } from 'lucide-react';
+import Link from 'next/link';
+import { Download, Printer, Share2, Loader2, RefreshCw } from 'lucide-react';
 import { PageHeader, DetailSection } from '@/components/shared';
-
-// Mock student data
-const mockStudents: Record<string, {
-  id: string;
-  firstName: string;
-  lastName: string;
-  grade: string;
-  section: string;
-  qrCode: string;
-}> = {
-  '1': {
-    id: '1',
-    firstName: 'Juan',
-    lastName: 'Pérez González',
-    grade: '5to',
-    section: 'B',
-    qrCode: 'QR-STU-001-2024',
-  },
-  '2': {
-    id: '2',
-    firstName: 'Ana',
-    lastName: 'Torres Martínez',
-    grade: '4to',
-    section: 'C',
-    qrCode: 'QR-STU-002-2024',
-  },
-};
+import { useStudent, useStudentMutations } from '@/hooks';
+import { useState } from 'react';
 
 /**
  * Student QR Code Page
- * Displays and allows download of student QR code for check-in
+ * Connected to real Convex data
  */
 export default function StudentQRPage() {
   const params = useParams();
   const studentId = params.id as string;
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
-  const student = mockStudents[studentId];
+  // Real data from Convex
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { student, isLoading, notFound } = useStudent(studentId as any);
+  const { regenerateQRCode } = useStudentMutations();
 
-  if (!student) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando...</span>
+      </div>
+    );
+  }
+
+  if (notFound || !student) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Estudiante no encontrado</p>
+        <Link href="/students" className="text-primary hover:underline mt-2 inline-block">
+          Volver a Estudiantes
+        </Link>
       </div>
     );
   }
 
   const handleDownload = () => {
-    // In production, this would generate and download the actual QR code
-    console.log('Downloading QR code for student:', student.id);
+    // In production, this would generate and download the actual QR code image
+    console.log('Downloading QR code for student:', student._id);
   };
 
   const handlePrint = () => {
@@ -60,8 +52,26 @@ export default function StudentQRPage() {
 
   const handleShare = () => {
     // In production, this would use the Web Share API
-    console.log('Sharing QR code for student:', student.id);
+    if (navigator.share) {
+      navigator.share({
+        title: `QR Code - ${student.firstName} ${student.lastName}`,
+        text: `Código QR de ${student.firstName} ${student.lastName}`,
+      });
+    }
   };
+
+  const handleRegenerate = async () => {
+    setIsRegenerating(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await regenerateQRCode(studentId as any);
+    } catch (error) {
+      console.error('Error regenerating QR code:', error);
+    }
+    setIsRegenerating(false);
+  };
+
+  const studentName = `${student.firstName} ${student.lastName}`;
 
   return (
     <div>
@@ -70,10 +80,10 @@ export default function StudentQRPage() {
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Estudiantes', href: '/students' },
-          { label: `${student.firstName} ${student.lastName}`, href: `/students/${student.id}` },
+          { label: studentName, href: `/students/${student._id}` },
           { label: 'Código QR' },
         ]}
-        backHref={`/students/${student.id}`}
+        backHref={`/students/${student._id}`}
         actions={[
           {
             label: 'Descargar',
@@ -99,17 +109,19 @@ export default function StudentQRPage() {
       <div className="max-w-lg mx-auto">
         <DetailSection title="Código QR del Estudiante">
           <div className="text-center">
-            {/* QR Code Placeholder */}
+            {/* QR Code Placeholder - In production, render actual QR code from student.qrCode */}
             <div className="w-64 h-64 mx-auto bg-white border-2 border-gray-200 rounded-xl p-4 mb-4">
               <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
                 <div className="text-center">
                   <div className="grid grid-cols-5 gap-1 mx-auto w-40 h-40 p-2">
-                    {/* Simulated QR pattern */}
+                    {/* Simulated QR pattern based on studentId for visual consistency */}
                     {Array.from({ length: 25 }).map((_, i) => (
                       <div
                         key={i}
                         className={`rounded-sm ${
-                          Math.random() > 0.4 ? 'bg-gray-900' : 'bg-white'
+                          (student._id.charCodeAt(i % student._id.length) + i) % 2 === 0
+                            ? 'bg-gray-900'
+                            : 'bg-white'
                         }`}
                       />
                     ))}
@@ -120,16 +132,22 @@ export default function StudentQRPage() {
 
             {/* Student Info */}
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-gray-900">
-                {student.firstName} {student.lastName}
-              </h2>
-              <p className="text-gray-500">
-                {student.grade} {student.section}
-              </p>
-              <p className="text-sm font-mono text-gray-400">
-                {student.qrCode}
+              <h2 className="text-xl font-bold text-gray-900">{studentName}</h2>
+              <p className="text-gray-500">{student.grade || '-'}</p>
+              <p className="text-sm font-mono text-gray-400 truncate max-w-[250px] mx-auto">
+                {student.qrCode ? 'QR Generado' : 'QR Pendiente'}
               </p>
             </div>
+
+            {/* Regenerate Button */}
+            <button
+              onClick={handleRegenerate}
+              disabled={isRegenerating}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm text-primary hover:text-primary/80 border border-primary/30 rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+              {isRegenerating ? 'Regenerando...' : 'Regenerar QR'}
+            </button>
           </div>
         </DetailSection>
 
@@ -151,7 +169,7 @@ export default function StudentQRPage() {
         </DetailSection>
 
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-          <strong>Importante:</strong> No comparta este código QR con personas no autorizadas. En caso de pérdida o compromiso del código, solicite uno nuevo al administrador.
+          <strong>Importante:</strong> No comparta este código QR con personas no autorizadas. En caso de pérdida o compromiso del código, use el botón &quot;Regenerar QR&quot; para generar uno nuevo.
         </div>
       </div>
     </div>

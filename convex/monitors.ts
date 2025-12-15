@@ -129,19 +129,28 @@ export const getMonitorById = query({
       return null;
     }
 
+    // Helper to return monitor with user data
+    const enrichWithUser = async () => {
+      const user = await ctx.db.get(monitor.userId);
+      return {
+        ...monitor,
+        user: user ? { name: user.name, email: user.email, phone: user.phone } : null,
+      };
+    };
+
     // Monitors can view their own profile
     if (currentUser._id === monitor.userId) {
-      return monitor;
+      return enrichWithUser();
     }
 
     // Admin can view monitors in their institution
     if (currentUser.role === "admin" && currentUser.institutionId === monitor.institutionId) {
-      return monitor;
+      return enrichWithUser();
     }
 
     // Super admin can view all
     if (currentUser.role === "super_admin") {
-      return monitor;
+      return enrichWithUser();
     }
 
     throw new Error("No tienes permiso para ver este perfil de monitor");

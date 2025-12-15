@@ -5,28 +5,23 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   MapPin, Users, Clock, Bus, Phone, Edit, Play, Trash2,
-  ChevronRight, GraduationCap, Route, User, CheckCircle
+  ChevronRight, GraduationCap, Route, User, CheckCircle, Loader2
 } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection, ConfirmDialog } from '@/components/shared';
 import { cn } from '@/lib/utils';
 import { GoogleMapsProvider, InteractiveMap } from '@altaviapp/maps';
 import type { MarkerInfo } from '@altaviapp/maps';
-
-// Import mock data from routes page
-import { mockRoutes, mockStudents, mockStops } from '../page';
+import { useRoute, useRouteMutations } from '@/hooks';
 
 // Type labels for route types
 const typeLabels: Record<string, { label: string; color: string }> = {
   pickup: { label: 'Recogida', color: 'bg-blue-100 text-blue-700' },
   dropoff: { label: 'Entrega', color: 'bg-purple-100 text-purple-700' },
-  ida: { label: 'Ida', color: 'bg-blue-100 text-blue-700' },
-  retorno: { label: 'Retorno', color: 'bg-purple-100 text-purple-700' },
-  ambas: { label: 'Ida/Retorno', color: 'bg-green-100 text-green-700' },
 };
 
 /**
  * Route Detail Page
- * Shows route information with interactive map, stops, and assigned students
+ * Connected to real Convex data
  */
 export default function RouteDetailPage() {
   const router = useRouter();
@@ -36,12 +31,21 @@ export default function RouteDetailPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Find route in mock data
-  const route = mockRoutes.find(r => r._id === routeId);
-  const stops = mockStops[routeId as keyof typeof mockStops] || [];
-  const students = mockStudents.filter(s => s.routeId === routeId);
+  // Real data from Convex
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { route, isLoading, notFound } = useRoute(routeId as any);
+  const { deactivateRoute } = useRouteMutations();
 
-  if (!route) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando ruta...</span>
+      </div>
+    );
+  }
+
+  if (notFound || !route) {
     return (
       <div className="text-center py-12">
         <MapPin className="w-12 h-12 mx-auto text-gray-400 mb-4" />
@@ -54,36 +58,47 @@ export default function RouteDetailPage() {
   }
 
   const typeInfo = typeLabels[route.type] || { label: 'Ruta', color: 'bg-gray-100 text-gray-700' };
+  const stops = route.stops || [];
+  // Filter out any null students and type the result properly
+  const students = (route.students || []).filter((s): s is NonNullable<typeof s> => s !== null);
 
   // Prepare map markers
   const mapMarkers: MarkerInfo[] = stops.map((stop, index) => ({
-    id: `stop-${stop.id}`,
-    position: { lat: stop.lat, lng: stop.lng },
+    id: `stop-${stop._id}`,
+    position: { lat: stop.latitude, lng: stop.longitude },
     type: index === stops.length - 1 ? 'school' : 'stop',
     title: `${stop.order}. ${stop.name}`,
     label: stop.order.toString(),
   }));
 
   // Create polyline from stops
-  const routePolyline = stops.map((stop) => ({ lat: stop.lat, lng: stop.lng }));
+  const routePolyline = stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude }));
 
   // Calculate map center (use first stop or default to Quito)
   const firstStop = stops[0];
   const mapCenter = firstStop
-    ? { lat: firstStop.lat, lng: firstStop.lng }
+    ? { lat: firstStop.latitude, lng: firstStop.longitude }
     : { lat: -0.1807, lng: -78.4678 };
 
   // Group students by stop
   const studentsByStop = stops.reduce((acc, stop) => {
-    acc[stop.id] = students.filter(s => s.stopId === stop.id);
+    acc[stop._id] = students.filter(s => s.stopId === stop._id);
     return acc;
   }, {} as Record<string, typeof students>);
 
   const handleDelete = async () => {
     setIsDeleting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/routes');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await deactivateRoute(routeId as any);
+      router.push('/routes');
+    } catch (error) {
+      console.error('Error deactivating route:', error);
+      setIsDeleting(false);
+    }
   };
+
+  const vehicleCapacity = route.vehicle?.capacity || 0;
 
   return (
     <GoogleMapsProvider>
@@ -163,7 +178,7 @@ export default function RouteDetailPage() {
                   <Bus className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{route.vehicleCapacity}</p>
+                  <p className="text-2xl font-bold text-gray-900">{vehicleCapacity}</p>
                   <p className="text-sm text-gray-500">Capacidad</p>
                 </div>
               </div>
@@ -228,68 +243,74 @@ export default function RouteDetailPage() {
                   <p className="text-sm text-gray-500">Orden optimizado por proximidad de estudiantes</p>
                 </div>
                 <div className="divide-y divide-gray-100">
-                  {stops.map((stop, index) => {
-                    const stopStudents = studentsByStop[stop.id] || [];
-                    const isSchool = index === stops.length - 1;
+                  {stops.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      No hay paradas configuradas
+                    </div>
+                  ) : (
+                    stops.map((stop, index) => {
+                      const stopStudents = studentsByStop[stop._id] || [];
+                      const isSchool = index === stops.length - 1;
 
-                    return (
-                      <div key={stop.id} className="p-4">
-                        <div className="flex items-start gap-4">
-                          {/* Order Number */}
-                          <div className={cn(
-                            'w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0',
-                            isSchool ? 'bg-success' : 'bg-primary'
-                          )}>
-                            {isSchool ? <CheckCircle className="w-5 h-5" /> : stop.order}
-                          </div>
+                      return (
+                        <div key={stop._id} className="p-4">
+                          <div className="flex items-start gap-4">
+                            {/* Order Number */}
+                            <div className={cn(
+                              'w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0',
+                              isSchool ? 'bg-success' : 'bg-primary'
+                            )}>
+                              {isSchool ? <CheckCircle className="w-5 h-5" /> : stop.order}
+                            </div>
 
-                          {/* Stop Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-gray-900">{stop.name}</p>
-                              {isSchool && (
-                                <span className="px-2 py-0.5 bg-success/10 text-success rounded text-xs">
-                                  Destino Final
-                                </span>
+                            {/* Stop Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="font-medium text-gray-900">{stop.name}</p>
+                                {isSchool && (
+                                  <span className="px-2 py-0.5 bg-success/10 text-success rounded text-xs">
+                                    Destino Final
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-500 mb-2">{stop.address}</p>
+
+                              {/* Students at this stop */}
+                              {stopStudents.length > 0 && (
+                                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <GraduationCap className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm font-medium text-gray-700">
+                                      {stopStudents.length} estudiante{stopStudents.length !== 1 ? 's' : ''}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {stopStudents.map(student => (
+                                      <Link
+                                        key={student.id}
+                                        href={`/students/${student.id}`}
+                                        className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded border border-gray-200 text-xs hover:border-primary hover:text-primary transition-colors"
+                                      >
+                                        <User className="w-3 h-3" />
+                                        {student.firstName} {student.lastName}
+                                        <span className="text-gray-400">({student.grade})</span>
+                                      </Link>
+                                    ))}
+                                  </div>
+                                </div>
                               )}
                             </div>
-                            <p className="text-sm text-gray-500 mb-2">{stop.address}</p>
 
-                            {/* Students at this stop */}
-                            {stopStudents.length > 0 && (
-                              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <GraduationCap className="w-4 h-4 text-gray-400" />
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {stopStudents.length} estudiante{stopStudents.length !== 1 ? 's' : ''}
-                                  </span>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  {stopStudents.map(student => (
-                                    <Link
-                                      key={student.id}
-                                      href={`/students/${student.id}`}
-                                      className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded border border-gray-200 text-xs hover:border-primary hover:text-primary transition-colors"
-                                    >
-                                      <User className="w-3 h-3" />
-                                      {student.firstName} {student.lastName}
-                                      <span className="text-gray-400">({student.grade})</span>
-                                    </Link>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Scheduled Time */}
-                          <div className="text-right">
-                            <p className="font-medium text-gray-900">{stop.scheduledTime}</p>
-                            <p className="text-xs text-gray-500">hora programada</p>
+                            {/* Scheduled Time */}
+                            <div className="text-right">
+                              <p className="font-medium text-gray-900">{stop.scheduledTime}</p>
+                              <p className="text-xs text-gray-500">hora programada</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -326,23 +347,25 @@ export default function RouteDetailPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Ocupación</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={cn(
-                            'h-full rounded-full',
-                            (students.length / route.vehicleCapacity) > 0.8 ? 'bg-warning' : 'bg-success'
-                          )}
-                          style={{ width: `${Math.min((students.length / route.vehicleCapacity) * 100, 100)}%` }}
-                        />
+                  {vehicleCapacity > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Ocupación</p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              'h-full rounded-full',
+                              (students.length / vehicleCapacity) > 0.8 ? 'bg-warning' : 'bg-success'
+                            )}
+                            style={{ width: `${Math.min((students.length / vehicleCapacity) * 100, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium">
+                          {students.length}/{vehicleCapacity}
+                        </span>
                       </div>
-                      <span className="text-sm font-medium">
-                        {students.length}/{route.vehicleCapacity}
-                      </span>
                     </div>
-                  </div>
+                  )}
                 </div>
               </DetailSection>
 
@@ -350,37 +373,49 @@ export default function RouteDetailPage() {
               <DetailSection title="Tripulación">
                 <div className="space-y-4">
                   {/* Driver */}
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bus className="w-5 h-5 text-primary" />
+                  {route.driver ? (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Bus className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Conductor</p>
+                        <Link href={`/fleet/drivers/${route.driver.id}`} className="font-medium text-gray-900 hover:text-primary">
+                          {route.driver.name || 'Sin nombre'}
+                        </Link>
+                      </div>
+                      {route.driver.phone && (
+                        <a href={`tel:${route.driver.phone}`} className="p-2 text-primary hover:bg-primary/10 rounded-lg">
+                          <Phone className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Conductor</p>
-                      <Link href={`/fleet/drivers/${route.driverId}`} className="font-medium text-gray-900 hover:text-primary">
-                        {route.driverName}
-                      </Link>
+                  ) : (
+                    <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                        <Bus className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-amber-600">Conductor</p>
+                        <p className="font-medium text-amber-700">Sin asignar</p>
+                      </div>
                     </div>
-                    {route.driverPhone && (
-                      <a href={`tel:${route.driverPhone}`} className="p-2 text-primary hover:bg-primary/10 rounded-lg">
-                        <Phone className="w-4 h-4" />
-                      </a>
-                    )}
-                  </div>
+                  )}
 
                   {/* Monitor */}
-                  {route.monitorId ? (
+                  {route.monitor ? (
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
                         <Users className="w-5 h-5 text-green-600" />
                       </div>
                       <div className="flex-1">
                         <p className="text-xs text-gray-500">Monitor</p>
-                        <Link href={`/fleet/monitors/${route.monitorId}`} className="font-medium text-gray-900 hover:text-primary">
-                          {route.monitorName}
+                        <Link href={`/fleet/monitors/${route.monitor.id}`} className="font-medium text-gray-900 hover:text-primary">
+                          {route.monitor.name || 'Sin nombre'}
                         </Link>
                       </div>
-                      {route.monitorPhone && (
-                        <a href={`tel:${route.monitorPhone}`} className="p-2 text-primary hover:bg-primary/10 rounded-lg">
+                      {route.monitor.phone && (
+                        <a href={`tel:${route.monitor.phone}`} className="p-2 text-primary hover:bg-primary/10 rounded-lg">
                           <Phone className="w-4 h-4" />
                         </a>
                       )}
@@ -398,18 +433,30 @@ export default function RouteDetailPage() {
                   )}
 
                   {/* Vehicle */}
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Bus className="w-5 h-5 text-blue-600" />
+                  {route.vehicle ? (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Bus className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Vehículo</p>
+                        <Link href={`/fleet/vehicles/${route.vehicle.id}`} className="font-medium text-gray-900 hover:text-primary">
+                          {route.vehicle.licensePlate}
+                        </Link>
+                        <p className="text-xs text-gray-500">{route.vehicle.brand} {route.vehicle.model}</p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Vehículo</p>
-                      <Link href={`/fleet/vehicles/${route.vehicleId}`} className="font-medium text-gray-900 hover:text-primary">
-                        {route.vehiclePlate}
-                      </Link>
-                      <p className="text-xs text-gray-500">{route.vehicleModel}</p>
+                  ) : (
+                    <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                        <Bus className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-amber-600">Vehículo</p>
+                        <p className="font-medium text-amber-700">Sin asignar</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </DetailSection>
 
@@ -420,37 +467,45 @@ export default function RouteDetailPage() {
                     <h3 className="font-semibold text-gray-900">Estudiantes Asignados</h3>
                     <p className="text-sm text-gray-500">{students.length} estudiantes</p>
                   </div>
-                  <Link
-                    href={`/routes/${route._id}/students`}
-                    className="text-sm text-primary hover:underline flex items-center gap-1"
-                  >
-                    Ver todos <ChevronRight className="w-4 h-4" />
-                  </Link>
+                  {students.length > 0 && (
+                    <Link
+                      href={`/routes/${route._id}/students`}
+                      className="text-sm text-primary hover:underline flex items-center gap-1"
+                    >
+                      Ver todos <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  )}
                 </div>
                 <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
-                  {students.map((student) => {
-                    const stop = stops.find(s => s.id === student.stopId);
-                    return (
-                      <Link
-                        key={student.id}
-                        href={`/students/${student.id}`}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                          {student.firstName[0]}{student.lastName[0]}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 text-sm">
-                            {student.firstName} {student.lastName}
-                          </p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {student.grade} • {stop?.name || 'Sin parada'}
-                          </p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400" />
-                      </Link>
-                    );
-                  })}
+                  {students.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      No hay estudiantes asignados
+                    </div>
+                  ) : (
+                    students.map((student) => {
+                      const stop = stops.find(s => s._id === student.stopId);
+                      return (
+                        <Link
+                          key={student.id}
+                          href={`/students/${student.id}`}
+                          className="flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+                            {student.firstName[0]}{student.lastName[0]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 text-sm">
+                              {student.firstName} {student.lastName}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {student.grade} • {stop?.name || 'Sin parada'}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                        </Link>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 

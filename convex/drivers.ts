@@ -118,17 +118,29 @@ export const getDriverById = query({
 
     // Drivers can view their own profile
     if (currentUser._id === driver.userId) {
-      return driver;
+      const user = await ctx.db.get(driver.userId);
+      return {
+        ...driver,
+        user: user ? { name: user.name, email: user.email, phone: user.phone } : null,
+      };
     }
 
     // Admin can view drivers in their institution
     if (currentUser.role === "admin" && currentUser.institutionId === driver.institutionId) {
-      return driver;
+      const user = await ctx.db.get(driver.userId);
+      return {
+        ...driver,
+        user: user ? { name: user.name, email: user.email, phone: user.phone } : null,
+      };
     }
 
     // Super admin can view all
     if (currentUser.role === "super_admin") {
-      return driver;
+      const user = await ctx.db.get(driver.userId);
+      return {
+        ...driver,
+        user: user ? { name: user.name, email: user.email, phone: user.phone } : null,
+      };
     }
 
     throw new Error("No tienes permiso para ver este perfil");

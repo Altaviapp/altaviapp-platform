@@ -2,53 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Edit, Trash2, Phone, Mail, MapPin } from 'lucide-react';
+import Link from 'next/link';
+import { Edit, Trash2, Phone, Mail, MapPin, Loader2, Shield, Heart } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection, DetailItem, DetailGrid, ConfirmDialog } from '@/components/shared';
-
-// Mock monitor data
-const mockMonitors: Record<string, {
-  id: string;
-  firstName: string;
-  lastName: string;
-  cedula: string;
-  birthDate: string;
-  phone: string;
-  email: string;
-  address: string;
-  status: 'active' | 'on_route' | 'available' | 'inactive';
-  route: { id: string; name: string } | null;
-  emergencyContact: { name: string; relation: string; phone: string } | null;
-  createdAt: string;
-}> = {
-  '1': {
-    id: '1',
-    firstName: 'Laura',
-    lastName: 'Sánchez',
-    cedula: '1111222233',
-    birthDate: '10/03/1992',
-    phone: '+593 99 111 2222',
-    email: 'laura.sanchez@email.com',
-    address: 'Calle Los Pinos 45, Quito',
-    status: 'on_route',
-    route: { id: '1', name: 'Ruta Centro' },
-    emergencyContact: { name: 'Pedro Sánchez', relation: 'Padre', phone: '+593 98 333 4444' },
-    createdAt: '05/06/2023',
-  },
-  '2': {
-    id: '2',
-    firstName: 'Pedro',
-    lastName: 'Gómez',
-    cedula: '4444555566',
-    birthDate: '25/11/1988',
-    phone: '+593 98 333 4444',
-    email: 'pedro.gomez@email.com',
-    address: 'Av. Amazonas 789, Quito',
-    status: 'on_route',
-    route: { id: '2', name: 'Ruta Norte' },
-    emergencyContact: { name: 'Ana Gómez', relation: 'Esposa', phone: '+593 97 555 6666' },
-    createdAt: '12/02/2023',
-  },
-};
+import { useMonitor, useMonitorMutations, useRoutes } from '@/hooks';
 
 const statusConfig = {
   active: { label: 'Activo', status: 'active' as const },
@@ -57,8 +14,14 @@ const statusConfig = {
   inactive: { label: 'Inactivo', status: 'inactive' as const },
 };
 
+function formatDate(timestamp?: number): string {
+  if (!timestamp) return '-';
+  return new Date(timestamp).toLocaleDateString('es-EC');
+}
+
 /**
  * Monitor Detail Page
+ * Connected to real Convex data
  */
 export default function MonitorDetailPage() {
   const router = useRouter();
@@ -68,40 +31,68 @@ export default function MonitorDetailPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const monitor = mockMonitors[monitorId];
+  // Real data from Convex
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { monitor, isLoading, notFound } = useMonitor(monitorId as any);
+  const { deactivateMonitor } = useMonitorMutations();
+  const { routes } = useRoutes();
 
-  if (!monitor) {
+  // Find assigned route
+  const assignedRoute = routes.find(r => r.monitorId === monitorId);
+
+  if (isLoading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Monitor no encontrado</p>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando monitor...</span>
       </div>
     );
   }
 
-  const statusInfo = statusConfig[monitor.status];
+  if (notFound || !monitor) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Monitor no encontrado</p>
+        <Link href="/fleet?tab=monitors" className="text-primary hover:underline mt-2 inline-block">
+          Volver a Monitores
+        </Link>
+      </div>
+    );
+  }
+
+  const monitorStatus = monitor.isActive ? 'active' : 'inactive';
+  const statusInfo = statusConfig[monitorStatus] ?? statusConfig.inactive;
+  const monitorName = monitor.user?.name || 'Sin nombre';
+  const monitorEmail = monitor.user?.email || '';
 
   const handleDelete = async () => {
     setIsDeleting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/fleet?tab=monitors');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await deactivateMonitor(monitorId as any);
+      router.push('/fleet?tab=monitors');
+    } catch (error) {
+      console.error('Error deactivating monitor:', error);
+      setIsDeleting(false);
+    }
   };
 
   return (
     <div>
       <PageHeader
-        title={`${monitor.firstName} ${monitor.lastName}`}
+        title={monitorName}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Flota', href: '/fleet' },
           { label: 'Monitores', href: '/fleet?tab=monitors' },
-          { label: `${monitor.firstName} ${monitor.lastName}` },
+          { label: monitorName },
         ]}
         backHref="/fleet?tab=monitors"
         badge={<StatusBadge status={statusInfo.status} label={statusInfo.label} />}
         actions={[
           {
             label: 'Editar',
-            href: `/fleet/monitors/${monitor.id}/edit`,
+            href: `/fleet/monitors/${monitorId}/edit`,
             icon: Edit,
             variant: 'secondary',
           },
@@ -118,10 +109,9 @@ export default function MonitorDetailPage() {
         {/* Información Personal */}
         <DetailSection title="Información Personal">
           <DetailGrid cols={3}>
-            <DetailItem label="Nombres" value={monitor.firstName} />
-            <DetailItem label="Apellidos" value={monitor.lastName} />
-            <DetailItem label="Cédula" value={monitor.cedula} />
-            <DetailItem label="Fecha de Nacimiento" value={monitor.birthDate} />
+            <DetailItem label="Nombre Completo" value={monitorName} />
+            <DetailItem label="Cédula" value={monitor.idNumber || '-'} />
+            <DetailItem label="Email" value={monitorEmail || '-'} />
           </DetailGrid>
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -131,7 +121,7 @@ export default function MonitorDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Teléfono</p>
-                <p className="text-sm font-medium text-gray-900">{monitor.phone}</p>
+                <p className="text-sm font-medium text-gray-900">{monitor.phone || '-'}</p>
               </div>
             </div>
 
@@ -141,7 +131,7 @@ export default function MonitorDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Email</p>
-                <p className="text-sm font-medium text-gray-900">{monitor.email || '-'}</p>
+                <p className="text-sm font-medium text-gray-900">{monitorEmail || '-'}</p>
               </div>
             </div>
 
@@ -150,8 +140,38 @@ export default function MonitorDetailPage() {
                 <MapPin className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Dirección</p>
-                <p className="text-sm font-medium text-gray-900 truncate">{monitor.address || '-'}</p>
+                <p className="text-xs text-gray-500">Contacto Emergencia</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{monitor.emergencyContact || '-'}</p>
+              </div>
+            </div>
+          </div>
+        </DetailSection>
+
+        {/* Certificaciones */}
+        <DetailSection title="Certificaciones">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <div className={`p-2 rounded-lg ${monitor.firstAidCertified ? 'bg-green-100' : 'bg-gray-100'}`}>
+                <Heart className={`w-5 h-5 ${monitor.firstAidCertified ? 'text-green-600' : 'text-gray-400'}`} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Primeros Auxilios</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {monitor.firstAidCertified ? 'Certificado' : 'No certificado'}
+                  {monitor.firstAidCertExpiry && ` (vence: ${formatDate(monitor.firstAidCertExpiry)})`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <div className={`p-2 rounded-lg ${monitor.childCareCertified ? 'bg-green-100' : 'bg-gray-100'}`}>
+                <Shield className={`w-5 h-5 ${monitor.childCareCertified ? 'text-green-600' : 'text-gray-400'}`} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Cuidado Infantil</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {monitor.childCareCertified ? 'Certificado' : 'No certificado'}
+                </p>
               </div>
             </div>
           </div>
@@ -162,13 +182,13 @@ export default function MonitorDetailPage() {
           <DetailItem
             label="Ruta Asignada"
             value={
-              monitor.route ? (
-                <a
-                  href={`/routes/${monitor.route.id}`}
+              assignedRoute ? (
+                <Link
+                  href={`/routes/${assignedRoute._id}`}
                   className="text-primary hover:underline"
                 >
-                  {monitor.route.name}
-                </a>
+                  {assignedRoute.name}
+                </Link>
               ) : (
                 <span className="text-gray-400">Sin ruta asignada</span>
               )
@@ -176,20 +196,9 @@ export default function MonitorDetailPage() {
           />
         </DetailSection>
 
-        {/* Contacto de Emergencia */}
-        {monitor.emergencyContact && (
-          <DetailSection title="Contacto de Emergencia">
-            <DetailGrid cols={3}>
-              <DetailItem label="Nombre" value={monitor.emergencyContact.name} />
-              <DetailItem label="Relación" value={monitor.emergencyContact.relation} />
-              <DetailItem label="Teléfono" value={monitor.emergencyContact.phone} />
-            </DetailGrid>
-          </DetailSection>
-        )}
-
         {/* Metadata */}
         <div className="text-xs text-gray-400 text-right">
-          Registrado el {monitor.createdAt}
+          Registrado el {formatDate(monitor.createdAt)}
         </div>
       </div>
 
@@ -199,7 +208,7 @@ export default function MonitorDetailPage() {
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={handleDelete}
         title="Eliminar Monitor"
-        message={`¿Estás seguro de que deseas eliminar a ${monitor.firstName} ${monitor.lastName}? Esta acción no se puede deshacer.`}
+        message={`¿Estás seguro de que deseas eliminar a ${monitorName}? Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
         variant="danger"
         isLoading={isDeleting}

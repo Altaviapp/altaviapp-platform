@@ -16,6 +16,8 @@ import {
   Check,
   Clock,
 } from 'lucide-react';
+import { useInvitationMutations } from '@/hooks';
+import type { InvitationRole } from '@/hooks';
 
 // ============================================
 // SCHEMAS
@@ -23,12 +25,12 @@ import {
 
 const invitationSchema = z.object({
   email: z.string().email('Email inválido'),
-  name: z.string().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  phone: z.string().optional(),
   role: z.enum(['parent', 'driver', 'monitor', 'admin'], {
     required_error: 'Selecciona un rol',
   }),
-  expiration: z.enum(['7', '14', '30']),
-  sendEmail: z.boolean(),
 });
 
 type InvitationFormData = z.infer<typeof invitationSchema>;
@@ -73,10 +75,12 @@ export default function NewInvitationPage() {
     email: string;
     role: string;
     code: string;
-    expiresAt: Date;
     emailSent: boolean;
   } | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Real data from Convex
+  const { createInvitation } = useInvitationMutations();
 
   const {
     register,
@@ -88,10 +92,10 @@ export default function NewInvitationPage() {
     resolver: zodResolver(invitationSchema),
     defaultValues: {
       email: '',
-      name: '',
+      firstName: '',
+      lastName: '',
+      phone: '',
       role: undefined,
-      expiration: '7',
-      sendEmail: true,
     },
   });
 
@@ -101,22 +105,25 @@ export default function NewInvitationPage() {
     setIsLoading(true);
     setError('');
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      const result = await createInvitation({
+        email: data.email,
+        firstName: data.firstName || undefined,
+        lastName: data.lastName || undefined,
+        phone: data.phone || undefined,
+        role: data.role as InvitationRole,
+      });
 
-    // Generate mock code
-    const code = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + parseInt(data.expiration));
-
-    // Mock success
-    setSuccess({
-      email: data.email,
-      role: roleOptions.find(r => r.value === data.role)?.label || data.role,
-      code,
-      expiresAt,
-      emailSent: data.sendEmail,
-    });
+      setSuccess({
+        email: data.email,
+        role: roleOptions.find(r => r.value === data.role)?.label || data.role,
+        code: result.invitationCode,
+        emailSent: result.emailSent,
+      });
+    } catch (err) {
+      console.error('Error creating invitation:', err);
+      setError(err instanceof Error ? err.message : 'Error al crear la invitación');
+    }
 
     setIsLoading(false);
   };
@@ -144,8 +151,8 @@ export default function NewInvitationPage() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-8">
           {/* Success Icon */}
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-success-light rounded-full flex items-center justify-center">
-              <CheckCircle className="w-10 h-10 text-success" />
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
           </div>
 
@@ -196,7 +203,7 @@ export default function NewInvitationPage() {
                 title="Copiar código"
               >
                 {copiedCode ? (
-                  <Check className="w-5 h-5 text-success" />
+                  <Check className="w-5 h-5 text-green-600" />
                 ) : (
                   <Copy className="w-5 h-5 text-gray-600" />
                 )}
@@ -207,18 +214,12 @@ export default function NewInvitationPage() {
           {/* Expiration */}
           <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
             <Clock className="w-4 h-4" />
-            <span>
-              Expira el {success.expiresAt.toLocaleDateString('es-EC', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              })}
-            </span>
+            <span>El código expira en 7 días</span>
           </div>
 
           {/* Email Status */}
           {success.emailSent && (
-            <div className="flex items-center justify-center gap-2 text-sm text-success mb-6">
+            <div className="flex items-center justify-center gap-2 text-sm text-green-600 mb-6">
               <CheckCircle className="w-4 h-4" />
               <span>Email enviado automáticamente</span>
             </div>
@@ -269,7 +270,7 @@ export default function NewInvitationPage() {
       <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-8">
         {/* Error */}
         {error && (
-          <div className="mb-6 p-3 bg-error-light border border-error rounded-lg text-sm text-error-dark flex items-center gap-2">
+          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2">
             <XCircle className="w-5 h-5 flex-shrink-0" />
             {error}
           </div>
@@ -293,26 +294,48 @@ export default function NewInvitationPage() {
               />
             </div>
             {errors.email && (
-              <p className="mt-1 text-sm text-error">{errors.email.message}</p>
+              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
             )}
           </div>
 
-          {/* Name (Optional) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nombre (opcional)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="w-5 h-5 text-gray-400" />
-              </div>
+          {/* Name */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nombre (opcional)
+              </label>
               <input
-                {...register('name')}
+                {...register('firstName')}
                 type="text"
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors"
-                placeholder="María García"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors"
+                placeholder="María"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Apellido (opcional)
+              </label>
+              <input
+                {...register('lastName')}
+                type="text"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors"
+                placeholder="García"
+              />
+            </div>
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Teléfono (opcional)
+            </label>
+            <input
+              {...register('phone')}
+              type="tel"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors"
+              placeholder="+593XXXXXXXXX"
+            />
+            <p className="mt-1 text-xs text-gray-500">Formato Ecuador: +593XXXXXXXXX</p>
           </div>
 
           {/* Role */}
@@ -347,53 +370,8 @@ export default function NewInvitationPage() {
               ))}
             </div>
             {errors.role && (
-              <p className="mt-1 text-sm text-error">{errors.role.message}</p>
+              <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>
             )}
-          </div>
-
-          {/* Divider */}
-          <hr className="border-gray-200" />
-
-          {/* Options */}
-          <div className="space-y-4">
-            <p className="text-sm font-medium text-gray-700">Opciones adicionales</p>
-
-            {/* Send Email */}
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                {...register('sendEmail')}
-                type="checkbox"
-                className="w-5 h-5 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <span className="text-sm text-gray-700">
-                Enviar email de invitación automáticamente
-              </span>
-            </label>
-
-            {/* Expiration */}
-            <div>
-              <p className="text-sm text-gray-700 mb-2">Expiración del código:</p>
-              <div className="flex flex-wrap gap-3">
-                {[
-                  { value: '7', label: '7 días' },
-                  { value: '14', label: '14 días' },
-                  { value: '30', label: '30 días' },
-                ].map((option) => (
-                  <label
-                    key={option.value}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
-                    <input
-                      {...register('expiration')}
-                      type="radio"
-                      value={option.value}
-                      className="w-4 h-4 text-primary border-gray-300 focus:ring-primary"
-                    />
-                    <span className="text-sm text-gray-700">{option.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Submit */}

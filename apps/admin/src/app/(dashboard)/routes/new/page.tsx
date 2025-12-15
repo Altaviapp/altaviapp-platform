@@ -5,83 +5,71 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-
-// Mock data
-const mockVehicles = [
-  { value: '1', label: 'ABC-1234 - Toyota Coaster (30 pasajeros)' },
-  { value: '2', label: 'XYZ-5678 - Mitsubishi Rosa (25 pasajeros)' },
-  { value: '3', label: 'DEF-9012 - Hino Dutro (35 pasajeros)' },
-];
-
-const mockDrivers = [
-  { value: '1', label: 'Juan Pérez' },
-  { value: '2', label: 'María González' },
-  { value: '3', label: 'Carlos Ruiz' },
-];
+import { useRouteMutations, useVehicles, useDrivers, useMonitors } from '@/hooks';
 
 const routeTypes = [
-  { value: 'ida', label: 'Ida (Recoger estudiantes)' },
-  { value: 'retorno', label: 'Retorno (Dejar estudiantes)' },
-  { value: 'ambas', label: 'Ambas (Ida y retorno)' },
+  { value: 'pickup', label: 'Recogida (Recoger estudiantes)' },
+  { value: 'dropoff', label: 'Entrega (Dejar estudiantes)' },
 ];
 
-const weekDays = [
-  { id: 'monday', label: 'Lun' },
-  { id: 'tuesday', label: 'Mar' },
-  { id: 'wednesday', label: 'Mié' },
-  { id: 'thursday', label: 'Jue' },
-  { id: 'friday', label: 'Vie' },
-  { id: 'saturday', label: 'Sáb' },
-  { id: 'sunday', label: 'Dom' },
-];
-
-interface Stop {
+interface StopFormData {
   id: string;
   name: string;
-  reference: string;
+  address: string;
   latitude: string;
   longitude: string;
-  estimatedTime: string;
-  students: string;
+  scheduledTime: string;
 }
 
 /**
  * New Route Page
- * Based on ADMIN_WIREFRAMES.md Section 3.2
+ * Connected to real Convex data
  */
 export default function NewRoutePage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
-    type: '',
-    startTime: '',
-    estimatedDuration: '',
+    type: '' as 'pickup' | 'dropoff' | '',
+    scheduledStartTime: '',
+    scheduledEndTime: '',
     vehicleId: '',
     driverId: '',
-    status: 'active',
+    monitorId: '',
   });
 
-  const [operationDays, setOperationDays] = useState({
-    monday: true,
-    tuesday: true,
-    wednesday: true,
-    thursday: true,
-    friday: true,
-    saturday: false,
-    sunday: false,
-  });
+  const [stops, setStops] = useState<StopFormData[]>([]);
 
-  const [stops, setStops] = useState<Stop[]>([]);
+  // Real data from Convex
+  const { createRoute, createStop } = useRouteMutations();
+  const { vehicles } = useVehicles();
+  const { drivers } = useDrivers();
+  const { monitors } = useMonitors();
+
+  // Build options for dropdowns
+  const vehicleOptions = vehicles.map(v => ({
+    value: v._id,
+    label: `${v.licensePlate} - ${v.brand} ${v.model} (${v.capacity} pasajeros)`,
+  }));
+
+  const driverOptions = drivers.map(d => ({
+    value: d._id,
+    label: d.user?.name || 'Sin nombre',
+  }));
+
+  const monitorOptions = [
+    { value: '', label: 'Sin monitor asignado' },
+    ...monitors.map(m => ({
+      value: m._id,
+      label: m.user?.name || 'Sin nombre',
+    })),
+  ];
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const toggleDay = (day: string) => {
-    setOperationDays((prev) => ({ ...prev, [day]: !prev[day as keyof typeof prev] }));
+    setError(null);
   };
 
   const addStop = () => {
@@ -90,11 +78,10 @@ export default function NewRoutePage() {
       {
         id: Date.now().toString(),
         name: '',
-        reference: '',
+        address: '',
         latitude: '',
         longitude: '',
-        estimatedTime: '5',
-        students: '0',
+        scheduledTime: '',
       },
     ]);
   };
@@ -111,9 +98,46 @@ export default function NewRoutePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/routes');
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Create route
+      const result = await createRoute({
+        name: formData.name,
+        type: formData.type as 'pickup' | 'dropoff',
+        scheduledStartTime: formData.scheduledStartTime,
+        scheduledEndTime: formData.scheduledEndTime,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        vehicleId: formData.vehicleId as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        driverId: formData.driverId as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        monitorId: formData.monitorId ? (formData.monitorId as any) : undefined,
+      });
+
+      // Create stops if any
+      if (result.routeId && stops.length > 0) {
+        for (let i = 0; i < stops.length; i++) {
+          const stop = stops[i];
+          if (!stop) continue;
+          await createStop(result.routeId, {
+            name: stop.name,
+            address: stop.address,
+            latitude: parseFloat(stop.latitude) || 0,
+            longitude: parseFloat(stop.longitude) || 0,
+            scheduledTime: stop.scheduledTime,
+            order: i + 1,
+          });
+        }
+      }
+
+      router.push('/routes');
+    } catch (err) {
+      console.error('Error creating route:', err);
+      setError(err instanceof Error ? err.message : 'Error al crear la ruta');
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -132,6 +156,12 @@ export default function NewRoutePage() {
         backHref="/routes"
       />
 
+      {error && (
+        <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg text-error">
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Información Básica */}
         <FormSection title="Información Básica">
@@ -142,15 +172,6 @@ export default function NewRoutePage() {
             onChange={handleChange('name')}
             placeholder="Ej: Ruta Centro - Escuela A"
             required
-          />
-
-          <FormField
-            label="Descripción"
-            name="description"
-            type="textarea"
-            value={formData.description}
-            onChange={handleChange('description')}
-            placeholder="Descripción de la ruta, zonas que cubre, etc."
           />
 
           <FormFieldRow cols={3}>
@@ -166,19 +187,19 @@ export default function NewRoutePage() {
             />
             <FormField
               label="Hora de Inicio"
-              name="startTime"
+              name="scheduledStartTime"
               type="time"
-              value={formData.startTime}
-              onChange={handleChange('startTime')}
+              value={formData.scheduledStartTime}
+              onChange={handleChange('scheduledStartTime')}
               required
             />
             <FormField
-              label="Duración Estimada (min)"
-              name="estimatedDuration"
-              type="number"
-              value={formData.estimatedDuration}
-              onChange={handleChange('estimatedDuration')}
-              placeholder="Ej: 45"
+              label="Hora de Fin"
+              name="scheduledEndTime"
+              type="time"
+              value={formData.scheduledEndTime}
+              onChange={handleChange('scheduledEndTime')}
+              required
             />
           </FormFieldRow>
         </FormSection>
@@ -192,7 +213,7 @@ export default function NewRoutePage() {
               type="select"
               value={formData.vehicleId}
               onChange={handleChange('vehicleId')}
-              options={mockVehicles}
+              options={vehicleOptions}
               placeholder="Seleccionar vehículo"
               required
             />
@@ -202,11 +223,20 @@ export default function NewRoutePage() {
               type="select"
               value={formData.driverId}
               onChange={handleChange('driverId')}
-              options={mockDrivers}
+              options={driverOptions}
               placeholder="Seleccionar conductor"
               required
             />
           </FormFieldRow>
+
+          <FormField
+            label="Monitor (Opcional)"
+            name="monitorId"
+            type="select"
+            value={formData.monitorId}
+            onChange={handleChange('monitorId')}
+            options={monitorOptions}
+          />
         </FormSection>
 
         {/* Paradas */}
@@ -255,15 +285,16 @@ export default function NewRoutePage() {
                       required
                     />
                     <FormField
-                      label="Referencia"
-                      name={`stop-${stop.id}-reference`}
-                      value={stop.reference}
-                      onChange={(value) => updateStop(stop.id, 'reference', value)}
-                      placeholder="Ej: Frente al parque"
+                      label="Dirección"
+                      name={`stop-${stop.id}-address`}
+                      value={stop.address}
+                      onChange={(value) => updateStop(stop.id, 'address', value)}
+                      placeholder="Ej: Av. Principal 123"
+                      required
                     />
                   </FormFieldRow>
 
-                  <FormFieldRow cols={4}>
+                  <FormFieldRow cols={3}>
                     <FormField
                       label="Latitud"
                       name={`stop-${stop.id}-lat`}
@@ -279,18 +310,11 @@ export default function NewRoutePage() {
                       placeholder="-78.5249"
                     />
                     <FormField
-                      label="Tiempo (min)"
+                      label="Hora Programada"
                       name={`stop-${stop.id}-time`}
-                      type="number"
-                      value={stop.estimatedTime}
-                      onChange={(value) => updateStop(stop.id, 'estimatedTime', value)}
-                    />
-                    <FormField
-                      label="Estudiantes"
-                      name={`stop-${stop.id}-students`}
-                      type="number"
-                      value={stop.students}
-                      onChange={(value) => updateStop(stop.id, 'students', value)}
+                      type="time"
+                      value={stop.scheduledTime}
+                      onChange={(value) => updateStop(stop.id, 'scheduledTime', value)}
                     />
                   </FormFieldRow>
                 </div>
@@ -308,51 +332,13 @@ export default function NewRoutePage() {
           </button>
         </FormSection>
 
-        {/* Configuración */}
-        <FormSection title="Configuración">
-          <FormField
-            label="Estado"
-            name="status"
-            type="select"
-            value={formData.status}
-            onChange={handleChange('status')}
-            options={[
-              { value: 'active', label: 'Activa' },
-              { value: 'inactive', label: 'Inactiva' },
-            ]}
-            required
-          />
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Días de Operación *
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {weekDays.map((day) => (
-                <button
-                  key={day.id}
-                  type="button"
-                  onClick={() => toggleDay(day.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    operationDays[day.id as keyof typeof operationDays]
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {day.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </FormSection>
-
         {/* Form Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <p className="text-sm text-gray-500 mb-4">* Campos obligatorios</p>
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Ruta"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

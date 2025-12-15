@@ -109,18 +109,34 @@ export const getRoute = query({
       })
     );
 
-    // Get vehicle, driver, monitor info
+    // Get vehicle, driver, monitor info with user names
     const vehicle = await ctx.db.get(route.vehicleId);
     const driver = await ctx.db.get(route.driverId);
+    const driverUser = driver ? await ctx.db.get(driver.userId) : null;
     const monitor = route.monitorId ? await ctx.db.get(route.monitorId) : null;
+    const monitorUser = monitor ? await ctx.db.get(monitor.userId) : null;
 
     return {
       ...route,
       stops: stops.filter((s) => s.isActive).sort((a, b) => a.order - b.order),
       students: students.filter(Boolean),
-      vehicle: vehicle ? { id: vehicle._id, licensePlate: vehicle.licensePlate, capacity: vehicle.capacity } : null,
-      driver: driver ? { id: driver._id, phone: driver.phone } : null,
-      monitor: monitor ? { id: monitor._id, phone: monitor.phone } : null,
+      vehicle: vehicle ? {
+        id: vehicle._id,
+        licensePlate: vehicle.licensePlate,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        capacity: vehicle.capacity,
+      } : null,
+      driver: driver ? {
+        id: driver._id,
+        phone: driver.phone,
+        name: driverUser?.name || null,
+      } : null,
+      monitor: monitor ? {
+        id: monitor._id,
+        phone: monitor.phone,
+        name: monitorUser?.name || null,
+      } : null,
     };
   },
 });

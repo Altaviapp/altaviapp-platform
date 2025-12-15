@@ -25,6 +25,7 @@ import {
   DEMO_MONITORS,
   DEMO_PARENTS,
   DEMO_STUDENTS,
+  DEMO_ROUTE_STOPS,
   generateQRCode,
 } from "./demoData";
 import { hashPassword } from "../lib/authUtils";
@@ -191,6 +192,7 @@ export const _createDemoData = internalMutation({
       "mrodriguez.driver@demo.com",
       "atorres.monitor@demo.com",
       "cmartinez.parent@demo.com",
+      "asanchez.parent@demo.com", // Second parent for testing novedades
     ];
 
     for (const email of demoEmails) {
@@ -334,7 +336,7 @@ export const _createDemoData = internalMutation({
       console.log("✅ Monitor created:", monitorData.user.name);
     }
 
-    // 7. Create Parent User
+    // 7. Create Parent User 1 (Carlos Martínez - parent of Sofía)
     const parentUserId = await ctx.db.insert("users", {
       clientId,
       institutionId,
@@ -354,6 +356,27 @@ export const _createDemoData = internalMutation({
       updatedAt: now,
     });
     console.log("✅ Parent user created: Carlos Martínez");
+
+    // 7b. Create Parent User 2 (Ana Sánchez - parent of Diego) for testing novedades
+    const parent2UserId = await ctx.db.insert("users", {
+      clientId,
+      institutionId,
+      email: "asanchez.parent@demo.com",
+      passwordHash: args.parentPasswordHash,
+      emailVerified: true,
+      emailVerifiedAt: now,
+      name: "Ana Sánchez",
+      firstName: "Ana",
+      lastName: "Sánchez",
+      phone: "+593992345678",
+      role: "parent",
+      accessibleInstitutionIds: [institutionId],
+      failedLoginAttempts: 0,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    console.log("✅ Parent user created: Ana Sánchez");
 
     // 8. Create Students with QR Codes
     const studentIds: string[] = [];
@@ -393,6 +416,127 @@ export const _createDemoData = internalMutation({
       console.log("✅ Student created:", `${student.firstName} ${student.lastName}`);
     }
 
+    // =========================================================================
+    // DEMO ROUTE, STOPS, AND TRIP FOR TESTING
+    // =========================================================================
+
+    // 9. Create Demo Route (dropoff - afternoon route)
+    const routeId = await ctx.db.insert("routes", {
+      institutionId,
+      name: "Ruta Demo PM - La Floresta",
+      type: "dropoff",
+      vehicleId: vehicleIds[0] as any, // PBA-1234
+      driverId: driverIds[0] as any, // Juan Carlos Pérez
+      isActive: true,
+      scheduledStartTime: "18:00",
+      scheduledEndTime: "19:00",
+      createdAt: now,
+      updatedAt: now,
+    });
+    console.log("✅ Route created: Ruta Demo PM - La Floresta");
+
+    // 10. Create Route Stops (3 stops: School → 12 de Octubre → La Floresta)
+    const demoStops = [
+      {
+        name: "Colegio Demo La Carolina",
+        address: "Av. de los Shyris N35-174 y Portugal",
+        latitude: -0.1828,
+        longitude: -78.4847,
+        scheduledTime: "18:00",
+        order: 1,
+        geofenceRadius: 100,
+      },
+      {
+        name: "12 de Octubre y Orellana",
+        address: "Av. 12 de Octubre N25-67 y Orellana",
+        latitude: -0.1912,
+        longitude: -78.4878,
+        scheduledTime: "18:20",
+        order: 2,
+        geofenceRadius: 100,
+      },
+      {
+        name: "La Floresta - Plaza Isabel La Católica",
+        address: "Isabel La Católica y Toledo",
+        latitude: -0.1967,
+        longitude: -78.4892,
+        scheduledTime: "18:40",
+        order: 3,
+        geofenceRadius: 100,
+      },
+    ];
+
+    const stopIds: string[] = [];
+    for (const stop of demoStops) {
+      const stopId = await ctx.db.insert("routeStops", {
+        routeId: routeId as any,
+        name: stop.name,
+        address: stop.address,
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        scheduledTime: stop.scheduledTime,
+        order: stop.order,
+        geofenceRadius: stop.geofenceRadius,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      stopIds.push(stopId);
+      console.log("✅ Stop created:", stop.name);
+    }
+
+    // 11. Create Student Route Assignments
+    // Sofía (index 0) → Stop 3 (La Floresta)
+    // Diego (index 1) → Stop 3 (La Floresta) - same stop, different parent
+    // Valentina (index 2) → Stop 2 (12 de Octubre)
+    const studentRouteAssignments = [
+      { studentIndex: 0, stopIndex: 2 }, // Sofía → La Floresta
+      { studentIndex: 1, stopIndex: 2 }, // Diego → La Floresta
+      { studentIndex: 2, stopIndex: 1 }, // Valentina → 12 de Octubre
+    ];
+
+    const studentRouteIds: string[] = [];
+    for (const assignment of studentRouteAssignments) {
+      const studentRouteId = await ctx.db.insert("studentRoutes", {
+        studentId: studentIds[assignment.studentIndex] as any,
+        routeId: routeId as any,
+        stopId: stopIds[assignment.stopIndex] as any,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      studentRouteIds.push(studentRouteId);
+    }
+    console.log("✅ Student route assignments created:", studentRouteIds.length);
+
+    // 12. Create Trip for TODAY
+    const today = new Date().toISOString().split('T')[0] ?? ''; // YYYY-MM-DD format
+    const tripId = await ctx.db.insert("trips", {
+      routeId: routeId as any,
+      driverId: driverIds[0] as any,
+      vehicleId: vehicleIds[0] as any,
+      status: "scheduled",
+      scheduledDate: today,
+      createdAt: now,
+      updatedAt: now,
+    });
+    console.log("✅ Trip created for:", today);
+
+    // 13. Create Trip Students (students scheduled for this trip)
+    const tripStudentIds: string[] = [];
+    for (const assignment of studentRouteAssignments) {
+      const tripStudentId = await ctx.db.insert("tripStudents", {
+        tripId: tripId as any,
+        studentId: studentIds[assignment.studentIndex] as any,
+        stopId: stopIds[assignment.stopIndex] as any,
+        status: "scheduled",
+        createdAt: now,
+        updatedAt: now,
+      });
+      tripStudentIds.push(tripStudentId);
+    }
+    console.log("✅ Trip students created:", tripStudentIds.length);
+
     return {
       success: true,
       created: {
@@ -400,10 +544,16 @@ export const _createDemoData = internalMutation({
         institutionId,
         adminUserId,
         parentUserId,
+        parent2UserId,
         vehicleIds,
         driverIds,
         monitorIds,
         studentIds,
+        routeId,
+        stopIds,
+        studentRouteIds,
+        tripId,
+        tripStudentIds,
       },
       credentials: {
         admin: { email: args.adminData.email, password: "demo123" },
@@ -415,7 +565,10 @@ export const _createDemoData = internalMutation({
           email: m.user.email,
           password: "monitor123",
         })),
-        parents: [{ email: "cmartinez.parent@demo.com", password: "parent123" }],
+        parents: [
+          { email: "cmartinez.parent@demo.com", password: "parent123" },
+          { email: "asanchez.parent@demo.com", password: "parent123" },
+        ],
       },
     };
   },
@@ -429,10 +582,16 @@ type SeedResult = {
     institutionId: string;
     adminUserId: string;
     parentUserId: string;
+    parent2UserId: string;
     vehicleIds: string[];
     driverIds: string[];
     monitorIds: string[];
     studentIds: string[];
+    routeId: string;
+    stopIds: string[];
+    studentRouteIds: string[];
+    tripId: string;
+    tripStudentIds: string[];
   };
   credentials: {
     admin: { email: string; password: string };
@@ -519,7 +678,10 @@ export const seedDemoData = action({
     console.log("Driver 1: jperez.driver@demo.com / driver123");
     console.log("Driver 2: mrodriguez.driver@demo.com / driver123");
     console.log("Monitor: atorres.monitor@demo.com / monitor123");
-    console.log("Parent: cmartinez.parent@demo.com / parent123");
+    console.log("Parent 1 (Sofía's parent): cmartinez.parent@demo.com / parent123");
+    console.log("Parent 2 (Diego's parent): asanchez.parent@demo.com / parent123");
+    console.log("\n🚌 Demo Route: Ruta Demo PM - La Floresta");
+    console.log("📅 Trip scheduled for today with 3 students");
 
     return result;
   },

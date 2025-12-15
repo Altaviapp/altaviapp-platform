@@ -2,173 +2,138 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Trash2, GripVertical, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-
-// Mock data
-const mockVehicles = [
-  { value: '1', label: 'ABC-1234 - Toyota Coaster (30 pasajeros)' },
-  { value: '2', label: 'XYZ-5678 - Mitsubishi Rosa (25 pasajeros)' },
-  { value: '3', label: 'DEF-9012 - Hino Dutro (35 pasajeros)' },
-];
-
-const mockDrivers = [
-  { value: '1', label: 'Juan Pérez' },
-  { value: '2', label: 'María González' },
-  { value: '3', label: 'Carlos Ruiz' },
-];
+import { useRoute, useRouteMutations, useVehicles, useDrivers, useMonitors } from '@/hooks';
 
 const routeTypes = [
-  { value: 'ida', label: 'Ida (Recoger estudiantes)' },
-  { value: 'retorno', label: 'Retorno (Dejar estudiantes)' },
-  { value: 'ambas', label: 'Ambas (Ida y retorno)' },
+  { value: 'pickup', label: 'Recogida (Recoger estudiantes)' },
+  { value: 'dropoff', label: 'Entrega (Dejar estudiantes)' },
 ];
 
-const weekDays = [
-  { id: 'monday', label: 'Lun' },
-  { id: 'tuesday', label: 'Mar' },
-  { id: 'wednesday', label: 'Mié' },
-  { id: 'thursday', label: 'Jue' },
-  { id: 'friday', label: 'Vie' },
-  { id: 'saturday', label: 'Sáb' },
-  { id: 'sunday', label: 'Dom' },
-];
-
-interface Stop {
+interface StopFormData {
   id: string;
   name: string;
-  reference: string;
+  address: string;
   latitude: string;
   longitude: string;
-  estimatedTime: string;
-  students: string;
+  scheduledTime: string;
+  order: number;
+  isNew?: boolean;
+  isDeleted?: boolean;
 }
-
-type OperationDays = {
-  monday: boolean;
-  tuesday: boolean;
-  wednesday: boolean;
-  thursday: boolean;
-  friday: boolean;
-  saturday: boolean;
-  sunday: boolean;
-};
-
-// Mock route data
-const mockRoutes: Record<string, {
-  name: string;
-  description: string;
-  type: string;
-  startTime: string;
-  estimatedDuration: string;
-  vehicleId: string;
-  driverId: string;
-  status: string;
-  operationDays: OperationDays;
-  stops: Stop[];
-}> = {
-  '1': {
-    name: 'Ruta Centro - Escuela A',
-    description: 'Ruta que cubre el sector centro de la ciudad',
-    type: 'ida',
-    startTime: '07:00',
-    estimatedDuration: '45',
-    vehicleId: '1',
-    driverId: '1',
-    status: 'active',
-    operationDays: {
-      monday: true,
-      tuesday: true,
-      wednesday: true,
-      thursday: true,
-      friday: true,
-      saturday: false,
-      sunday: false,
-    },
-    stops: [
-      { id: '1', name: 'Centro Comercial', reference: 'Entrada principal', latitude: '-0.2298', longitude: '-78.5249', estimatedTime: '5', students: '5' },
-      { id: '2', name: 'Parque Central', reference: 'Esquina norte', latitude: '-0.2305', longitude: '-78.5240', estimatedTime: '3', students: '8' },
-    ],
-  },
-};
 
 /**
  * Edit Route Page
+ * Connected to real Convex data
  */
 export default function EditRoutePage() {
   const router = useRouter();
   const params = useParams();
   const routeId = params.id as string;
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
-    type: '',
-    startTime: '',
-    estimatedDuration: '',
+    type: '' as 'pickup' | 'dropoff' | '',
+    scheduledStartTime: '',
+    scheduledEndTime: '',
     vehicleId: '',
     driverId: '',
-    status: 'active',
+    monitorId: '',
+    isActive: true,
   });
-  const [operationDays, setOperationDays] = useState({
-    monday: true,
-    tuesday: true,
-    wednesday: true,
-    thursday: true,
-    friday: true,
-    saturday: false,
-    sunday: false,
-  });
-  const [stops, setStops] = useState<Stop[]>([]);
+  const [stops, setStops] = useState<StopFormData[]>([]);
 
+  // Real data from Convex
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { route, isLoading, notFound } = useRoute(routeId as any);
+  const { updateRoute, createStop, updateStop, deleteStop } = useRouteMutations();
+  const { vehicles } = useVehicles();
+  const { drivers } = useDrivers();
+  const { monitors } = useMonitors();
+
+  // Build options for dropdowns
+  const vehicleOptions = vehicles.map(v => ({
+    value: v._id,
+    label: `${v.licensePlate} - ${v.brand} ${v.model} (${v.capacity} pasajeros)`,
+  }));
+
+  const driverOptions = drivers.map(d => ({
+    value: d._id,
+    label: d.user?.name || 'Sin nombre',
+  }));
+
+  const monitorOptions = [
+    { value: '', label: 'Sin monitor asignado' },
+    ...monitors.map(m => ({
+      value: m._id,
+      label: m.user?.name || 'Sin nombre',
+    })),
+  ];
+
+  // Load route data into form
   useEffect(() => {
-    const route = mockRoutes[routeId];
     if (route) {
       setFormData({
         name: route.name,
-        description: route.description,
         type: route.type,
-        startTime: route.startTime,
-        estimatedDuration: route.estimatedDuration,
+        scheduledStartTime: route.scheduledStartTime,
+        scheduledEndTime: route.scheduledEndTime,
         vehicleId: route.vehicleId,
         driverId: route.driverId,
-        status: route.status,
+        monitorId: route.monitorId || '',
+        isActive: route.isActive,
       });
-      setOperationDays(route.operationDays);
-      setStops(route.stops);
+
+      // Load stops
+      if (route.stops) {
+        setStops(route.stops.map(s => ({
+          id: s._id,
+          name: s.name,
+          address: s.address,
+          latitude: s.latitude.toString(),
+          longitude: s.longitude.toString(),
+          scheduledTime: s.scheduledTime,
+          order: s.order,
+        })));
+      }
     }
-  }, [routeId]);
+  }, [route]);
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const toggleDay = (day: string) => {
-    setOperationDays((prev) => ({ ...prev, [day]: !prev[day as keyof typeof prev] }));
+    setError(null);
   };
 
   const addStop = () => {
     setStops((prev) => [
       ...prev,
       {
-        id: Date.now().toString(),
+        id: `new-${Date.now()}`,
         name: '',
-        reference: '',
+        address: '',
         latitude: '',
         longitude: '',
-        estimatedTime: '5',
-        students: '0',
+        scheduledTime: '',
+        order: prev.length + 1,
+        isNew: true,
       },
     ]);
   };
 
   const removeStop = (stopId: string) => {
-    setStops((prev) => prev.filter((s) => s.id !== stopId));
+    setStops((prev) =>
+      prev.map((s) =>
+        s.id === stopId ? { ...s, isDeleted: true } : s
+      ).filter((s) => !s.isNew || !s.isDeleted)
+    );
   };
 
-  const updateStop = (stopId: string, field: string, value: string) => {
+  const updateStopField = (stopId: string, field: string, value: string | number) => {
     setStops((prev) =>
       prev.map((s) => (s.id === stopId ? { ...s, [field]: value } : s))
     );
@@ -176,35 +141,109 @@ export default function EditRoutePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push(`/routes/${routeId}`);
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Update route basic info
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updateRoute(routeId as any, {
+        name: formData.name,
+        type: formData.type as 'pickup' | 'dropoff',
+        scheduledStartTime: formData.scheduledStartTime,
+        scheduledEndTime: formData.scheduledEndTime,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        vehicleId: formData.vehicleId as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        driverId: formData.driverId as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        monitorId: formData.monitorId ? (formData.monitorId as any) : undefined,
+        isActive: formData.isActive,
+      });
+
+      // Handle stop changes
+      for (const stop of stops) {
+        if (stop.isDeleted && !stop.isNew) {
+          // Delete existing stop
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await deleteStop(stop.id as any);
+        } else if (stop.isNew && !stop.isDeleted) {
+          // Create new stop
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await createStop(routeId as any, {
+            name: stop.name,
+            address: stop.address,
+            latitude: parseFloat(stop.latitude) || 0,
+            longitude: parseFloat(stop.longitude) || 0,
+            scheduledTime: stop.scheduledTime,
+            order: stop.order,
+          });
+        } else if (!stop.isNew && !stop.isDeleted) {
+          // Update existing stop
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await updateStop(stop.id as any, {
+            name: stop.name,
+            address: stop.address,
+            latitude: parseFloat(stop.latitude) || 0,
+            longitude: parseFloat(stop.longitude) || 0,
+            scheduledTime: stop.scheduledTime,
+            order: stop.order,
+          });
+        }
+      }
+
+      router.push(`/routes/${routeId}`);
+    } catch (err) {
+      console.error('Error updating route:', err);
+      setError(err instanceof Error ? err.message : 'Error al actualizar la ruta');
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
     router.push(`/routes/${routeId}`);
   };
 
-  if (!mockRoutes[routeId]) {
+  if (isLoading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Ruta no encontrada</p>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando ruta...</span>
       </div>
     );
   }
 
+  if (notFound || !route) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Ruta no encontrada</p>
+        <Link href="/routes" className="text-primary hover:underline mt-2 inline-block">
+          Volver a Rutas
+        </Link>
+      </div>
+    );
+  }
+
+  const visibleStops = stops.filter(s => !s.isDeleted);
+
   return (
     <div>
       <PageHeader
-        title={`Editar ${formData.name}`}
+        title={`Editar ${route.name}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Rutas', href: '/routes' },
-          { label: formData.name, href: `/routes/${routeId}` },
+          { label: route.name, href: `/routes/${routeId}` },
           { label: 'Editar' },
         ]}
         backHref={`/routes/${routeId}`}
       />
+
+      {error && (
+        <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg text-error">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Información Básica */}
@@ -215,14 +254,6 @@ export default function EditRoutePage() {
             value={formData.name}
             onChange={handleChange('name')}
             required
-          />
-
-          <FormField
-            label="Descripción"
-            name="description"
-            type="textarea"
-            value={formData.description}
-            onChange={handleChange('description')}
           />
 
           <FormFieldRow cols={3}>
@@ -237,18 +268,19 @@ export default function EditRoutePage() {
             />
             <FormField
               label="Hora de Inicio"
-              name="startTime"
+              name="scheduledStartTime"
               type="time"
-              value={formData.startTime}
-              onChange={handleChange('startTime')}
+              value={formData.scheduledStartTime}
+              onChange={handleChange('scheduledStartTime')}
               required
             />
             <FormField
-              label="Duración Estimada (min)"
-              name="estimatedDuration"
-              type="number"
-              value={formData.estimatedDuration}
-              onChange={handleChange('estimatedDuration')}
+              label="Hora de Fin"
+              name="scheduledEndTime"
+              type="time"
+              value={formData.scheduledEndTime}
+              onChange={handleChange('scheduledEndTime')}
+              required
             />
           </FormFieldRow>
         </FormSection>
@@ -262,7 +294,7 @@ export default function EditRoutePage() {
               type="select"
               value={formData.vehicleId}
               onChange={handleChange('vehicleId')}
-              options={mockVehicles}
+              options={vehicleOptions}
               required
             />
             <FormField
@@ -271,21 +303,30 @@ export default function EditRoutePage() {
               type="select"
               value={formData.driverId}
               onChange={handleChange('driverId')}
-              options={mockDrivers}
+              options={driverOptions}
               required
             />
           </FormFieldRow>
+
+          <FormField
+            label="Monitor (Opcional)"
+            name="monitorId"
+            type="select"
+            value={formData.monitorId}
+            onChange={handleChange('monitorId')}
+            options={monitorOptions}
+          />
         </FormSection>
 
         {/* Paradas */}
         <FormSection title="Paradas (Orden de recorrido)">
-          {stops.length === 0 ? (
+          {visibleStops.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <p>No hay paradas configuradas</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {stops.map((stop, index) => (
+              {visibleStops.map((stop, index) => (
                 <div
                   key={stop.id}
                   className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4"
@@ -299,6 +340,11 @@ export default function EditRoutePage() {
                       <span className="text-sm font-medium text-gray-700">
                         {stop.name || 'Nueva Parada'}
                       </span>
+                      {stop.isNew && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                          Nueva
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -314,43 +360,39 @@ export default function EditRoutePage() {
                       label="Nombre"
                       name={`stop-${stop.id}-name`}
                       value={stop.name}
-                      onChange={(value) => updateStop(stop.id, 'name', value)}
+                      onChange={(value) => updateStopField(stop.id, 'name', value)}
                       required
                     />
                     <FormField
-                      label="Referencia"
-                      name={`stop-${stop.id}-reference`}
-                      value={stop.reference}
-                      onChange={(value) => updateStop(stop.id, 'reference', value)}
+                      label="Dirección"
+                      name={`stop-${stop.id}-address`}
+                      value={stop.address}
+                      onChange={(value) => updateStopField(stop.id, 'address', value)}
+                      required
                     />
                   </FormFieldRow>
 
-                  <FormFieldRow cols={4}>
+                  <FormFieldRow cols={3}>
                     <FormField
                       label="Latitud"
                       name={`stop-${stop.id}-lat`}
                       value={stop.latitude}
-                      onChange={(value) => updateStop(stop.id, 'latitude', value)}
+                      onChange={(value) => updateStopField(stop.id, 'latitude', value)}
+                      placeholder="-0.2298"
                     />
                     <FormField
                       label="Longitud"
                       name={`stop-${stop.id}-lng`}
                       value={stop.longitude}
-                      onChange={(value) => updateStop(stop.id, 'longitude', value)}
+                      onChange={(value) => updateStopField(stop.id, 'longitude', value)}
+                      placeholder="-78.5249"
                     />
                     <FormField
-                      label="Tiempo (min)"
+                      label="Hora Programada"
                       name={`stop-${stop.id}-time`}
-                      type="number"
-                      value={stop.estimatedTime}
-                      onChange={(value) => updateStop(stop.id, 'estimatedTime', value)}
-                    />
-                    <FormField
-                      label="Estudiantes"
-                      name={`stop-${stop.id}-students`}
-                      type="number"
-                      value={stop.students}
-                      onChange={(value) => updateStop(stop.id, 'students', value)}
+                      type="time"
+                      value={stop.scheduledTime}
+                      onChange={(value) => updateStopField(stop.id, 'scheduledTime', value)}
                     />
                   </FormFieldRow>
                 </div>
@@ -368,42 +410,20 @@ export default function EditRoutePage() {
           </button>
         </FormSection>
 
-        {/* Configuración */}
-        <FormSection title="Configuración">
+        {/* Estado */}
+        <FormSection title="Estado">
           <FormField
-            label="Estado"
-            name="status"
+            label="Estado de la Ruta"
+            name="isActive"
             type="select"
-            value={formData.status}
-            onChange={handleChange('status')}
+            value={formData.isActive ? 'active' : 'inactive'}
+            onChange={(val) => setFormData(prev => ({ ...prev, isActive: val === 'active' }))}
             options={[
               { value: 'active', label: 'Activa' },
               { value: 'inactive', label: 'Inactiva' },
             ]}
             required
           />
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Días de Operación
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {weekDays.map((day) => (
-                <button
-                  key={day.id}
-                  type="button"
-                  onClick={() => toggleDay(day.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    operationDays[day.id as keyof typeof operationDays]
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {day.label}
-                </button>
-              ))}
-            </div>
-          </div>
         </FormSection>
 
         {/* Form Actions */}
@@ -412,7 +432,7 @@ export default function EditRoutePage() {
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Cambios"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

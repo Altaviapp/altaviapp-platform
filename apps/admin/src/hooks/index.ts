@@ -86,3 +86,11 @@ export {
   useUserStats,
 } from "./useUsers";
 export type { UserRole } from "./useUsers";
+
+// Invitations
+export {
+  useInvitations,
+  useInvitationMutations,
+  useInvitationStats,
+} from "./useInvitations";
+export type { InvitationRole, InvitationStatus } from "./useInvitations";

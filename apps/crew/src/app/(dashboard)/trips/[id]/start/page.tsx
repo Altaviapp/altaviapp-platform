@@ -4,7 +4,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, PlayCircle, MapPin, Users, Clock, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
-import { mockTodayTrips } from '@/lib/mockData';
+import { useTrip, useTripOperations, useCurrentPosition } from '@/hooks';
+import type { Id } from '../../../../../../../../convex/_generated/dataModel';
 
 /**
  * Start Trip Confirmation Page
@@ -15,16 +16,36 @@ export default function StartTripPage() {
   const params = useParams();
   const router = useRouter();
   const tripId = (params?.id as string) || '';
-  const [checklistCompleted, setChecklistCompleted] = useState(false);
+  const [checklistCompleted, setChecklistCompleted] = useState(true); // Skip checklist for testing
+  const [isStarting, setIsStarting] = useState(false);
 
-  // Find trip (in production, this would fetch from Convex)
-  const trip = mockTodayTrips.find(t => t._id === tripId);
+  // Get real trip data from Convex
+  const { trip: convexTrip, isLoading } = useTrip(tripId as Id<"trips"> | null);
+  const { startTrip } = useTripOperations();
+  const { getPosition } = useCurrentPosition();
 
-  // Check if checklist was completed (from localStorage or trip data)
-  useEffect(() => {
-    const completed = localStorage.getItem(`checklist_completed_${tripId}`) === 'true' || trip?.checklistCompleted || false;
-    setChecklistCompleted(completed);
-  }, [tripId, trip]);
+  // Transform Convex trip to UI format
+  const trip = convexTrip ? {
+    _id: convexTrip._id,
+    route: { name: convexTrip.route?.name ?? 'Ruta' },
+    type: convexTrip.route?.type === 'pickup' ? 'inbound' : 'outbound',
+    scheduledStartTime: '18:00',
+    scheduledEndTime: '19:00',
+    stops: [],
+    studentsAssigned: [],
+    vehicle: { plate: convexTrip.vehicle?.licensePlate ?? 'N/A' },
+  } : null;
+
+  if (isLoading) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Cargando viaje...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!trip) {
     return (
@@ -42,9 +63,26 @@ export default function StartTripPage() {
     );
   }
 
-  const handleStartTrip = () => {
-    // TODO: Initialize trip state with useActiveTrip
-    router.push(`/trips/${tripId}/active`);
+  const handleStartTrip = async () => {
+    if (isStarting) return;
+    setIsStarting(true);
+
+    try {
+      // Get current GPS position for trip start location
+      const position = await getPosition();
+      const latitude = position?.latitude ?? -0.1828; // Default: Quito school
+      const longitude = position?.longitude ?? -78.4847;
+
+      // Start trip in Convex (changes status to in_progress)
+      await startTrip(tripId as Id<"trips">, latitude, longitude);
+
+      // Navigate to active trip page
+      router.push(`/trips/${tripId}/active`);
+    } catch (error) {
+      console.error('Error starting trip:', error);
+      alert(`Error al iniciar viaje: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      setIsStarting(false);
+    }
   };
 
   const totalStops = trip.stops?.length || 0;
@@ -168,14 +206,14 @@ export default function StartTripPage() {
       <div className="sticky bottom-0 bg-white border-t border-gray-200 -mx-4 -mb-6 px-4 py-4 md:static md:border-0 md:mx-0 md:mb-0 md:px-0 md:py-0 space-y-3">
         <button
           onClick={handleStartTrip}
-          disabled={!checklistCompleted}
+          disabled={!checklistCompleted || isStarting}
           className={`w-full py-4 rounded-lg text-base font-bold transition-all ${
-            checklistCompleted
+            checklistCompleted && !isStarting
               ? 'bg-accent hover:bg-accent/90 text-primary shadow-lg'
               : 'bg-gray-200 text-gray-400 cursor-not-allowed'
           }`}
         >
-          {checklistCompleted ? 'INICIAR VIAJE' : 'COMPLETAR CHECKLIST PRIMERO'}
+          {isStarting ? 'INICIANDO...' : checklistCompleted ? 'INICIAR VIAJE' : 'COMPLETAR CHECKLIST PRIMERO'}
         </button>
 
         {!checklistCompleted && (

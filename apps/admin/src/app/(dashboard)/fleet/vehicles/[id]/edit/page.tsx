@@ -2,133 +2,61 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-import { Satellite, Smartphone, Cloud, Info } from 'lucide-react';
+import { Satellite, Smartphone, Cloud, Info, Loader2 } from 'lucide-react';
+import { useVehicle, useVehicleMutations } from '@/hooks';
 
-// Mock data for dropdowns
-const mockDrivers = [
-  { value: '1', label: 'Juan Pérez' },
-  { value: '2', label: 'María González' },
-  { value: '3', label: 'Carlos Ruiz' },
-];
-
-const mockRoutes = [
-  { value: '1', label: 'Ruta Centro' },
-  { value: '2', label: 'Ruta Norte' },
-  { value: '3', label: 'Ruta Sur' },
-];
-
-// GPS Source type
 type GPSSourceType = 'mobile' | 'device' | 'api';
-
-// Mock vehicle data
-const mockVehicles: Record<string, {
-  plate: string;
-  brand: string;
-  model: string;
-  year: string;
-  color: string;
-  capacity: string;
-  registrationNumber: string;
-  insurancePolicy: string;
-  insuranceExpiry: string;
-  lastInspection: string;
-  nextInspection: string;
-  status: string;
-  driverId: string;
-  routeId: string;
-  notes: string;
-  // GPS Configuration
-  gpsSourceType: GPSSourceType;
-  gpsDeviceId: string;
-  gpsProvider: string;
-  gpsFallbackToMobile: boolean;
-}> = {
-  '1': {
-    plate: 'ABC-1234',
-    brand: 'Toyota',
-    model: 'Coaster',
-    year: '2022',
-    color: 'Blanco',
-    capacity: '30',
-    registrationNumber: 'REG-2022-001234',
-    insurancePolicy: 'POL-123456789',
-    insuranceExpiry: '2025-08-15',
-    lastInspection: '2024-10-01',
-    nextInspection: '2025-04-01',
-    status: 'active',
-    driverId: '1',
-    routeId: '1',
-    notes: 'Vehículo en excelente estado. Última revisión sin novedades.',
-    gpsSourceType: 'device',
-    gpsDeviceId: 'GPS-TOYOTA-001',
-    gpsProvider: 'custom',
-    gpsFallbackToMobile: true,
-  },
-  '2': {
-    plate: 'XYZ-5678',
-    brand: 'Mitsubishi',
-    model: 'Rosa',
-    year: '2021',
-    color: 'Amarillo',
-    capacity: '25',
-    registrationNumber: 'REG-2021-005678',
-    insurancePolicy: 'POL-987654321',
-    insuranceExpiry: '2025-06-20',
-    lastInspection: '2024-09-15',
-    nextInspection: '2025-03-15',
-    status: 'maintenance',
-    driverId: '',
-    routeId: '',
-    notes: 'En mantenimiento: cambio de frenos programado.',
-    gpsSourceType: 'mobile',
-    gpsDeviceId: '',
-    gpsProvider: '',
-    gpsFallbackToMobile: false,
-  },
-};
 
 /**
  * Edit Vehicle Page
- * Based on ADMIN_WIREFRAMES.md Section 2.2
+ * Connected to real Convex data
  */
 export default function EditVehiclePage() {
   const router = useRouter();
   const params = useParams();
   const vehicleId = params.id as string;
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    plate: '',
+    licensePlate: '',
     brand: '',
     model: '',
     year: '',
     color: '',
     capacity: '',
-    registrationNumber: '',
-    insurancePolicy: '',
-    insuranceExpiry: '',
-    lastInspection: '',
-    nextInspection: '',
     status: 'active',
-    driverId: '',
-    routeId: '',
-    notes: '',
-    // GPS Configuration
     gpsSourceType: 'mobile' as GPSSourceType,
     gpsDeviceId: '',
     gpsProvider: '',
     gpsFallbackToMobile: false,
   });
 
-  // Load vehicle data
+  // Real data from Convex
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { vehicle, isLoading, notFound } = useVehicle(vehicleId as any);
+  const { updateVehicle } = useVehicleMutations();
+
+  // Load vehicle data into form
   useEffect(() => {
-    const vehicle = mockVehicles[vehicleId];
     if (vehicle) {
-      setFormData(vehicle);
+      setFormData({
+        licensePlate: vehicle.licensePlate || '',
+        brand: vehicle.brand || '',
+        model: vehicle.model || '',
+        year: String(vehicle.year || ''),
+        color: vehicle.color || '',
+        capacity: String(vehicle.capacity || ''),
+        status: vehicle.status || 'active',
+        gpsSourceType: (vehicle.gpsSourceType as GPSSourceType) || 'mobile',
+        gpsDeviceId: vehicle.gpsDeviceConfig?.deviceId || '',
+        gpsProvider: vehicle.gpsDeviceConfig?.provider || '',
+        gpsFallbackToMobile: vehicle.gpsDeviceConfig?.fallbackToMobile || false,
+      });
     }
-  }, [vehicleId]);
+  }, [vehicle]);
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -136,23 +64,46 @@ export default function EditVehiclePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Redirect to vehicle detail after save
-    router.push(`/fleet/vehicles/${vehicleId}`);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updateVehicle(vehicleId as any, {
+        licensePlate: formData.licensePlate,
+        brand: formData.brand,
+        model: formData.model,
+        year: parseInt(formData.year) || 0,
+        color: formData.color,
+        capacity: parseInt(formData.capacity) || 0,
+        status: formData.status as "active" | "maintenance" | "out_of_service",
+      });
+      router.push(`/fleet/vehicles/${vehicleId}`);
+    } catch (error) {
+      console.error('Error updating vehicle:', error);
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
     router.push(`/fleet/vehicles/${vehicleId}`);
   };
 
-  if (!mockVehicles[vehicleId]) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando vehículo...</span>
+      </div>
+    );
+  }
+
+  if (notFound || !vehicle) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Vehículo no encontrado</p>
+        <Link href="/fleet" className="text-primary hover:underline mt-2 inline-block">
+          Volver a Flota
+        </Link>
       </div>
     );
   }
@@ -160,11 +111,11 @@ export default function EditVehiclePage() {
   return (
     <div>
       <PageHeader
-        title={`Editar Vehículo ${formData.plate}`}
+        title={`Editar Vehículo ${formData.licensePlate}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Flota', href: '/fleet' },
-          { label: formData.plate, href: `/fleet/vehicles/${vehicleId}` },
+          { label: formData.licensePlate, href: `/fleet/vehicles/${vehicleId}` },
           { label: 'Editar' },
         ]}
         backHref={`/fleet/vehicles/${vehicleId}`}
@@ -176,9 +127,9 @@ export default function EditVehiclePage() {
           <FormFieldRow cols={2}>
             <FormField
               label="Placa"
-              name="plate"
-              value={formData.plate}
-              onChange={handleChange('plate')}
+              name="licensePlate"
+              value={formData.licensePlate}
+              onChange={handleChange('licensePlate')}
               placeholder="Ej: ABC-1234"
               required
             />
@@ -233,55 +184,8 @@ export default function EditVehiclePage() {
           </FormFieldRow>
         </FormSection>
 
-        {/* Documentación */}
-        <FormSection title="Documentación">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Número de Registro"
-              name="registrationNumber"
-              value={formData.registrationNumber}
-              onChange={handleChange('registrationNumber')}
-              placeholder="Número de matrícula"
-            />
-            <FormField
-              label="Póliza de Seguro"
-              name="insurancePolicy"
-              value={formData.insurancePolicy}
-              onChange={handleChange('insurancePolicy')}
-              placeholder="Número de póliza"
-            />
-          </FormFieldRow>
-
-          <FormFieldRow cols={3}>
-            <FormField
-              label="Vencimiento Seguro"
-              name="insuranceExpiry"
-              type="date"
-              value={formData.insuranceExpiry}
-              onChange={handleChange('insuranceExpiry')}
-              required
-            />
-            <FormField
-              label="Última Revisión Técnica"
-              name="lastInspection"
-              type="date"
-              value={formData.lastInspection}
-              onChange={handleChange('lastInspection')}
-              required
-            />
-            <FormField
-              label="Próxima Revisión Técnica"
-              name="nextInspection"
-              type="date"
-              value={formData.nextInspection}
-              onChange={handleChange('nextInspection')}
-              required
-            />
-          </FormFieldRow>
-        </FormSection>
-
-        {/* Estado y Asignación */}
-        <FormSection title="Estado y Asignación">
+        {/* Estado */}
+        <FormSection title="Estado">
           <FormField
             label="Estado"
             name="status"
@@ -291,36 +195,14 @@ export default function EditVehiclePage() {
             options={[
               { value: 'active', label: 'Activo' },
               { value: 'maintenance', label: 'En mantenimiento' },
-              { value: 'inactive', label: 'Inactivo' },
+              { value: 'out_of_service', label: 'Fuera de servicio' },
             ]}
             required
           />
-
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Conductor Asignado"
-              name="driverId"
-              type="select"
-              value={formData.driverId}
-              onChange={handleChange('driverId')}
-              options={mockDrivers}
-              placeholder="Seleccionar conductor"
-            />
-            <FormField
-              label="Ruta Asignada"
-              name="routeId"
-              type="select"
-              value={formData.routeId}
-              onChange={handleChange('routeId')}
-              options={mockRoutes}
-              placeholder="Seleccionar ruta"
-            />
-          </FormFieldRow>
         </FormSection>
 
         {/* GPS Configuration */}
         <FormSection title="Configuración GPS">
-          {/* GPS Source Type Selection */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Fuente de GPS
@@ -368,10 +250,9 @@ export default function EditVehiclePage() {
             </div>
           </div>
 
-          {/* External GPS Configuration - Only shown for device or api */}
           {(formData.gpsSourceType === 'device' || formData.gpsSourceType === 'api') && (
             <div className="space-y-4 pt-4 border-t border-gray-200">
-              <div className="flex items-start gap-2 p-3 bg-info/10 rounded-lg text-sm text-info-dark">
+              <div className="flex items-start gap-2 p-3 bg-info/10 rounded-lg text-sm text-info">
                 <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>
                   Configure los datos del dispositivo GPS externo. El ID del dispositivo será usado
@@ -406,7 +287,6 @@ export default function EditVehiclePage() {
                 />
               </FormFieldRow>
 
-              {/* Fallback to Mobile */}
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <input
                   type="checkbox"
@@ -425,9 +305,8 @@ export default function EditVehiclePage() {
             </div>
           )}
 
-          {/* Mobile GPS Info */}
           {formData.gpsSourceType === 'mobile' && (
-            <div className="flex items-start gap-2 p-3 bg-success/10 rounded-lg text-sm text-success-dark">
+            <div className="flex items-start gap-2 p-3 bg-success/10 rounded-lg text-sm text-success">
               <Smartphone className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>
                 El tracking GPS se realizará desde el celular del conductor o monitor asignado al viaje.
@@ -437,25 +316,13 @@ export default function EditVehiclePage() {
           )}
         </FormSection>
 
-        {/* Notas Adicionales */}
-        <FormSection title="Notas Adicionales">
-          <FormField
-            label="Notas"
-            name="notes"
-            type="textarea"
-            value={formData.notes}
-            onChange={handleChange('notes')}
-            placeholder="Información adicional sobre el vehículo..."
-          />
-        </FormSection>
-
         {/* Form Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <p className="text-sm text-gray-500 mb-4">* Campos obligatorios</p>
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Cambios"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

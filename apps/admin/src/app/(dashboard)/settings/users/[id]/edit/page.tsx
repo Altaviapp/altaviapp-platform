@@ -1,57 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-
-// Mock users data
-const mockUsers: Record<string, {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  role: string;
-  status: string;
-}> = {
-  '1': {
-    id: '1',
-    firstName: 'Admin',
-    lastName: 'Principal',
-    email: 'admin@escuela-altaviapp.ec',
-    phone: '+593 99 111 2222',
-    role: 'admin',
-    status: 'active',
-  },
-  '2': {
-    id: '2',
-    firstName: 'Juan',
-    lastName: 'Pérez',
-    email: 'juan.perez@escuela-altaviapp.ec',
-    phone: '+593 99 123 4567',
-    role: 'driver',
-    status: 'active',
-  },
-  '3': {
-    id: '3',
-    firstName: 'María',
-    lastName: 'González',
-    email: 'maria.gonzalez@escuela-altaviapp.ec',
-    phone: '+593 97 111 2222',
-    role: 'driver',
-    status: 'active',
-  },
-  '4': {
-    id: '4',
-    firstName: 'Ana',
-    lastName: 'Torres',
-    email: 'ana.torres@escuela-altaviapp.ec',
-    phone: '+593 98 765 4321',
-    role: 'monitor',
-    status: 'active',
-  },
-};
+import { useUser, useUserMutations } from '@/hooks';
+import type { UserRole } from '@/hooks';
 
 const roleOptions = [
   { value: 'admin', label: 'Administrador - Acceso completo al sistema' },
@@ -62,44 +18,83 @@ const roleOptions = [
 
 /**
  * Edit User Page
+ * Connected to real Convex data
  */
 export default function EditUserPage() {
   const router = useRouter();
   const params = useParams();
   const userId = params.id as string;
 
-  const user = mockUsers[userId];
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [isLoading, setIsLoading] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { user, isLoading, notFound } = useUser(userId as any);
+  const { updateUser } = useUserMutations();
 
   const [formData, setFormData] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    role: user?.role || '',
-    status: user?.status || 'active',
-    newPassword: '',
-    confirmPassword: '',
+    name: '',
+    phone: '',
+    role: '' as UserRole | '',
+    isActive: true,
   });
 
-  if (!user) {
+  // Initialize form data when user loads
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        phone: user.phone || '',
+        role: user.role || '',
+        isActive: user.isActive !== false,
+      });
+    }
+  }, [user]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando usuario...</span>
+      </div>
+    );
+  }
+
+  if (notFound || !user) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Usuario no encontrado</p>
+        <Link href="/settings/users" className="text-primary hover:underline mt-2 inline-block">
+          Volver a Usuarios
+        </Link>
       </div>
     );
   }
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/settings/users');
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updateUser(userId as any, {
+        name: formData.name,
+        phone: formData.phone || undefined,
+        role: formData.role as UserRole,
+        isActive: formData.isActive,
+      });
+      router.push('/settings/users');
+    } catch (err) {
+      console.error('Error updating user:', err);
+      setError(err instanceof Error ? err.message : 'Error al actualizar el usuario');
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -109,47 +104,43 @@ export default function EditUserPage() {
   return (
     <div>
       <PageHeader
-        title={`Editar Usuario: ${user.firstName} ${user.lastName}`}
+        title={`Editar Usuario: ${user.name || user.email}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Configuración', href: '/settings' },
           { label: 'Usuarios', href: '/settings/users' },
-          { label: `Editar ${user.firstName}` },
+          { label: `Editar ${user.name || 'Usuario'}` },
         ]}
         backHref="/settings/users"
       />
 
+      {error && (
+        <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg text-error">
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Información Personal */}
         <FormSection title="Información Personal">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Nombre"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange('firstName')}
-              placeholder="Ej: Juan"
-              required
-            />
-            <FormField
-              label="Apellido"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange('lastName')}
-              placeholder="Ej: Pérez"
-              required
-            />
-          </FormFieldRow>
+          <FormField
+            label="Nombre Completo"
+            name="name"
+            value={formData.name}
+            onChange={handleChange('name')}
+            placeholder="Ej: Juan Pérez"
+            required
+          />
 
           <FormFieldRow cols={2}>
             <FormField
               label="Correo Electrónico"
               name="email"
               type="email"
-              value={formData.email}
-              onChange={handleChange('email')}
-              placeholder="usuario@escuela.ec"
-              required
+              value={user.email}
+              onChange={() => {}}
+              disabled
+              hint="El correo no puede ser modificado"
             />
             <FormField
               label="Teléfono"
@@ -220,39 +211,14 @@ export default function EditUserPage() {
           )}
         </FormSection>
 
-        {/* Cambiar Contraseña */}
-        <FormSection
-          title="Cambiar Contraseña"
-          description="Deja los campos en blanco para mantener la contraseña actual"
-        >
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Nueva Contraseña"
-              name="newPassword"
-              type="password"
-              value={formData.newPassword}
-              onChange={handleChange('newPassword')}
-              placeholder="Mínimo 8 caracteres"
-            />
-            <FormField
-              label="Confirmar Nueva Contraseña"
-              name="confirmPassword"
-              type="password"
-              value={formData.confirmPassword}
-              onChange={handleChange('confirmPassword')}
-              placeholder="Repetir contraseña"
-            />
-          </FormFieldRow>
-        </FormSection>
-
         {/* Estado */}
         <FormSection title="Estado">
           <FormField
             label="Estado del Usuario"
-            name="status"
+            name="isActive"
             type="select"
-            value={formData.status}
-            onChange={handleChange('status')}
+            value={formData.isActive ? 'active' : 'inactive'}
+            onChange={(value) => setFormData((prev) => ({ ...prev, isActive: value === 'active' }))}
             options={[
               { value: 'active', label: 'Activo - Puede acceder al sistema' },
               { value: 'inactive', label: 'Inactivo - No puede acceder al sistema' },
@@ -260,7 +226,7 @@ export default function EditUserPage() {
             required
           />
 
-          {formData.status === 'inactive' && (
+          {!formData.isActive && (
             <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
               <p className="text-sm text-amber-800">
                 <strong>Nota:</strong> El usuario no podrá acceder al sistema mientras esté inactivo.
@@ -276,7 +242,7 @@ export default function EditUserPage() {
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Cambios"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

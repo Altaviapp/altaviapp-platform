@@ -4,13 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-
-// Mock data for dropdowns
-const mockVehicles = [
-  { value: '1', label: 'ABC-1234 - Toyota Coaster' },
-  { value: '2', label: 'XYZ-5678 - Mitsubishi Rosa' },
-  { value: '3', label: 'DEF-9012 - Hino Dutro' },
-];
+import { useDriverMutations, useVehicles, useUsers } from '@/hooks';
 
 const licenseTypes = [
   { value: 'C', label: 'Tipo C - Vehículos livianos' },
@@ -20,40 +14,70 @@ const licenseTypes = [
 
 /**
  * New Driver Page
- * Based on ADMIN_WIREFRAMES.md Section 2.4
+ * Connected to real Convex data
+ *
+ * Note: Creating a driver requires selecting an existing user with role "driver"
  */
 export default function NewDriverPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Real hooks
+  const { createDriver } = useDriverMutations();
+  const { vehicles } = useVehicles();
+  const { users } = useUsers({ role: 'driver' });
+
+  // Build options
+  const vehicleOptions = vehicles.map(v => ({
+    value: v._id,
+    label: `${v.licensePlate} - ${v.brand} ${v.model}`,
+  }));
+
+  // Users with driver role who don't have a driver profile yet
+  const userOptions = users.map(u => ({
+    value: u._id,
+    label: `${u.name} (${u.email})`,
+  }));
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    cedula: '',
-    birthDate: '',
-    phone: '',
-    email: '',
-    address: '',
+    userId: '',
     licenseNumber: '',
-    licenseType: '',
-    licenseIssueDate: '',
     licenseExpiry: '',
-    vehicleId: '',
-    status: 'active',
-    emergencyContactName: '',
-    emergencyContactRelation: '',
-    emergencyContactPhone: '',
+    phone: '',
+    emergencyContact: '',
   });
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/fleet?tab=drivers');
+    setIsSubmitting(true);
+    setError(null);
+
+    if (!formData.userId) {
+      setError('Debe seleccionar un usuario');
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await createDriver(formData.userId as any, {
+        licenseNumber: formData.licenseNumber,
+        licenseExpiry: new Date(formData.licenseExpiry).getTime(),
+        phone: formData.phone,
+        emergencyContact: formData.emergencyContact,
+      });
+      router.push('/fleet?tab=drivers');
+    } catch (err) {
+      console.error('Error creating driver:', err);
+      setError(err instanceof Error ? err.message : 'Error al crear el conductor');
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -73,48 +97,35 @@ export default function NewDriverPage() {
         backHref="/fleet?tab=drivers"
       />
 
+      {error && (
+        <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg text-error">
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Información Personal */}
-        <FormSection title="Información Personal">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Nombres"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange('firstName')}
-              placeholder="Nombres completos"
-              required
-            />
-            <FormField
-              label="Apellidos"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange('lastName')}
-              placeholder="Apellidos completos"
-              required
-            />
-          </FormFieldRow>
+        {/* Selección de Usuario */}
+        <FormSection title="Usuario">
+          <div className="p-4 bg-info/10 rounded-lg mb-4">
+            <p className="text-sm text-info">
+              Seleccione un usuario existente con rol de conductor para crear su perfil de conductor.
+              El usuario debe haber sido creado previamente en la sección de Usuarios.
+            </p>
+          </div>
+          <FormField
+            label="Usuario"
+            name="userId"
+            type="select"
+            value={formData.userId}
+            onChange={handleChange('userId')}
+            options={userOptions}
+            placeholder="Seleccionar usuario"
+            required
+          />
+        </FormSection>
 
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Cédula de Identidad"
-              name="cedula"
-              value={formData.cedula}
-              onChange={handleChange('cedula')}
-              placeholder="10 dígitos"
-              hint="Ejemplo: 1234567890"
-              required
-            />
-            <FormField
-              label="Fecha de Nacimiento"
-              name="birthDate"
-              type="date"
-              value={formData.birthDate}
-              onChange={handleChange('birthDate')}
-              required
-            />
-          </FormFieldRow>
-
+        {/* Información de Contacto */}
+        <FormSection title="Información de Contacto">
           <FormFieldRow cols={2}>
             <FormField
               label="Teléfono"
@@ -127,22 +138,14 @@ export default function NewDriverPage() {
               required
             />
             <FormField
-              label="Email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange('email')}
-              placeholder="correo@ejemplo.com"
+              label="Contacto de Emergencia"
+              name="emergencyContact"
+              value={formData.emergencyContact}
+              onChange={handleChange('emergencyContact')}
+              placeholder="Nombre y teléfono del contacto"
+              required
             />
           </FormFieldRow>
-
-          <FormField
-            label="Dirección"
-            name="address"
-            value={formData.address}
-            onChange={handleChange('address')}
-            placeholder="Dirección completa"
-          />
         </FormSection>
 
         {/* Licencia de Conducir */}
@@ -157,27 +160,6 @@ export default function NewDriverPage() {
               required
             />
             <FormField
-              label="Tipo de Licencia"
-              name="licenseType"
-              type="select"
-              value={formData.licenseType}
-              onChange={handleChange('licenseType')}
-              options={licenseTypes}
-              placeholder="Seleccionar tipo"
-              required
-            />
-          </FormFieldRow>
-
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Fecha de Emisión"
-              name="licenseIssueDate"
-              type="date"
-              value={formData.licenseIssueDate}
-              onChange={handleChange('licenseIssueDate')}
-              required
-            />
-            <FormField
               label="Fecha de Vencimiento"
               name="licenseExpiry"
               type="date"
@@ -188,69 +170,13 @@ export default function NewDriverPage() {
           </FormFieldRow>
         </FormSection>
 
-        {/* Asignaciones */}
-        <FormSection title="Asignaciones">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Vehículo Asignado"
-              name="vehicleId"
-              type="select"
-              value={formData.vehicleId}
-              onChange={handleChange('vehicleId')}
-              options={mockVehicles}
-              placeholder="Seleccionar vehículo"
-            />
-            <FormField
-              label="Estado"
-              name="status"
-              type="select"
-              value={formData.status}
-              onChange={handleChange('status')}
-              options={[
-                { value: 'active', label: 'Activo' },
-                { value: 'inactive', label: 'Inactivo' },
-              ]}
-              required
-            />
-          </FormFieldRow>
-        </FormSection>
-
-        {/* Contacto de Emergencia */}
-        <FormSection title="Contacto de Emergencia">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Nombre Completo"
-              name="emergencyContactName"
-              value={formData.emergencyContactName}
-              onChange={handleChange('emergencyContactName')}
-              placeholder="Nombre del contacto"
-            />
-            <FormField
-              label="Relación"
-              name="emergencyContactRelation"
-              value={formData.emergencyContactRelation}
-              onChange={handleChange('emergencyContactRelation')}
-              placeholder="Ej: Esposa, Hermano"
-            />
-          </FormFieldRow>
-
-          <FormField
-            label="Teléfono"
-            name="emergencyContactPhone"
-            type="tel"
-            value={formData.emergencyContactPhone}
-            onChange={handleChange('emergencyContactPhone')}
-            placeholder="+593XXXXXXXXX"
-          />
-        </FormSection>
-
         {/* Form Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <p className="text-sm text-gray-500 mb-4">* Campos obligatorios</p>
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Conductor"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

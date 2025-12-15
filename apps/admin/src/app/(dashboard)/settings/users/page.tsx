@@ -1,89 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
-  Users, Plus, Search, Edit, Trash2, MoreHorizontal,
-  Shield, ChevronLeft, ChevronRight, Mail, Phone, CheckCircle, XCircle
+  Users, Plus, Search, Edit, Trash2,
+  Shield, ChevronLeft, ChevronRight, Mail, Phone, CheckCircle, XCircle, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PageHeader, ConfirmDialog } from '@/components/shared';
-
-// Mock users data
-const mockUsers = [
-  {
-    id: '1',
-    name: 'Admin Principal',
-    email: 'admin@escuela-altaviapp.ec',
-    phone: '+593 99 111 2222',
-    role: 'admin',
-    status: 'active',
-    lastLogin: '04/12/2024 08:30',
-    createdAt: '01/01/2024',
-  },
-  {
-    id: '2',
-    name: 'Juan Pérez',
-    email: 'juan.perez@escuela-altaviapp.ec',
-    phone: '+593 99 123 4567',
-    role: 'driver',
-    status: 'active',
-    lastLogin: '04/12/2024 06:45',
-    createdAt: '15/01/2024',
-  },
-  {
-    id: '3',
-    name: 'María González',
-    email: 'maria.gonzalez@escuela-altaviapp.ec',
-    phone: '+593 97 111 2222',
-    role: 'driver',
-    status: 'active',
-    lastLogin: '04/12/2024 06:30',
-    createdAt: '15/01/2024',
-  },
-  {
-    id: '4',
-    name: 'Ana Torres',
-    email: 'ana.torres@escuela-altaviapp.ec',
-    phone: '+593 98 765 4321',
-    role: 'monitor',
-    status: 'active',
-    lastLogin: '04/12/2024 06:50',
-    createdAt: '20/01/2024',
-  },
-  {
-    id: '5',
-    name: 'Carlos Ruiz',
-    email: 'carlos.ruiz@escuela-altaviapp.ec',
-    phone: '+593 95 555 6666',
-    role: 'driver',
-    status: 'inactive',
-    lastLogin: '01/11/2024 14:20',
-    createdAt: '01/02/2024',
-  },
-  {
-    id: '6',
-    name: 'Pedro Gómez',
-    email: 'pedro.gomez@gmail.com',
-    phone: '+593 97 333 4444',
-    role: 'parent',
-    status: 'active',
-    lastLogin: '03/12/2024 19:45',
-    createdAt: '10/02/2024',
-  },
-  {
-    id: '7',
-    name: 'Laura Sánchez',
-    email: 'laura.sanchez@escuela-altaviapp.ec',
-    phone: '+593 96 333 4444',
-    role: 'monitor',
-    status: 'active',
-    lastLogin: '04/12/2024 06:40',
-    createdAt: '15/02/2024',
-  },
-];
+import { useUsers, useUserMutations, useUserStats } from '@/hooks';
 
 const roleConfig: Record<string, { label: string; color: string; bg: string }> = {
+  super_admin: { label: 'Super Admin', color: 'text-red-700', bg: 'bg-red-100' },
   admin: { label: 'Administrador', color: 'text-purple-700', bg: 'bg-purple-100' },
   driver: { label: 'Conductor', color: 'text-blue-700', bg: 'bg-blue-100' },
   monitor: { label: 'Monitor', color: 'text-green-700', bg: 'bg-green-100' },
@@ -92,7 +20,7 @@ const roleConfig: Record<string, { label: string; color: string; bg: string }> =
 
 /**
  * Users Management Page
- * Manage system users and their roles
+ * Connected to real Convex data
  */
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,22 +29,20 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const filteredUsers = mockUsers.filter((user) => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
+  // Real data from Convex
+  const { users, isLoading } = useUsers();
+  const { stats } = useUserStats();
+  const { deactivateUser } = useUserMutations();
 
-  const stats = {
-    total: mockUsers.length,
-    admins: mockUsers.filter((u) => u.role === 'admin').length,
-    drivers: mockUsers.filter((u) => u.role === 'driver').length,
-    monitors: mockUsers.filter((u) => u.role === 'monitor').length,
-    parents: mockUsers.filter((u) => u.role === 'parent').length,
-    active: mockUsers.filter((u) => u.status === 'active').length,
-  };
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      const matchesSearch =
+        (user.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [users, searchQuery, roleFilter]);
 
   const handleDeleteClick = (userId: string) => {
     setSelectedUser(userId);
@@ -124,8 +50,14 @@ export default function UsersPage() {
   };
 
   const handleDelete = async () => {
+    if (!selectedUser) return;
     setIsDeleting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await deactivateUser(selectedUser as any);
+    } catch (error) {
+      console.error('Error deactivating user:', error);
+    }
     setShowDeleteDialog(false);
     setSelectedUser(null);
     setIsDeleting(false);
@@ -143,8 +75,8 @@ export default function UsersPage() {
         backHref="/settings"
         actions={[
           {
-            label: 'Nuevo Usuario',
-            href: '/settings/users/new',
+            label: 'Invitar Usuario',
+            href: '/settings/invitations/new',
             icon: Plus,
             variant: 'primary',
           },
@@ -262,130 +194,151 @@ export default function UsersPage() {
 
         {/* Users Table */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Usuario
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Contacto
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Rol
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Último Acceso
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredUsers.map((user) => {
-                  const defaultRole = { label: 'Usuario', color: 'text-gray-700', bg: 'bg-gray-100' };
-                  const role = roleConfig[user.role] ?? defaultRole;
-                  return (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <span className="text-sm font-bold text-primary">
-                              {user.name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')
-                                .slice(0, 2)}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{user.name}</p>
-                            <p className="text-xs text-gray-500">ID: {user.id}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Mail className="w-3 h-3" />
-                            {user.email}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Phone className="w-3 h-3" />
-                            {user.phone}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={cn('px-2 py-1 rounded-full text-xs font-medium', role.bg, role.color)}>
-                          {role.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          {user.status === 'active' ? (
-                            <>
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                              <span className="text-sm text-green-600">Activo</span>
-                            </>
-                          ) : (
-                            <>
-                              <XCircle className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm text-gray-500">Inactivo</span>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{user.lastLogin}</td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link
-                            href={`/settings/users/${user.id}/edit`}
-                            className="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Link>
-                          <button
-                            onClick={() => handleDeleteClick(user.id)}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-sm text-gray-500">
-              Mostrando 1-{filteredUsers.length} de {filteredUsers.length} usuarios
-            </p>
-            <div className="flex gap-2">
-              <button
-                className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                disabled
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="px-4 py-2 text-sm">Página 1 de 1</span>
-              <button
-                className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                disabled
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="ml-3 text-gray-500">Cargando usuarios...</span>
             </div>
-          </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Sin resultados</h3>
+              <p className="text-gray-500">No se encontraron usuarios con los filtros actuales</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Usuario
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Contacto
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Rol
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Estado
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                        Registro
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredUsers.map((user) => {
+                      const defaultRole = { label: 'Usuario', color: 'text-gray-700', bg: 'bg-gray-100' };
+                      const role = roleConfig[user.role] ?? defaultRole;
+                      const isActive = user.isActive !== false;
+                      return (
+                        <tr key={user._id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <span className="text-sm font-bold text-primary">
+                                  {(user.name || user.email)
+                                    .split(' ')
+                                    .map((n) => n[0])
+                                    .join('')
+                                    .slice(0, 2)
+                                    .toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">{user.name || 'Sin nombre'}</p>
+                                <p className="text-xs text-gray-500">ID: {user._id.slice(-8)}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1 text-sm text-gray-600">
+                                <Mail className="w-3 h-3" />
+                                {user.email}
+                              </div>
+                              {user.phone && (
+                                <div className="flex items-center gap-1 text-sm text-gray-600">
+                                  <Phone className="w-3 h-3" />
+                                  {user.phone}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={cn('px-2 py-1 rounded-full text-xs font-medium', role.bg, role.color)}>
+                              {role.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              {isActive ? (
+                                <>
+                                  <CheckCircle className="w-4 h-4 text-green-500" />
+                                  <span className="text-sm text-green-600">Activo</span>
+                                </>
+                              ) : (
+                                <>
+                                  <XCircle className="w-4 h-4 text-gray-400" />
+                                  <span className="text-sm text-gray-500">Inactivo</span>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString('es-EC') : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Link
+                                href={`/settings/users/${user._id}/edit`}
+                                className="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Link>
+                              <button
+                                onClick={() => handleDeleteClick(user._id)}
+                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  Mostrando 1-{filteredUsers.length} de {filteredUsers.length} usuarios
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    disabled
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="px-4 py-2 text-sm">Página 1 de 1</span>
+                  <button
+                    className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    disabled
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -397,9 +350,9 @@ export default function UsersPage() {
           setSelectedUser(null);
         }}
         onConfirm={handleDelete}
-        title="Eliminar Usuario"
-        message="¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer."
-        confirmLabel="Eliminar"
+        title="Desactivar Usuario"
+        message="¿Estás seguro de que deseas desactivar este usuario? No podrá acceder al sistema."
+        confirmLabel="Desactivar"
         variant="danger"
         isLoading={isDeleting}
       />

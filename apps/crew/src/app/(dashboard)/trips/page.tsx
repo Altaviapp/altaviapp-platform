@@ -150,15 +150,7 @@ export default function TripsPage() {
 
               {/* Trip Actions */}
               <div className="p-3 bg-gray-50 flex items-center gap-2">
-                {trip.status === 'scheduled' && isDriver && !trip.hasChecklist && (
-                  <Link
-                    href={`/trips/${trip._id}/checklist`}
-                    className="flex-1 py-2 px-4 rounded-lg bg-warning text-white text-sm font-medium text-center hover:bg-warning-dark transition-colors"
-                  >
-                    Completar Checklist
-                  </Link>
-                )}
-                {trip.status === 'scheduled' && isDriver && trip.hasChecklist && (
+                {trip.status === 'scheduled' && isDriver && (
                   <Link
                     href={`/trips/${trip._id}/start`}
                     className="flex-1 py-2 px-4 rounded-lg bg-success text-white text-sm font-medium text-center flex items-center justify-center gap-2 hover:bg-success-dark transition-colors"

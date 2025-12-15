@@ -4,31 +4,36 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-
-// Mock data for dropdowns
-const mockDrivers = [
-  { value: '1', label: 'Juan Pérez' },
-  { value: '2', label: 'María González' },
-  { value: '3', label: 'Carlos Ruiz' },
-];
-
-const mockRoutes = [
-  { value: '1', label: 'Ruta Centro' },
-  { value: '2', label: 'Ruta Norte' },
-  { value: '3', label: 'Ruta Sur' },
-];
+import { useVehicleMutations, useDrivers, useRoutes } from '@/hooks';
 
 /**
  * New Vehicle Page
- * Based on ADMIN_WIREFRAMES.md Section 2.2
+ * Connected to real Convex data
  */
 export default function NewVehiclePage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Real hooks
+  const { createVehicle } = useVehicleMutations();
+  const { drivers } = useDrivers();
+  const { routes } = useRoutes();
+
+  // Build dropdown options
+  const driverOptions = drivers.map(d => ({
+    value: d._id,
+    label: d.user?.name || 'Sin nombre',
+  }));
+
+  const routeOptions = routes.map(r => ({
+    value: r._id,
+    label: r.name,
+  }));
 
   // Form state
   const [formData, setFormData] = useState({
-    plate: '',
+    licensePlate: '',
     brand: '',
     model: '',
     year: '',
@@ -47,17 +52,29 @@ export default function NewVehiclePage() {
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
+    setError(null);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Redirect to fleet page after save
-    router.push('/fleet');
+    try {
+      await createVehicle({
+        licensePlate: formData.licensePlate,
+        brand: formData.brand,
+        model: formData.model,
+        year: parseInt(formData.year) || new Date().getFullYear(),
+        color: formData.color,
+        capacity: parseInt(formData.capacity) || 0,
+      });
+      router.push('/fleet');
+    } catch (err) {
+      console.error('Error creating vehicle:', err);
+      setError(err instanceof Error ? err.message : 'Error al crear el vehículo');
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -76,15 +93,21 @@ export default function NewVehiclePage() {
         backHref="/fleet"
       />
 
+      {error && (
+        <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg text-error">
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Información Básica */}
         <FormSection title="Información Básica">
           <FormFieldRow cols={2}>
             <FormField
               label="Placa"
-              name="plate"
-              value={formData.plate}
-              onChange={handleChange('plate')}
+              name="licensePlate"
+              value={formData.licensePlate}
+              onChange={handleChange('licensePlate')}
               placeholder="Ej: ABC-1234"
               required
             />
@@ -165,7 +188,6 @@ export default function NewVehiclePage() {
               type="date"
               value={formData.insuranceExpiry}
               onChange={handleChange('insuranceExpiry')}
-              required
             />
             <FormField
               label="Última Revisión Técnica"
@@ -173,7 +195,6 @@ export default function NewVehiclePage() {
               type="date"
               value={formData.lastInspection}
               onChange={handleChange('lastInspection')}
-              required
             />
             <FormField
               label="Próxima Revisión Técnica"
@@ -181,7 +202,6 @@ export default function NewVehiclePage() {
               type="date"
               value={formData.nextInspection}
               onChange={handleChange('nextInspection')}
-              required
             />
           </FormFieldRow>
         </FormSection>
@@ -197,7 +217,7 @@ export default function NewVehiclePage() {
             options={[
               { value: 'active', label: 'Activo' },
               { value: 'maintenance', label: 'En mantenimiento' },
-              { value: 'inactive', label: 'Inactivo' },
+              { value: 'out_of_service', label: 'Fuera de servicio' },
             ]}
             required
           />
@@ -209,7 +229,7 @@ export default function NewVehiclePage() {
               type="select"
               value={formData.driverId}
               onChange={handleChange('driverId')}
-              options={mockDrivers}
+              options={driverOptions}
               placeholder="Seleccionar conductor"
             />
             <FormField
@@ -218,7 +238,7 @@ export default function NewVehiclePage() {
               type="select"
               value={formData.routeId}
               onChange={handleChange('routeId')}
-              options={mockRoutes}
+              options={routeOptions}
               placeholder="Seleccionar ruta"
             />
           </FormFieldRow>
@@ -242,7 +262,7 @@ export default function NewVehiclePage() {
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Vehículo"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

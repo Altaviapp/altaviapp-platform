@@ -4,55 +4,14 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-
-// Mock data for selects
-const mockRoutes = [
-  { value: '1', label: 'Ruta Centro - Escuela A' },
-  { value: '2', label: 'Ruta Norte - Escuela B' },
-  { value: '3', label: 'Ruta Sur - Escuela A' },
-  { value: '4', label: 'Ruta Oeste - Escuela D' },
-];
-
-const mockTrips = [
-  { value: '1', label: 'Viaje #1 - Ruta Centro (04/12/2024 07:00)' },
-  { value: '2', label: 'Viaje #2 - Ruta Norte (04/12/2024 06:30)' },
-  { value: '3', label: 'Viaje #3 - Ruta Sur (04/12/2024 06:45)' },
-  { value: '4', label: 'Viaje #4 - Ruta Oeste (04/12/2024 07:15)' },
-];
-
-const mockDrivers = [
-  { value: '1', label: 'Juan Pérez' },
-  { value: '2', label: 'María González' },
-  { value: '3', label: 'Carlos Ruiz' },
-  { value: '4', label: 'Pedro Gómez' },
-];
-
-const mockMonitors = [
-  { value: '1', label: 'Ana Torres' },
-  { value: '2', label: 'Laura Sánchez' },
-  { value: '3', label: 'Pedro Gómez' },
-];
-
-const mockVehicles = [
-  { value: '1', label: 'ABC-1234 - Toyota Coaster' },
-  { value: '2', label: 'DEF-9012 - Mitsubishi Rosa' },
-  { value: '3', label: 'JKL-7890 - Hino Dutro' },
-];
-
-const mockStudents = [
-  { value: '1', label: 'Juan Pérez González - 5to B' },
-  { value: '2', label: 'Ana Torres Martínez - 4to C' },
-  { value: '3', label: 'María García López - 4to B' },
-  { value: '5', label: 'María García - 4to B' },
-  { value: '8', label: 'Diego López - 6to A' },
-];
+import { useIncidentMutations, useTrips } from '@/hooks';
+import type { IncidentType, IncidentSeverity } from '@/hooks';
 
 const incidentTypes = [
-  { value: 'delay', label: 'Retraso' },
-  { value: 'student', label: 'Estudiante (ausencia, comportamiento)' },
-  { value: 'medical', label: 'Médico / Emergencia' },
-  { value: 'route', label: 'Ruta (calle cerrada, desvío)' },
   { value: 'accident', label: 'Accidente de tránsito' },
+  { value: 'breakdown', label: 'Avería del vehículo' },
+  { value: 'behavior', label: 'Comportamiento de estudiante' },
+  { value: 'emergency', label: 'Emergencia médica' },
   { value: 'other', label: 'Otro' },
 ];
 
@@ -65,6 +24,7 @@ const severityLevels = [
 
 /**
  * New Incident Form - Inner component that uses useSearchParams
+ * Connected to real Convex data
  */
 function NewIncidentForm() {
   const router = useRouter();
@@ -72,41 +32,66 @@ function NewIncidentForm() {
   const tripIdParam = searchParams.get('tripId');
 
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Real data from Convex
+  const { trips } = useTrips();
+  const { reportIncident } = useIncidentMutations();
+
+  // Format trips for dropdown
+  const tripOptions = trips.map((trip) => ({
+    value: trip._id,
+    label: `${trip.routeName || 'Viaje'} - ${new Date(trip.scheduledDate).toLocaleDateString('es-EC')}`,
+  }));
 
   const [formData, setFormData] = useState({
-    type: '',
-    severity: 'medium',
+    type: '' as IncidentType | '',
+    severity: 'medium' as IncidentSeverity,
     title: '',
     description: '',
-    routeId: '',
     tripId: tripIdParam || '',
-    driverId: '',
-    monitorId: '',
-    vehicleId: '',
-    studentId: '',
     location: '',
     date: new Date().toISOString().split('T')[0],
     time: new Date().toTimeString().slice(0, 5),
-    notes: '',
   });
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.type) {
+      setError('Por favor selecciona un tipo de incidente');
+      return;
+    }
+
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/incidents');
+    setError(null);
+
+    try {
+      await reportIncident({
+        type: formData.type as IncidentType,
+        severity: formData.severity,
+        title: formData.title,
+        description: formData.description,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tripId: formData.tripId ? (formData.tripId as any) : undefined,
+        location: formData.location || undefined,
+      });
+      router.push('/incidents');
+    } catch (err) {
+      console.error('Error creating incident:', err);
+      setError(err instanceof Error ? err.message : 'Error al reportar el incidente');
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
     router.push('/incidents');
   };
-
-  // Show student field only for certain incident types
-  const showStudentField = ['student', 'medical'].includes(formData.type);
 
   return (
     <div>
@@ -119,6 +104,12 @@ function NewIncidentForm() {
         ]}
         backHref="/incidents"
       />
+
+      {error && (
+        <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg text-error">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Tipo y Severidad */}
@@ -200,121 +191,46 @@ function NewIncidentForm() {
           </FormFieldRow>
         </FormSection>
 
-        {/* Asociaciones */}
+        {/* Viaje Relacionado */}
         <FormSection
-          title="Viaje / Ruta Relacionada"
-          description="Asocia el incidente a un viaje o ruta específica (opcional)"
-        >
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Viaje"
-              name="tripId"
-              type="select"
-              value={formData.tripId}
-              onChange={handleChange('tripId')}
-              options={mockTrips}
-              placeholder="Seleccionar viaje"
-              hint="Si el incidente ocurrió durante un viaje activo"
-            />
-            <FormField
-              label="Ruta"
-              name="routeId"
-              type="select"
-              value={formData.routeId}
-              onChange={handleChange('routeId')}
-              options={mockRoutes}
-              placeholder="Seleccionar ruta"
-            />
-          </FormFieldRow>
-        </FormSection>
-
-        {/* Personal y Vehículo */}
-        <FormSection
-          title="Personal Involucrado"
-          description="Indica quiénes estaban presentes durante el incidente"
-        >
-          <FormFieldRow cols={3}>
-            <FormField
-              label="Conductor"
-              name="driverId"
-              type="select"
-              value={formData.driverId}
-              onChange={handleChange('driverId')}
-              options={mockDrivers}
-              placeholder="Seleccionar conductor"
-            />
-            <FormField
-              label="Monitor"
-              name="monitorId"
-              type="select"
-              value={formData.monitorId}
-              onChange={handleChange('monitorId')}
-              options={mockMonitors}
-              placeholder="Seleccionar monitor"
-            />
-            <FormField
-              label="Vehículo"
-              name="vehicleId"
-              type="select"
-              value={formData.vehicleId}
-              onChange={handleChange('vehicleId')}
-              options={mockVehicles}
-              placeholder="Seleccionar vehículo"
-            />
-          </FormFieldRow>
-
-          {showStudentField && (
-            <FormField
-              label="Estudiante Afectado"
-              name="studentId"
-              type="select"
-              value={formData.studentId}
-              onChange={handleChange('studentId')}
-              options={mockStudents}
-              placeholder="Seleccionar estudiante"
-              required={showStudentField}
-            />
-          )}
-        </FormSection>
-
-        {/* Notas Adicionales */}
-        <FormSection
-          title="Información Adicional"
-          description="Cualquier nota o comentario relevante"
+          title="Viaje Relacionado"
+          description="Asocia el incidente a un viaje específico (opcional)"
         >
           <FormField
-            label="Notas"
-            name="notes"
-            type="textarea"
-            value={formData.notes}
-            onChange={handleChange('notes')}
-            placeholder="Agrega cualquier información adicional que pueda ser útil..."
+            label="Viaje"
+            name="tripId"
+            type="select"
+            value={formData.tripId}
+            onChange={handleChange('tripId')}
+            options={tripOptions}
+            placeholder="Seleccionar viaje (opcional)"
+            hint="Si el incidente ocurrió durante un viaje activo"
           />
-
-          {/* Severity Warning */}
-          {formData.severity === 'critical' && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800 font-medium">
-                ⚠️ Has marcado este incidente como CRÍTICO
-              </p>
-              <p className="text-sm text-red-700 mt-1">
-                Esto notificará inmediatamente a los administradores y padres involucrados.
-                Asegúrate de que la severidad es correcta antes de enviar.
-              </p>
-            </div>
-          )}
-
-          {formData.severity === 'high' && (
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-sm text-amber-800 font-medium">
-                ⚠️ Incidente de alta severidad
-              </p>
-              <p className="text-sm text-amber-700 mt-1">
-                Los incidentes de alta severidad requieren atención urgente y serán priorizados.
-              </p>
-            </div>
-          )}
         </FormSection>
+
+        {/* Severity Warning */}
+        {formData.severity === 'critical' && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-800 font-medium">
+              ⚠️ Has marcado este incidente como CRÍTICO
+            </p>
+            <p className="text-sm text-red-700 mt-1">
+              Esto notificará inmediatamente a los administradores.
+              Asegúrate de que la severidad es correcta antes de enviar.
+            </p>
+          </div>
+        )}
+
+        {formData.severity === 'high' && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm text-amber-800 font-medium">
+              ⚠️ Incidente de alta severidad
+            </p>
+            <p className="text-sm text-amber-700 mt-1">
+              Los incidentes de alta severidad requieren atención urgente y serán priorizados.
+            </p>
+          </div>
+        )}
 
         {/* Form Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

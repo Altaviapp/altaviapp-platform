@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
+import { useStudentMutations } from '@/hooks';
 
-// Mock data for dropdowns
 const grades = [
   { value: '1ro', label: '1ro Básica' },
   { value: '2do', label: '2do Básica' },
@@ -16,87 +15,57 @@ const grades = [
   { value: '6to', label: '6to Básica' },
 ];
 
-const sections = [
-  { value: 'A', label: 'Paralelo A' },
-  { value: 'B', label: 'Paralelo B' },
-  { value: 'C', label: 'Paralelo C' },
-];
-
-const genderOptions = [
-  { value: 'male', label: 'Masculino' },
-  { value: 'female', label: 'Femenino' },
-  { value: 'other', label: 'Otro' },
-];
-
-const relationOptions = [
-  { value: 'father', label: 'Padre' },
-  { value: 'mother', label: 'Madre' },
-  { value: 'tutor', label: 'Tutor' },
-  { value: 'other', label: 'Otro' },
-];
-
-interface Parent {
-  id: string;
-  name: string;
-  relation: string;
-  phone: string;
-  email: string;
-}
-
 /**
  * New Student Page
- * Based on ADMIN_WIREFRAMES.md Section 4.2
+ * Connected to real Convex data
  */
 export default function NewStudentPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { createStudent } = useStudentMutations();
 
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    cedula: '',
-    birthDate: '',
-    gender: '',
+    dateOfBirth: '',
     grade: '',
-    section: '',
-    enrollmentNumber: '',
     address: '',
-    homePhone: '',
-    status: 'active',
+    parentName: '',
+    parentPhone: '',
+    parentEmail: '',
+    emergencyContact: '',
   });
-
-  const [parents, setParents] = useState<Parent[]>([
-    { id: '1', name: '', relation: '', phone: '', email: '' },
-  ]);
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleParentChange = (parentId: string, field: string) => (value: string) => {
-    setParents((prev) =>
-      prev.map((p) => (p.id === parentId ? { ...p, [field]: value } : p))
-    );
-  };
-
-  const addParent = () => {
-    setParents((prev) => [
-      ...prev,
-      { id: Date.now().toString(), name: '', relation: '', phone: '', email: '' },
-    ]);
-  };
-
-  const removeParent = (parentId: string) => {
-    if (parents.length > 1) {
-      setParents((prev) => prev.filter((p) => p.id !== parentId));
-    }
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/students');
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await createStudent({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        dateOfBirth: new Date(formData.dateOfBirth).getTime(),
+        grade: formData.grade,
+        address: formData.address,
+        parentName: formData.parentName,
+        parentPhone: formData.parentPhone,
+        parentEmail: formData.parentEmail,
+        emergencyContact: formData.emergencyContact,
+      });
+      router.push('/students');
+    } catch (err) {
+      console.error('Error creating student:', err);
+      setError(err instanceof Error ? err.message : 'Error al crear el estudiante');
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -114,6 +83,12 @@ export default function NewStudentPage() {
         ]}
         backHref="/students"
       />
+
+      {error && (
+        <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg text-error">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Información Personal */}
@@ -137,37 +112,15 @@ export default function NewStudentPage() {
             />
           </FormFieldRow>
 
-          <FormFieldRow cols={3}>
-            <FormField
-              label="Cédula/Pasaporte"
-              name="cedula"
-              value={formData.cedula}
-              onChange={handleChange('cedula')}
-              placeholder="Documento de identidad"
-            />
+          <FormFieldRow cols={2}>
             <FormField
               label="Fecha de Nacimiento"
-              name="birthDate"
+              name="dateOfBirth"
               type="date"
-              value={formData.birthDate}
-              onChange={handleChange('birthDate')}
+              value={formData.dateOfBirth}
+              onChange={handleChange('dateOfBirth')}
               required
             />
-            <FormField
-              label="Género"
-              name="gender"
-              type="select"
-              value={formData.gender}
-              onChange={handleChange('gender')}
-              options={genderOptions}
-              placeholder="Seleccionar"
-            />
-          </FormFieldRow>
-        </FormSection>
-
-        {/* Información Académica */}
-        <FormSection title="Información Académica">
-          <FormFieldRow cols={3}>
             <FormField
               label="Grado"
               name="grade"
@@ -177,23 +130,6 @@ export default function NewStudentPage() {
               options={grades}
               placeholder="Seleccionar grado"
               required
-            />
-            <FormField
-              label="Salón/Paralelo"
-              name="section"
-              type="select"
-              value={formData.section}
-              onChange={handleChange('section')}
-              options={sections}
-              placeholder="Seleccionar"
-              required
-            />
-            <FormField
-              label="Número de Matrícula"
-              name="enrollmentNumber"
-              value={formData.enrollmentNumber}
-              onChange={handleChange('enrollmentNumber')}
-              placeholder="Código de matrícula"
             />
           </FormFieldRow>
         </FormSection>
@@ -210,108 +146,50 @@ export default function NewStudentPage() {
           />
 
           <FormField
-            label="Teléfono de Casa"
-            name="homePhone"
-            type="tel"
-            value={formData.homePhone}
-            onChange={handleChange('homePhone')}
-            placeholder="+593XXXXXXXXX"
-          />
-        </FormSection>
-
-        {/* Padres/Tutores */}
-        <FormSection
-          title="Padres/Tutores"
-          description="Agregue al menos un padre o tutor responsable"
-        >
-          {parents.map((parent, index) => (
-            <div
-              key={parent.id}
-              className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">
-                  Padre/Tutor {index + 1}
-                </span>
-                {parents.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeParent(parent.id)}
-                    className="text-red-600 hover:text-red-700 p-1"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              <FormFieldRow cols={2}>
-                <FormField
-                  label="Nombre Completo"
-                  name={`parent-${parent.id}-name`}
-                  value={parent.name}
-                  onChange={handleParentChange(parent.id, 'name')}
-                  placeholder="Nombre del padre/tutor"
-                  required={index === 0}
-                />
-                <FormField
-                  label="Relación"
-                  name={`parent-${parent.id}-relation`}
-                  type="select"
-                  value={parent.relation}
-                  onChange={handleParentChange(parent.id, 'relation')}
-                  options={relationOptions}
-                  placeholder="Seleccionar"
-                  required={index === 0}
-                />
-              </FormFieldRow>
-
-              <FormFieldRow cols={2}>
-                <FormField
-                  label="Teléfono"
-                  name={`parent-${parent.id}-phone`}
-                  type="tel"
-                  value={parent.phone}
-                  onChange={handleParentChange(parent.id, 'phone')}
-                  placeholder="+593XXXXXXXXX"
-                  hint="WhatsApp para notificaciones"
-                  required={index === 0}
-                />
-                <FormField
-                  label="Email"
-                  name={`parent-${parent.id}-email`}
-                  type="email"
-                  value={parent.email}
-                  onChange={handleParentChange(parent.id, 'email')}
-                  placeholder="correo@ejemplo.com"
-                />
-              </FormFieldRow>
-            </div>
-          ))}
-
-          <button
-            type="button"
-            onClick={addParent}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm text-primary hover:text-primary/80 border border-dashed border-primary/30 rounded-lg hover:border-primary/50 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Agregar otro padre/tutor
-          </button>
-        </FormSection>
-
-        {/* Estado */}
-        <FormSection title="Estado">
-          <FormField
-            label="Estado del Estudiante"
-            name="status"
-            type="select"
-            value={formData.status}
-            onChange={handleChange('status')}
-            options={[
-              { value: 'active', label: 'Activo' },
-              { value: 'inactive', label: 'Inactivo' },
-            ]}
+            label="Contacto de Emergencia"
+            name="emergencyContact"
+            value={formData.emergencyContact}
+            onChange={handleChange('emergencyContact')}
+            placeholder="Nombre y teléfono del contacto"
             required
           />
+        </FormSection>
+
+        {/* Padre/Tutor */}
+        <FormSection
+          title="Padre/Tutor"
+          description="Información del padre o tutor principal"
+        >
+          <FormField
+            label="Nombre Completo"
+            name="parentName"
+            value={formData.parentName}
+            onChange={handleChange('parentName')}
+            placeholder="Nombre del padre/tutor"
+            required
+          />
+
+          <FormFieldRow cols={2}>
+            <FormField
+              label="Teléfono"
+              name="parentPhone"
+              type="tel"
+              value={formData.parentPhone}
+              onChange={handleChange('parentPhone')}
+              placeholder="+593XXXXXXXXX"
+              hint="WhatsApp para notificaciones"
+              required
+            />
+            <FormField
+              label="Email"
+              name="parentEmail"
+              type="email"
+              value={formData.parentEmail}
+              onChange={handleChange('parentEmail')}
+              placeholder="correo@ejemplo.com"
+              required
+            />
+          </FormFieldRow>
         </FormSection>
 
         {/* Form Actions */}
@@ -320,7 +198,7 @@ export default function NewStudentPage() {
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Estudiante"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

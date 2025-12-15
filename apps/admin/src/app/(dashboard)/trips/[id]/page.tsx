@@ -4,241 +4,25 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Bus, MapPin, Users, Clock, AlertTriangle, CheckCircle, Phone,
-  Navigation, Play, Pause, Square, MessageSquare, FileText, Plus,
-  RefreshCw, X, Send, AlertCircle, Info
+  MessageSquare, RefreshCw, X, Send, Loader2
 } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection } from '@/components/shared';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { GoogleMapsProvider, InteractiveMap } from '@altaviapp/maps';
 import type { MarkerInfo } from '@altaviapp/maps';
-
-// Mock trip data - Extended with coordinates
-const mockTrips: Record<string, {
-  id: string;
-  route: { id: string; name: string };
-  driver: { id: string; name: string; phone: string };
-  monitor: { id: string; name: string; phone: string } | null;
-  vehicle: { id: string; plate: string; model: string; currentLocation: { lat: number; lng: number } };
-  status: 'scheduled' | 'in_progress' | 'picking_up' | 'completed' | 'delayed' | 'cancelled';
-  type: 'pickup' | 'dropoff';
-  progress: number;
-  students: {
-    total: number;
-    onBoard: number;
-    delivered: number;
-    absent: number;
-  };
-  stops: Array<{
-    id: string;
-    order: number;
-    name: string;
-    reference: string;
-    status: 'pending' | 'arrived' | 'completed' | 'skipped';
-    arrivedAt: string | null;
-    departedAt: string | null;
-    students: number;
-    studentsBoarded: number;
-    lat: number;
-    lng: number;
-  }>;
-  timeline: Array<{
-    id: string;
-    time: string;
-    event: string;
-    type: 'info' | 'warning' | 'success' | 'error';
-  }>;
-  incidents: Array<{
-    id: string;
-    type: 'accident' | 'breakdown' | 'behavior' | 'emergency' | 'other';
-    severity: 'low' | 'medium' | 'high' | 'critical';
-    title: string;
-    description: string;
-    reportedBy: string;
-    reportedAt: string;
-    status: 'open' | 'investigating' | 'resolved' | 'closed';
-  }>;
-  startTime: string;
-  scheduledStart: string;
-  eta: string;
-  currentLocation: string;
-  delayMinutes: number;
-  date: string;
-  notes: string;
-  schoolLocation: { lat: number; lng: number };
-}> = {
-  '1': {
-    id: '1',
-    route: { id: '1', name: 'Ruta Centro - Escuela A' },
-    driver: { id: '1', name: 'Juan Pérez', phone: '+593 99 123 4567' },
-    monitor: { id: '1', name: 'Ana Torres', phone: '+593 98 765 4321' },
-    vehicle: { id: '1', plate: 'ABC-1234', model: 'Toyota Coaster', currentLocation: { lat: -0.1825, lng: -78.4835 } },
-    status: 'in_progress',
-    type: 'pickup',
-    progress: 75,
-    students: { total: 28, onBoard: 23, delivered: 0, absent: 2 },
-    stops: [
-      { id: '1', order: 1, name: 'Centro Comercial', reference: 'Entrada principal', status: 'completed', arrivedAt: '07:05', departedAt: '07:08', students: 5, studentsBoarded: 5, lat: -0.1750, lng: -78.4820 },
-      { id: '2', order: 2, name: 'Parque Central', reference: 'Esquina norte', status: 'completed', arrivedAt: '07:15', departedAt: '07:18', students: 8, studentsBoarded: 7, lat: -0.1780, lng: -78.4850 },
-      { id: '3', order: 3, name: 'Iglesia San Juan', reference: 'Frente a la plaza', status: 'completed', arrivedAt: '07:25', departedAt: '07:28', students: 6, studentsBoarded: 6, lat: -0.1810, lng: -78.4870 },
-      { id: '4', order: 4, name: 'Plaza Mayor', reference: 'Junto a la fuente', status: 'arrived', arrivedAt: '07:35', departedAt: null, students: 5, studentsBoarded: 5, lat: -0.1830, lng: -78.4890 },
-      { id: '5', order: 5, name: 'Av. Principal', reference: 'Parada de bus', status: 'pending', arrivedAt: null, departedAt: null, students: 4, studentsBoarded: 0, lat: -0.1860, lng: -78.4910 },
-      { id: '6', order: 6, name: 'Escuela A', reference: 'Entrada principal', status: 'pending', arrivedAt: null, departedAt: null, students: 0, studentsBoarded: 0, lat: -0.1900, lng: -78.4950 },
-    ],
-    timeline: [
-      { id: '1', time: '07:00', event: 'Viaje iniciado', type: 'info' },
-      { id: '2', time: '07:05', event: 'Llegada a Centro Comercial', type: 'info' },
-      { id: '3', time: '07:08', event: '5 estudiantes abordaron', type: 'success' },
-      { id: '4', time: '07:15', event: 'Llegada a Parque Central', type: 'info' },
-      { id: '5', time: '07:16', event: '1 estudiante marcado como ausente', type: 'warning' },
-      { id: '6', time: '07:18', event: '7 estudiantes abordaron', type: 'success' },
-      { id: '7', time: '07:25', event: 'Llegada a Iglesia San Juan', type: 'info' },
-      { id: '8', time: '07:28', event: '6 estudiantes abordaron', type: 'success' },
-      { id: '9', time: '07:35', event: 'Llegada a Plaza Mayor', type: 'info' },
-    ],
-    incidents: [
-      {
-        id: '1',
-        type: 'behavior',
-        severity: 'low',
-        title: 'Estudiante mareado',
-        description: 'Un estudiante reportó sentirse mareado durante el trayecto. Se le dio agua y mejoró.',
-        reportedBy: 'Ana Torres (Monitor)',
-        reportedAt: '07:20',
-        status: 'resolved',
-      },
-    ],
-    startTime: '07:00',
-    scheduledStart: '07:00',
-    eta: '08:15',
-    currentLocation: 'Plaza Mayor',
-    delayMinutes: 0,
-    date: '10/12/2024',
-    notes: '',
-    schoolLocation: { lat: -0.1900, lng: -78.4950 },
-  },
-  '2': {
-    id: '2',
-    route: { id: '2', name: 'Ruta Norte - Escuela B' },
-    driver: { id: '2', name: 'María González', phone: '+593 99 234 5678' },
-    monitor: { id: '2', name: 'Luis Mendoza', phone: '+593 98 876 5432' },
-    vehicle: { id: '2', plate: 'DEF-5678', model: 'Hyundai County', currentLocation: { lat: -0.1650, lng: -78.4750 } },
-    status: 'picking_up',
-    type: 'pickup',
-    progress: 40,
-    students: { total: 25, onBoard: 12, delivered: 0, absent: 0 },
-    stops: [
-      { id: '1', order: 1, name: 'Residencial Norte', reference: 'Entrada', status: 'completed', arrivedAt: '06:35', departedAt: '06:40', students: 4, studentsBoarded: 4, lat: -0.1600, lng: -78.4700 },
-      { id: '2', order: 2, name: 'Parque del Arbolito', reference: 'Esquina', status: 'completed', arrivedAt: '06:50', departedAt: '06:55', students: 5, studentsBoarded: 5, lat: -0.1630, lng: -78.4720 },
-      { id: '3', order: 3, name: 'Av. El Inca', reference: 'Parada', status: 'arrived', arrivedAt: '07:05', departedAt: null, students: 3, studentsBoarded: 3, lat: -0.1660, lng: -78.4740 },
-      { id: '4', order: 4, name: 'Centro Norte', reference: 'Plaza', status: 'pending', arrivedAt: null, departedAt: null, students: 6, studentsBoarded: 0, lat: -0.1690, lng: -78.4780 },
-      { id: '5', order: 5, name: 'Escuela B', reference: 'Puerta principal', status: 'pending', arrivedAt: null, departedAt: null, students: 7, studentsBoarded: 0, lat: -0.1720, lng: -78.4820 },
-    ],
-    timeline: [
-      { id: '1', time: '06:30', event: 'Viaje iniciado', type: 'info' },
-      { id: '2', time: '06:35', event: 'Llegada a Residencial Norte', type: 'info' },
-      { id: '3', time: '06:40', event: '4 estudiantes abordaron', type: 'success' },
-      { id: '4', time: '06:50', event: 'Llegada a Parque del Arbolito', type: 'info' },
-      { id: '5', time: '06:55', event: '5 estudiantes abordaron', type: 'success' },
-      { id: '6', time: '07:05', event: 'Llegada a Av. El Inca', type: 'info' },
-    ],
-    incidents: [],
-    startTime: '06:30',
-    scheduledStart: '06:30',
-    eta: '07:45',
-    currentLocation: 'Av. El Inca',
-    delayMinutes: 0,
-    date: '10/12/2024',
-    notes: '',
-    schoolLocation: { lat: -0.1720, lng: -78.4820 },
-  },
-  '3': {
-    id: '3',
-    route: { id: '3', name: 'Ruta Sur - Escuela A' },
-    driver: { id: '3', name: 'Carlos Ruiz', phone: '+593 99 345 6789' },
-    monitor: null,
-    vehicle: { id: '3', plate: 'GHI-9012', model: 'Mercedes Sprinter', currentLocation: { lat: -0.1900, lng: -78.4950 } },
-    status: 'completed',
-    type: 'pickup',
-    progress: 100,
-    students: { total: 22, onBoard: 0, delivered: 22, absent: 0 },
-    stops: [
-      { id: '1', order: 1, name: 'Quitumbe', reference: 'Terminal', status: 'completed', arrivedAt: '06:20', departedAt: '06:25', students: 6, studentsBoarded: 6, lat: -0.2950, lng: -78.5500 },
-      { id: '2', order: 2, name: 'Av. Morán Valverde', reference: 'Estación', status: 'completed', arrivedAt: '06:35', departedAt: '06:40', students: 8, studentsBoarded: 8, lat: -0.2700, lng: -78.5350 },
-      { id: '3', order: 3, name: 'El Recreo', reference: 'Centro comercial', status: 'completed', arrivedAt: '06:55', departedAt: '07:00', students: 8, studentsBoarded: 8, lat: -0.2450, lng: -78.5200 },
-      { id: '4', order: 4, name: 'Escuela A', reference: 'Entrada principal', status: 'completed', arrivedAt: '07:30', departedAt: '07:35', students: 0, studentsBoarded: 0, lat: -0.1900, lng: -78.4950 },
-    ],
-    timeline: [
-      { id: '1', time: '06:15', event: 'Viaje iniciado', type: 'info' },
-      { id: '2', time: '06:20', event: 'Llegada a Quitumbe', type: 'info' },
-      { id: '3', time: '06:25', event: '6 estudiantes abordaron', type: 'success' },
-      { id: '4', time: '06:35', event: 'Llegada a Av. Morán Valverde', type: 'info' },
-      { id: '5', time: '06:40', event: '8 estudiantes abordaron', type: 'success' },
-      { id: '6', time: '06:55', event: 'Llegada a El Recreo', type: 'info' },
-      { id: '7', time: '07:00', event: '8 estudiantes abordaron', type: 'success' },
-      { id: '8', time: '07:30', event: 'Llegada a Escuela A', type: 'info' },
-      { id: '9', time: '07:35', event: 'Viaje completado - 22 estudiantes entregados', type: 'success' },
-    ],
-    incidents: [],
-    startTime: '06:15',
-    scheduledStart: '06:15',
-    eta: '07:30',
-    currentLocation: 'Escuela A',
-    delayMinutes: 0,
-    date: '10/12/2024',
-    notes: '',
-    schoolLocation: { lat: -0.1900, lng: -78.4950 },
-  },
-};
+import { useTrip, useTripMutations } from '@/hooks';
 
 const statusConfig: Record<string, { label: string; status: 'active' | 'inactive' | 'warning' | 'error' }> = {
   scheduled: { label: 'Programado', status: 'inactive' },
   in_progress: { label: 'En Progreso', status: 'active' },
-  picking_up: { label: 'Recogiendo', status: 'active' },
   completed: { label: 'Completado', status: 'inactive' },
-  delayed: { label: 'Retrasado', status: 'error' },
   cancelled: { label: 'Cancelado', status: 'error' },
-};
-
-const stopStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: 'Pendiente', color: 'text-gray-500', bg: 'bg-gray-200' },
-  arrived: { label: 'En parada', color: 'text-blue-600', bg: 'bg-blue-500' },
-  completed: { label: 'Completada', color: 'text-green-600', bg: 'bg-green-500' },
-  skipped: { label: 'Omitida', color: 'text-amber-600', bg: 'bg-amber-500' },
-};
-
-const timelineTypeConfig: Record<string, { color: string; bg: string }> = {
-  info: { color: 'text-blue-600', bg: 'bg-blue-100' },
-  warning: { color: 'text-amber-600', bg: 'bg-amber-100' },
-  success: { color: 'text-green-600', bg: 'bg-green-100' },
-  error: { color: 'text-red-600', bg: 'bg-red-100' },
-};
-
-const incidentTypeConfig: Record<string, { label: string; color: string; bg: string; icon: typeof AlertTriangle }> = {
-  accident: { label: 'Accidente', color: 'text-red-600', bg: 'bg-red-100', icon: AlertTriangle },
-  breakdown: { label: 'Avería', color: 'text-orange-600', bg: 'bg-orange-100', icon: AlertCircle },
-  behavior: { label: 'Comportamiento', color: 'text-amber-600', bg: 'bg-amber-100', icon: Info },
-  emergency: { label: 'Emergencia', color: 'text-red-700', bg: 'bg-red-200', icon: AlertTriangle },
-  other: { label: 'Otro', color: 'text-gray-600', bg: 'bg-gray-100', icon: Info },
-};
-
-const severityConfig: Record<string, { label: string; color: string; bg: string }> = {
-  low: { label: 'Baja', color: 'text-green-600', bg: 'bg-green-100' },
-  medium: { label: 'Media', color: 'text-amber-600', bg: 'bg-amber-100' },
-  high: { label: 'Alta', color: 'text-orange-600', bg: 'bg-orange-100' },
-  critical: { label: 'Crítica', color: 'text-red-600', bg: 'bg-red-100' },
-};
-
-const incidentStatusConfig: Record<string, { label: string; color: string }> = {
-  open: { label: 'Abierto', color: 'text-red-600' },
-  investigating: { label: 'Investigando', color: 'text-amber-600' },
-  resolved: { label: 'Resuelto', color: 'text-green-600' },
-  closed: { label: 'Cerrado', color: 'text-gray-600' },
 };
 
 /**
  * Trip Detail Page
- * Real-time monitoring view for an active trip with map and incidents
+ * Connected to real Convex data
  */
 export default function TripDetailPage() {
   const params = useParams();
@@ -253,7 +37,19 @@ export default function TripDetailPage() {
     description: '',
   });
 
-  const trip = mockTrips[tripId];
+  // Real data from Convex
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { trip, isLoading } = useTrip(tripId as any);
+  const { cancelTrip, completeTrip } = useTripMutations();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando viaje...</span>
+      </div>
+    );
+  }
 
   if (!trip) {
     return (
@@ -270,84 +66,107 @@ export default function TripDetailPage() {
   const defaultStatusInfo = { label: 'En Progreso', status: 'active' as const };
   const statusInfo = statusConfig[trip.status] ?? defaultStatusInfo;
 
+  // Get stops and current location
+  const stops = trip.stops || [];
+  const currentLocation = trip.currentLocation;
+  const checkins = trip.checkins || [];
+
+  // Calculate stats from real data
+  const stats = trip.stats || { totalStudents: 0, checkedIn: 0, stopsCompleted: 0 };
+
   // Prepare map markers
   const mapMarkers: MarkerInfo[] = [
-    // Vehicle marker
-    {
+    // Current vehicle location if available
+    ...(currentLocation ? [{
       id: 'vehicle',
-      position: trip.vehicle.currentLocation,
-      type: 'vehicle',
-      title: `${trip.vehicle.plate} - ${trip.driver.name}`,
+      position: { lat: currentLocation.latitude, lng: currentLocation.longitude },
+      type: 'vehicle' as const,
+      title: `${trip.vehicle?.licensePlate || 'Vehículo'}`,
       label: '',
-    },
-    // School marker
-    {
-      id: 'school',
-      position: trip.schoolLocation,
-      type: 'school',
-      title: 'Escuela',
-    },
+    }] : []),
     // Stop markers
-    ...trip.stops.map((stop) => ({
-      id: `stop-${stop.id}`,
-      position: { lat: stop.lat, lng: stop.lng },
-      type: 'stop' as const,
+    ...stops.map((stop, index) => ({
+      id: `stop-${stop._id}`,
+      position: { lat: stop.latitude, lng: stop.longitude },
+      type: index === stops.length - 1 ? 'school' as const : 'stop' as const,
       title: `${stop.order}. ${stop.name}`,
       label: stop.order.toString(),
     })),
   ];
 
   // Create polyline from stops
-  const routePolyline = trip.stops.map((stop) => ({ lat: stop.lat, lng: stop.lng }));
+  const routePolyline = stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude }));
 
-  // Calculate map center (use vehicle location or first stop)
-  const mapCenter = trip.vehicle.currentLocation;
+  // Calculate map center
+  const mapCenter = currentLocation
+    ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
+    : stops[0]
+      ? { lat: stops[0].latitude, lng: stops[0].longitude }
+      : { lat: -0.1807, lng: -78.4678 };
 
   const handleCreateIncident = () => {
-    // In a real app, this would call an API
+    // TODO: Connect to incidents API when available
     console.log('Creating incident:', newIncident);
     setShowIncidentModal(false);
     setNewIncident({ type: 'other', severity: 'low', title: '', description: '' });
+  };
+
+  const handleCompleteTrip = async () => {
+    if (!currentLocation) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await completeTrip(tripId as any, currentLocation.latitude, currentLocation.longitude);
+    } catch (error) {
+      console.error('Error completing trip:', error);
+    }
+  };
+
+  const handleCancelTrip = async () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await cancelTrip(tripId as any, 'Cancelado por administrador');
+    } catch (error) {
+      console.error('Error cancelling trip:', error);
+    }
   };
 
   return (
     <GoogleMapsProvider>
       <div>
         <PageHeader
-          title={trip.route.name}
-          subtitle={`${trip.date} • ${trip.type === 'pickup' ? 'Recogida' : 'Entrega'}`}
+          title={trip.route?.name || 'Viaje'}
+          subtitle={`${trip.scheduledDate} • ${trip.route?.type === 'pickup' ? 'Recogida' : 'Entrega'}`}
           breadcrumbs={[
             { label: 'Dashboard', href: '/dashboard' },
             { label: 'Viajes', href: '/trips' },
-            { label: trip.route.name },
+            { label: trip.route?.name || 'Viaje' },
           ]}
           backHref="/trips"
           badge={
-            <div className="flex items-center gap-2">
-              <StatusBadge
-                status={statusInfo.status}
-                label={statusInfo.label}
-              />
-              {trip.delayMinutes > 0 && (
-                <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-                  +{trip.delayMinutes} min
-                </span>
-              )}
-            </div>
+            <StatusBadge
+              status={statusInfo.status}
+              label={statusInfo.label}
+            />
           }
           actions={[
+            ...(trip.status === 'in_progress' ? [{
+              label: 'Completar Viaje',
+              onClick: handleCompleteTrip,
+              icon: CheckCircle,
+              variant: 'primary' as const,
+            }] : []),
             {
               label: 'Reportar Incidente',
               onClick: () => setShowIncidentModal(true),
               icon: AlertTriangle,
-              variant: 'danger',
+              variant: 'danger' as const,
             },
-            {
-              label: 'Ver Historial',
-              href: `/trips/${trip.id}/history`,
-              icon: FileText,
-              variant: 'secondary',
-            },
+            ...(trip.status !== 'completed' && trip.status !== 'cancelled' ? [{
+              label: 'Cancelar',
+              onClick: handleCancelTrip,
+              icon: X,
+              variant: 'secondary' as const,
+            }] : []),
           ]}
         />
 
@@ -360,8 +179,8 @@ export default function TripDetailPage() {
                   <Users className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{trip.students.onBoard}/{trip.students.total}</p>
-                  <p className="text-sm text-gray-500">Estudiantes a Bordo</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.checkedIn}/{stats.totalStudents}</p>
+                  <p className="text-sm text-gray-500">Estudiantes Registrados</p>
                 </div>
               </div>
             </div>
@@ -372,9 +191,7 @@ export default function TripDetailPage() {
                   <MapPin className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {trip.stops.filter(s => s.status === 'completed').length}/{trip.stops.length}
-                  </p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.stopsCompleted}/{stops.length}</p>
                   <p className="text-sm text-gray-500">Paradas Completadas</p>
                 </div>
               </div>
@@ -386,26 +203,22 @@ export default function TripDetailPage() {
                   <Clock className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{trip.eta}</p>
-                  <p className="text-sm text-gray-500">Hora Estimada Llegada</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {trip.startTime ? new Date(trip.startTime).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                  </p>
+                  <p className="text-sm text-gray-500">Hora Inicio</p>
                 </div>
               </div>
             </div>
 
             <div className="bg-white rounded-lg shadow p-4">
               <div className="flex items-center gap-3">
-                <div className={cn(
-                  'w-12 h-12 rounded-lg flex items-center justify-center',
-                  trip.incidents.length > 0 ? 'bg-amber-100' : 'bg-gray-100'
-                )}>
-                  <AlertTriangle className={cn(
-                    'w-6 h-6',
-                    trip.incidents.length > 0 ? 'text-amber-600' : 'text-gray-400'
-                  )} />
+                <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-gray-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{trip.incidents.length}</p>
-                  <p className="text-sm text-gray-500">Incidentes</p>
+                  <p className="text-2xl font-bold text-gray-900">{checkins.length}</p>
+                  <p className="text-sm text-gray-500">Check-ins</p>
                 </div>
               </div>
             </div>
@@ -433,10 +246,10 @@ export default function TripDetailPage() {
                     <div className="flex items-center gap-2">
                       <span className={cn(
                         'w-2 h-2 rounded-full',
-                        autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                        trip.status === 'in_progress' ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
                       )} />
                       <span className="text-sm text-gray-500">
-                        {autoRefresh ? 'Actualizando' : 'Pausado'}
+                        {trip.status === 'in_progress' ? 'En vivo' : 'Inactivo'}
                       </span>
                     </div>
                   </div>
@@ -466,183 +279,141 @@ export default function TripDetailPage() {
               </div>
 
               {/* Trip Progress */}
-              <DetailSection title="Progreso del Viaje">
+              <DetailSection title="Paradas de la Ruta">
+                {/* Progress Bar */}
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span className="text-gray-600">Progreso General</span>
-                    <span className="font-medium">{trip.progress}%</span>
+                    <span className="font-medium">{stops.length > 0 ? Math.round((stats.stopsCompleted / stops.length) * 100) : 0}%</span>
                   </div>
                   <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                     <div
                       className={cn(
-                        'h-full rounded-full transition-all',
-                        trip.status === 'delayed' ? 'bg-error' : 'bg-success'
+                        'h-full rounded-full transition-all bg-success'
                       )}
-                      style={{ width: `${trip.progress}%` }}
+                      style={{ width: `${stops.length > 0 ? (stats.stopsCompleted / stops.length) * 100 : 0}%` }}
                     />
                   </div>
                 </div>
 
                 {/* Stops List */}
                 <div className="space-y-3">
-                  {trip.stops.map((stop) => {
-                    const defaultStopStatus = { label: 'Pendiente', color: 'text-gray-500', bg: 'bg-gray-400' };
-                    const stopStatus = stopStatusConfig[stop.status] ?? defaultStopStatus;
-                    const isActive = stop.status === 'arrived';
-
-                    return (
-                      <div
-                        key={stop.id}
-                        className={cn(
-                          'flex items-center gap-4 p-3 rounded-lg border transition-colors',
-                          isActive ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'
-                        )}
-                      >
-                        {/* Order Number */}
-                        <div className={cn(
-                          'w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0',
-                          stopStatus.bg
-                        )}>
-                          {stop.status === 'completed' ? (
-                            <CheckCircle className="w-5 h-5" />
-                          ) : (
-                            stop.order
-                          )}
-                        </div>
-
-                        {/* Stop Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900">{stop.name}</p>
-                            {isActive && (
-                              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
-                                Actual
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-500">{stop.reference}</p>
-                        </div>
-
-                        {/* Students */}
-                        <div className="text-right text-sm">
-                          <p className={cn(
-                            'font-medium',
-                            stop.status === 'completed' ? 'text-green-600' : 'text-gray-600'
-                          )}>
-                            {stop.studentsBoarded}/{stop.students}
-                          </p>
-                          <p className="text-gray-400 text-xs">estudiantes</p>
-                        </div>
-
-                        {/* Times */}
-                        <div className="text-right text-sm w-20">
-                          {stop.arrivedAt && (
-                            <p className="text-gray-600">{stop.arrivedAt}</p>
-                          )}
-                          {stop.departedAt && (
-                            <p className="text-gray-400 text-xs">→ {stop.departedAt}</p>
-                          )}
-                          {!stop.arrivedAt && (
-                            <p className="text-gray-400">--:--</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </DetailSection>
-
-              {/* Incidents Section */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Incidentes del Viaje</h3>
-                  <button
-                    onClick={() => setShowIncidentModal(true)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors text-sm"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Reportar
-                  </button>
-                </div>
-                {trip.incidents.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <CheckCircle className="w-12 h-12 mx-auto text-green-400 mb-3" />
-                    <p className="text-gray-500">No hay incidentes reportados</p>
-                    <p className="text-sm text-gray-400">El viaje transcurre sin novedades</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-100">
-                    {trip.incidents.map((incident) => {
-                      const typeInfo = incidentTypeConfig[incident.type] ?? incidentTypeConfig.other!;
-                      const severityInfo = severityConfig[incident.severity] ?? severityConfig.low!;
-                      const statusInfo = incidentStatusConfig[incident.status] ?? incidentStatusConfig.open!;
-                      const TypeIcon = typeInfo.icon;
+                  {stops.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No hay paradas configuradas
+                    </div>
+                  ) : (
+                    stops.map((stop, index) => {
+                      const isLast = index === stops.length - 1;
 
                       return (
-                        <div key={incident.id} className="p-4">
-                          <div className="flex items-start gap-3">
-                            <div className={cn('p-2 rounded-lg', typeInfo.bg)}>
-                              <TypeIcon className={cn('w-5 h-5', typeInfo.color)} />
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <h4 className="font-medium text-gray-900">{incident.title}</h4>
-                                <span className={cn('px-2 py-0.5 rounded text-xs font-medium', severityInfo.bg, severityInfo.color)}>
-                                  {severityInfo.label}
+                        <div
+                          key={stop._id}
+                          className="flex items-center gap-4 p-3 rounded-lg border border-gray-200 bg-gray-50"
+                        >
+                          {/* Order Number */}
+                          <div className={cn(
+                            'w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0',
+                            isLast ? 'bg-success' : 'bg-primary'
+                          )}>
+                            {isLast ? <CheckCircle className="w-5 h-5" /> : stop.order}
+                          </div>
+
+                          {/* Stop Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900">{stop.name}</p>
+                              {isLast && (
+                                <span className="px-2 py-0.5 bg-success/10 text-success rounded text-xs">
+                                  Destino
                                 </span>
-                                <span className={cn('text-xs', statusInfo.color)}>
-                                  • {statusInfo.label}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-600 mb-2">{incident.description}</p>
-                              <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <span>{incident.reportedBy}</span>
-                                <span>{incident.reportedAt}</span>
-                              </div>
+                              )}
                             </div>
+                            <p className="text-sm text-gray-500 truncate">{stop.address}</p>
+                          </div>
+
+                          {/* Scheduled Time */}
+                          <div className="text-right text-sm">
+                            <p className="text-gray-600">{stop.scheduledTime || '--:--'}</p>
+                            <p className="text-gray-400 text-xs">programado</p>
                           </div>
                         </div>
                       );
-                    })}
+                    })
+                  )}
+                </div>
+              </DetailSection>
+
+              {/* Check-ins List */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                <div className="p-4 border-b border-gray-200">
+                  <h3 className="font-semibold text-gray-900">Registros de Estudiantes</h3>
+                  <p className="text-sm text-gray-500">{checkins.length} check-ins realizados</p>
+                </div>
+                {checkins.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <Users className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+                    <p className="text-gray-500">No hay registros aún</p>
+                    <p className="text-sm text-gray-400">Los check-ins aparecerán aquí</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                    {checkins.map((checkin) => (
+                      <div key={checkin._id} className="p-4 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-success/10 flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 text-success" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{checkin.studentName}</p>
+                          <p className="text-sm text-gray-500">{checkin.stopName}</p>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {new Date(checkin.timestamp).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Right Column - Info & Timeline */}
+            {/* Right Column - Info */}
             <div className="space-y-6">
               {/* Trip Info */}
               <DetailSection title="Información del Viaje">
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Ruta</p>
-                    <Link href={`/routes/${trip.route.id}`} className="text-primary hover:underline font-medium">
-                      {trip.route.name}
+                    <Link href={`/routes/${trip.routeId}`} className="text-primary hover:underline font-medium">
+                      {trip.route?.name || 'Sin nombre'}
                     </Link>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Inicio Programado</p>
-                      <p className="font-medium text-gray-900">{trip.scheduledStart}</p>
+                      <p className="text-xs text-gray-500 mb-1">Fecha</p>
+                      <p className="font-medium text-gray-900">{trip.scheduledDate}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Inicio Real</p>
-                      <p className="font-medium text-gray-900">{trip.startTime}</p>
+                      <p className="text-xs text-gray-500 mb-1">Tipo</p>
+                      <p className="font-medium text-gray-900">
+                        {trip.route?.type === 'pickup' ? 'Recogida' : 'Entrega'}
+                      </p>
                     </div>
                   </div>
 
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Ubicación Actual</p>
-                    <div className="flex items-center gap-1 text-gray-900">
-                      <MapPin className="w-4 h-4 text-blue-500" />
-                      <span className="font-medium">{trip.currentLocation}</span>
-                    </div>
-                  </div>
-
-                  {trip.notes && (
-                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-                      <p className="text-sm text-amber-800">{trip.notes}</p>
+                  {currentLocation && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Última Ubicación</p>
+                      <div className="flex items-center gap-1 text-gray-900">
+                        <MapPin className="w-4 h-4 text-blue-500" />
+                        <span className="font-mono text-sm">
+                          {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(currentLocation.timestamp).toLocaleTimeString('es-EC')}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -652,74 +423,71 @@ export default function TripDetailPage() {
               <DetailSection title="Tripulación">
                 <div className="space-y-4">
                   {/* Driver */}
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bus className="w-5 h-5 text-primary" />
+                  {trip.driver ? (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Bus className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Conductor</p>
+                        <Link href={`/fleet/drivers/${trip.driverId}`} className="font-medium text-gray-900 hover:text-primary">
+                          {trip.driver.licenseNumber || 'Sin licencia'}
+                        </Link>
+                      </div>
+                      {trip.driver.phone && (
+                        <a href={`tel:${trip.driver.phone}`} className="p-2 text-primary hover:bg-primary/10 rounded-lg">
+                          <Phone className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Conductor</p>
-                      <Link href={`/fleet/drivers/${trip.driver.id}`} className="font-medium text-gray-900 hover:text-primary">
-                        {trip.driver.name}
-                      </Link>
+                  ) : (
+                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <p className="text-sm text-amber-700">Conductor no asignado</p>
                     </div>
-                    <a href={`tel:${trip.driver.phone}`} className="p-2 text-primary hover:bg-primary/10 rounded-lg">
-                      <Phone className="w-4 h-4" />
-                    </a>
-                  </div>
+                  )}
 
                   {/* Monitor */}
-                  {trip.monitor && (
+                  {trip.monitor ? (
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
                         <Users className="w-5 h-5 text-green-600" />
                       </div>
                       <div className="flex-1">
                         <p className="text-xs text-gray-500">Monitor</p>
-                        <Link href={`/fleet/monitors/${trip.monitor.id}`} className="font-medium text-gray-900 hover:text-primary">
-                          {trip.monitor.name}
+                        <Link href={`/fleet/monitors/${trip.monitorId}`} className="font-medium text-gray-900 hover:text-primary">
+                          {trip.monitor.idNumber || 'Sin ID'}
                         </Link>
                       </div>
-                      <a href={`tel:${trip.monitor.phone}`} className="p-2 text-primary hover:bg-primary/10 rounded-lg">
-                        <Phone className="w-4 h-4" />
-                      </a>
+                      {trip.monitor.phone && (
+                        <a href={`tel:${trip.monitor.phone}`} className="p-2 text-primary hover:bg-primary/10 rounded-lg">
+                          <Phone className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-500">Sin monitor asignado</p>
                     </div>
                   )}
 
                   {/* Vehicle */}
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Bus className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Vehículo</p>
-                      <Link href={`/fleet/vehicles/${trip.vehicle.id}`} className="font-medium text-gray-900 hover:text-primary">
-                        {trip.vehicle.plate}
-                      </Link>
-                      <p className="text-xs text-gray-500">{trip.vehicle.model}</p>
-                    </div>
-                  </div>
-                </div>
-              </DetailSection>
-
-              {/* Timeline */}
-              <DetailSection title="Línea de Tiempo">
-                <div className="space-y-3 max-h-80 overflow-y-auto">
-                  {trip.timeline.slice().reverse().map((event) => {
-                    const defaultTimelineType = { label: 'Info', color: 'text-gray-600', bg: 'bg-gray-100' };
-                    const typeConfig = timelineTypeConfig[event.type] ?? defaultTimelineType;
-                    return (
-                      <div key={event.id} className="flex gap-3">
-                        <div className={cn(
-                          'w-2 h-2 rounded-full mt-2 flex-shrink-0',
-                          typeConfig.bg.replace('bg-', 'bg-').replace('-100', '-500')
-                        )} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900">{event.event}</p>
-                          <p className="text-xs text-gray-500">{event.time}</p>
-                        </div>
+                  {trip.vehicle ? (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Bus className="w-5 h-5 text-blue-600" />
                       </div>
-                    );
-                  })}
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500">Vehículo</p>
+                        <Link href={`/fleet/vehicles/${trip.vehicleId}`} className="font-medium text-gray-900 hover:text-primary">
+                          {trip.vehicle.licensePlate}
+                        </Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <p className="text-sm text-amber-700">Vehículo no asignado</p>
+                    </div>
+                  )}
                 </div>
               </DetailSection>
 
@@ -731,13 +499,15 @@ export default function TripDetailPage() {
                     <MessageSquare className="w-4 h-4" />
                     Mensaje
                   </button>
-                  <a
-                    href={`tel:${trip.driver.phone}`}
-                    className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-                  >
-                    <Phone className="w-4 h-4" />
-                    Llamar
-                  </a>
+                  {trip.driver?.phone && (
+                    <a
+                      href={`tel:${trip.driver.phone}`}
+                      className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                    >
+                      <Phone className="w-4 h-4" />
+                      Llamar
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
@@ -773,30 +543,6 @@ export default function TripDetailPage() {
                     <option value="emergency">Emergencia</option>
                     <option value="other">Otro</option>
                   </select>
-                </div>
-
-                {/* Severity */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Severidad</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {(['low', 'medium', 'high', 'critical'] as const).map((sev) => {
-                      const sevInfo = severityConfig[sev];
-                      return (
-                        <button
-                          key={sev}
-                          onClick={() => setNewIncident({ ...newIncident, severity: sev })}
-                          className={cn(
-                            'px-3 py-2 rounded-lg text-sm font-medium border-2 transition-colors',
-                            newIncident.severity === sev
-                              ? `${sevInfo?.bg} ${sevInfo?.color} border-current`
-                              : 'bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100'
-                          )}
-                        >
-                          {sevInfo?.label}
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
 
                 {/* Title */}
@@ -836,7 +582,7 @@ export default function TripDetailPage() {
                   className="px-4 py-2 bg-error text-white rounded-lg hover:bg-error/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <Send className="w-4 h-4" />
-                  Reportar Incidente
+                  Reportar
                 </button>
               </div>
             </div>

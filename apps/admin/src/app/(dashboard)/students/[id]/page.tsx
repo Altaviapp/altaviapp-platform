@@ -2,74 +2,19 @@
 
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Edit, Trash2, QrCode, Phone, Mail, MapPin, GraduationCap, Calendar, Users } from 'lucide-react';
+import { Edit, Trash2, QrCode, Phone, Mail, MapPin, GraduationCap, Calendar, Loader2 } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection, DetailItem, DetailGrid, ConfirmDialog } from '@/components/shared';
 import Link from 'next/link';
+import { useStudent, useStudentMutations, useStudentRouteAssignments } from '@/hooks';
 
-// Mock student data
-const mockStudents: Record<string, {
-  id: string;
-  firstName: string;
-  lastName: string;
-  cedula: string;
-  birthDate: string;
-  gender: string;
-  grade: string;
-  section: string;
-  enrollmentNumber: string;
-  address: string;
-  homePhone: string;
-  status: 'active' | 'inactive';
-  route: { id: string; name: string; stop: string } | null;
-  parents: Array<{ id: string; name: string; relation: string; phone: string; email: string }>;
-  qrCode: string;
-  createdAt: string;
-}> = {
-  '1': {
-    id: '1',
-    firstName: 'Juan',
-    lastName: 'Pérez González',
-    cedula: '1234567890',
-    birthDate: '15/03/2015',
-    gender: 'Masculino',
-    grade: '5to',
-    section: 'B',
-    enrollmentNumber: 'MAT-2024-001',
-    address: 'Av. Principal 123, Sector Norte, Quito',
-    homePhone: '+593 2 234 5678',
-    status: 'active',
-    route: { id: '1', name: 'Ruta Centro', stop: 'Parada 1 - Centro Comercial' },
-    parents: [
-      { id: '1', name: 'Pedro Pérez Mora', relation: 'Padre', phone: '+593 99 123 4567', email: 'pedro.perez@email.com' },
-      { id: '2', name: 'María González López', relation: 'Madre', phone: '+593 98 765 4321', email: 'maria.gonzalez@email.com' },
-    ],
-    qrCode: 'QR-STU-001-2024',
-    createdAt: '10/01/2024',
-  },
-  '2': {
-    id: '2',
-    firstName: 'Ana',
-    lastName: 'Torres Martínez',
-    cedula: '0987654321',
-    birthDate: '22/07/2016',
-    gender: 'Femenino',
-    grade: '4to',
-    section: 'C',
-    enrollmentNumber: 'MAT-2024-002',
-    address: 'Calle Secundaria 456, Sector Sur, Quito',
-    homePhone: '+593 2 345 6789',
-    status: 'active',
-    route: { id: '1', name: 'Ruta Centro', stop: 'Parada 1 - Centro Comercial' },
-    parents: [
-      { id: '3', name: 'Carmen Martínez Ruiz', relation: 'Madre', phone: '+593 97 111 2222', email: 'carmen.martinez@email.com' },
-    ],
-    qrCode: 'QR-STU-002-2024',
-    createdAt: '15/01/2024',
-  },
-};
+function formatDate(timestamp?: number): string {
+  if (!timestamp) return '-';
+  return new Date(timestamp).toLocaleDateString('es-EC');
+}
 
 /**
  * Student Detail Page
+ * Connected to real Convex data
  */
 export default function StudentDetailPage() {
   const router = useRouter();
@@ -79,48 +24,74 @@ export default function StudentDetailPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const student = mockStudents[studentId];
+  // Real data from Convex
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { student, isLoading, notFound } = useStudent(studentId as any);
+  const { deactivateStudent } = useStudentMutations();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { assignments } = useStudentRouteAssignments(studentId as any);
 
-  if (!student) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando estudiante...</span>
+      </div>
+    );
+  }
+
+  if (notFound || !student) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Estudiante no encontrado</p>
+        <Link href="/students" className="text-primary hover:underline mt-2 inline-block">
+          Volver a Estudiantes
+        </Link>
       </div>
     );
   }
 
   const handleDelete = async () => {
     setIsDeleting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push('/students');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await deactivateStudent(studentId as any);
+      router.push('/students');
+    } catch (error) {
+      console.error('Error deactivating student:', error);
+      setIsDeleting(false);
+    }
   };
+
+  const studentName = `${student.firstName} ${student.lastName}`;
+  const activeAssignment = assignments.find(a => a.isActive);
 
   return (
     <div>
       <PageHeader
-        title={`${student.firstName} ${student.lastName}`}
+        title={studentName}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Estudiantes', href: '/students' },
-          { label: `${student.firstName} ${student.lastName}` },
+          { label: studentName },
         ]}
         backHref="/students"
         badge={
           <StatusBadge
-            status={student.status === 'active' ? 'active' : 'inactive'}
-            label={student.status === 'active' ? 'Activo' : 'Inactivo'}
+            status={student.isActive ? 'active' : 'inactive'}
+            label={student.isActive ? 'Activo' : 'Inactivo'}
           />
         }
         actions={[
           {
             label: 'Ver QR',
-            href: `/students/${student.id}/qr`,
+            href: `/students/${student._id}/qr`,
             icon: QrCode,
             variant: 'secondary',
           },
           {
             label: 'Editar',
-            href: `/students/${student.id}/edit`,
+            href: `/students/${student._id}/edit`,
             icon: Edit,
             variant: 'secondary',
           },
@@ -146,9 +117,7 @@ export default function StudentDetailPage() {
               <DetailGrid cols={3}>
                 <DetailItem label="Nombres" value={student.firstName} />
                 <DetailItem label="Apellidos" value={student.lastName} />
-                <DetailItem label="Cédula" value={student.cedula || '-'} />
-                <DetailItem label="Fecha de Nacimiento" value={student.birthDate} />
-                <DetailItem label="Género" value={student.gender} />
+                <DetailItem label="Fecha de Nacimiento" value={formatDate(student.dateOfBirth)} />
               </DetailGrid>
             </div>
           </div>
@@ -156,24 +125,14 @@ export default function StudentDetailPage() {
 
         {/* Información Académica */}
         <DetailSection title="Información Académica">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <GraduationCap className="w-5 h-5 text-primary" />
               </div>
               <div>
                 <p className="text-xs text-gray-500">Grado</p>
-                <p className="text-sm font-medium text-gray-900">{student.grade} {student.section}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Calendar className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">N° Matrícula</p>
-                <p className="text-sm font-medium text-gray-900">{student.enrollmentNumber || '-'}</p>
+                <p className="text-sm font-medium text-gray-900">{student.grade || '-'}</p>
               </div>
             </div>
 
@@ -183,7 +142,9 @@ export default function StudentDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Código QR</p>
-                <p className="text-sm font-medium text-gray-900">{student.qrCode}</p>
+                <p className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
+                  {student.qrCode ? 'Generado' : 'Pendiente'}
+                </p>
               </div>
             </div>
           </div>
@@ -203,12 +164,12 @@ export default function StudentDetailPage() {
             </div>
 
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Phone className="w-5 h-5 text-blue-600" />
+              <div className="p-2 bg-red-100 rounded-lg">
+                <Phone className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Teléfono Casa</p>
-                <p className="text-sm font-medium text-gray-900">{student.homePhone || '-'}</p>
+                <p className="text-xs text-gray-500">Contacto de Emergencia</p>
+                <p className="text-sm font-medium text-gray-900">{student.emergencyContact || '-'}</p>
               </div>
             </div>
           </div>
@@ -216,18 +177,15 @@ export default function StudentDetailPage() {
 
         {/* Ruta Asignada */}
         <DetailSection title="Ruta de Transporte">
-          {student.route ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <DetailItem
-                label="Ruta Asignada"
-                value={
-                  <Link href={`/routes/${student.route.id}`} className="text-primary hover:underline">
-                    {student.route.name}
-                  </Link>
-                }
-              />
-              <DetailItem label="Parada" value={student.route.stop} />
-            </div>
+          {activeAssignment ? (
+            <DetailItem
+              label="Ruta Asignada"
+              value={
+                <Link href={`/routes/${activeAssignment.routeId}`} className="text-primary hover:underline">
+                  Ver ruta asignada
+                </Link>
+              }
+            />
           ) : (
             <p className="text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
               Este estudiante no tiene ruta de transporte asignada
@@ -235,46 +193,28 @@ export default function StudentDetailPage() {
           )}
         </DetailSection>
 
-        {/* Padres/Tutores */}
-        <DetailSection
-          title="Padres/Tutores"
-          actions={
-            <span className="text-sm text-gray-500 flex items-center gap-1">
-              <Users className="w-4 h-4" />
-              {student.parents.length} registrado{student.parents.length > 1 ? 's' : ''}
-            </span>
-          }
-        >
-          <div className="space-y-4" id="parents">
-            {student.parents.map((parent) => (
-              <div
-                key={parent.id}
-                className="p-4 bg-gray-50 rounded-lg border border-gray-200"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="font-medium text-gray-900">{parent.name}</p>
-                    <p className="text-sm text-gray-500">{parent.relation}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Phone className="w-4 h-4" />
-                    {parent.phone}
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Mail className="w-4 h-4" />
-                    {parent.email || '-'}
-                  </div>
-                </div>
+        {/* Padre/Tutor */}
+        <DetailSection title="Padre/Tutor">
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="mb-3">
+              <p className="font-medium text-gray-900">{student.parentName || '-'}</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center gap-2 text-gray-600">
+                <Phone className="w-4 h-4" />
+                {student.parentPhone || '-'}
               </div>
-            ))}
+              <div className="flex items-center gap-2 text-gray-600">
+                <Mail className="w-4 h-4" />
+                {student.parentEmail || '-'}
+              </div>
+            </div>
           </div>
         </DetailSection>
 
         {/* Metadata */}
         <div className="text-xs text-gray-400 text-right">
-          Registrado el {student.createdAt}
+          Registrado el {formatDate(student.createdAt)}
         </div>
       </div>
 
@@ -284,7 +224,7 @@ export default function StudentDetailPage() {
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={handleDelete}
         title="Eliminar Estudiante"
-        message={`¿Estás seguro de que deseas eliminar a ${student.firstName} ${student.lastName}? Esta acción no se puede deshacer.`}
+        message={`¿Estás seguro de que deseas eliminar a ${studentName}? Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
         variant="danger"
         isLoading={isDeleting}

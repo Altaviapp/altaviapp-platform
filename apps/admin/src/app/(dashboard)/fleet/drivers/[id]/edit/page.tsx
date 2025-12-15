@@ -2,15 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-
-// Mock data
-const mockVehicles = [
-  { value: '1', label: 'ABC-1234 - Toyota Coaster' },
-  { value: '2', label: 'XYZ-5678 - Mitsubishi Rosa' },
-  { value: '3', label: 'DEF-9012 - Hino Dutro' },
-];
+import { useDriver, useDriverMutations, useVehicles } from '@/hooks';
 
 const licenseTypes = [
   { value: 'C', label: 'Tipo C - Vehículos livianos' },
@@ -18,78 +14,48 @@ const licenseTypes = [
   { value: 'E', label: 'Tipo E - Vehículos pesados' },
 ];
 
-const mockDrivers: Record<string, {
-  firstName: string;
-  lastName: string;
-  cedula: string;
-  birthDate: string;
-  phone: string;
-  email: string;
-  address: string;
-  licenseNumber: string;
-  licenseType: string;
-  licenseIssueDate: string;
-  licenseExpiry: string;
-  vehicleId: string;
-  status: string;
-  emergencyContactName: string;
-  emergencyContactRelation: string;
-  emergencyContactPhone: string;
-}> = {
-  '1': {
-    firstName: 'Juan',
-    lastName: 'Pérez',
-    cedula: '1234567890',
-    birthDate: '1985-05-15',
-    phone: '+593991234567',
-    email: 'juan.perez@email.com',
-    address: 'Av. Principal 123, Quito',
-    licenseNumber: 'LIC-2020-12345',
-    licenseType: 'D',
-    licenseIssueDate: '2020-03-01',
-    licenseExpiry: '2026-08-15',
-    vehicleId: '1',
-    status: 'active',
-    emergencyContactName: 'María López',
-    emergencyContactRelation: 'Esposa',
-    emergencyContactPhone: '+593987654321',
-  },
-};
-
 /**
  * Edit Driver Page
+ * Connected to real Convex data
  */
 export default function EditDriverPage() {
   const router = useRouter();
   const params = useParams();
   const driverId = params.id as string;
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    cedula: '',
-    birthDate: '',
-    phone: '',
-    email: '',
-    address: '',
     licenseNumber: '',
-    licenseType: '',
-    licenseIssueDate: '',
     licenseExpiry: '',
-    vehicleId: '',
-    status: 'active',
-    emergencyContactName: '',
-    emergencyContactRelation: '',
-    emergencyContactPhone: '',
+    phone: '',
+    emergencyContact: '',
+    isActive: true,
   });
 
+  // Real data from Convex
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { driver, isLoading, notFound } = useDriver(driverId as any);
+  const { updateDriver } = useDriverMutations();
+  const { vehicles } = useVehicles();
+
+  // Build vehicle options
+  const vehicleOptions = vehicles.map(v => ({
+    value: v._id,
+    label: `${v.licensePlate} - ${v.brand} ${v.model}`,
+  }));
+
+  // Load driver data into form
   useEffect(() => {
-    const driver = mockDrivers[driverId];
     if (driver) {
-      setFormData(driver);
+      setFormData({
+        licenseNumber: driver.licenseNumber || '',
+        licenseExpiry: driver.licenseExpiry ? new Date(driver.licenseExpiry).toISOString().split('T')[0] ?? '' : '',
+        phone: driver.phone || '',
+        emergencyContact: driver.emergencyContact || '',
+        isActive: driver.isActive ?? true,
+      });
     }
-  }, [driverId]);
+  }, [driver]);
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -97,74 +63,75 @@ export default function EditDriverPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push(`/fleet/drivers/${driverId}`);
+    setIsSubmitting(true);
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updateDriver(driverId as any, {
+        licenseNumber: formData.licenseNumber,
+        licenseExpiry: formData.licenseExpiry ? new Date(formData.licenseExpiry).getTime() : undefined,
+        phone: formData.phone,
+        emergencyContact: formData.emergencyContact,
+        isActive: formData.isActive,
+      });
+      router.push(`/fleet/drivers/${driverId}`);
+    } catch (error) {
+      console.error('Error updating driver:', error);
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
     router.push(`/fleet/drivers/${driverId}`);
   };
 
-  if (!mockDrivers[driverId]) {
+  if (isLoading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Conductor no encontrado</p>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-3 text-gray-500">Cargando conductor...</span>
       </div>
     );
   }
 
+  if (notFound || !driver) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Conductor no encontrado</p>
+        <Link href="/fleet?tab=drivers" className="text-primary hover:underline mt-2 inline-block">
+          Volver a Conductores
+        </Link>
+      </div>
+    );
+  }
+
+  const driverName = driver.user?.name || 'Sin nombre';
+
   return (
     <div>
       <PageHeader
-        title={`Editar ${formData.firstName} ${formData.lastName}`}
+        title={`Editar ${driverName}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Flota', href: '/fleet' },
           { label: 'Conductores', href: '/fleet?tab=drivers' },
-          { label: `${formData.firstName} ${formData.lastName}`, href: `/fleet/drivers/${driverId}` },
+          { label: driverName, href: `/fleet/drivers/${driverId}` },
           { label: 'Editar' },
         ]}
         backHref={`/fleet/drivers/${driverId}`}
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Información Personal */}
-        <FormSection title="Información Personal">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Nombres"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange('firstName')}
-              required
-            />
-            <FormField
-              label="Apellidos"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange('lastName')}
-              required
-            />
-          </FormFieldRow>
-
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Cédula de Identidad"
-              name="cedula"
-              value={formData.cedula}
-              onChange={handleChange('cedula')}
-              required
-            />
-            <FormField
-              label="Fecha de Nacimiento"
-              name="birthDate"
-              type="date"
-              value={formData.birthDate}
-              onChange={handleChange('birthDate')}
-              required
-            />
-          </FormFieldRow>
+        {/* Información del Conductor */}
+        <FormSection title="Información del Conductor">
+          <div className="p-4 bg-gray-50 rounded-lg mb-4">
+            <p className="text-sm text-gray-600">
+              <strong>Nombre:</strong> {driverName}
+            </p>
+            <p className="text-sm text-gray-600">
+              <strong>Email:</strong> {driver.user?.email || '-'}
+            </p>
+          </div>
 
           <FormFieldRow cols={2}>
             <FormField
@@ -173,23 +140,18 @@ export default function EditDriverPage() {
               type="tel"
               value={formData.phone}
               onChange={handleChange('phone')}
+              placeholder="+593XXXXXXXXX"
               required
             />
             <FormField
-              label="Email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange('email')}
+              label="Contacto de Emergencia"
+              name="emergencyContact"
+              value={formData.emergencyContact}
+              onChange={handleChange('emergencyContact')}
+              placeholder="Nombre y teléfono"
+              required
             />
           </FormFieldRow>
-
-          <FormField
-            label="Dirección"
-            name="address"
-            value={formData.address}
-            onChange={handleChange('address')}
-          />
         </FormSection>
 
         {/* Licencia de Conducir */}
@@ -200,26 +162,7 @@ export default function EditDriverPage() {
               name="licenseNumber"
               value={formData.licenseNumber}
               onChange={handleChange('licenseNumber')}
-              required
-            />
-            <FormField
-              label="Tipo de Licencia"
-              name="licenseType"
-              type="select"
-              value={formData.licenseType}
-              onChange={handleChange('licenseType')}
-              options={licenseTypes}
-              required
-            />
-          </FormFieldRow>
-
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Fecha de Emisión"
-              name="licenseIssueDate"
-              type="date"
-              value={formData.licenseIssueDate}
-              onChange={handleChange('licenseIssueDate')}
+              placeholder="Número de licencia"
               required
             />
             <FormField
@@ -233,55 +176,19 @@ export default function EditDriverPage() {
           </FormFieldRow>
         </FormSection>
 
-        {/* Asignaciones */}
-        <FormSection title="Asignaciones">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Vehículo Asignado"
-              name="vehicleId"
-              type="select"
-              value={formData.vehicleId}
-              onChange={handleChange('vehicleId')}
-              options={mockVehicles}
-            />
-            <FormField
-              label="Estado"
-              name="status"
-              type="select"
-              value={formData.status}
-              onChange={handleChange('status')}
-              options={[
-                { value: 'active', label: 'Activo' },
-                { value: 'inactive', label: 'Inactivo' },
-              ]}
-              required
-            />
-          </FormFieldRow>
-        </FormSection>
-
-        {/* Contacto de Emergencia */}
-        <FormSection title="Contacto de Emergencia">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Nombre Completo"
-              name="emergencyContactName"
-              value={formData.emergencyContactName}
-              onChange={handleChange('emergencyContactName')}
-            />
-            <FormField
-              label="Relación"
-              name="emergencyContactRelation"
-              value={formData.emergencyContactRelation}
-              onChange={handleChange('emergencyContactRelation')}
-            />
-          </FormFieldRow>
-
+        {/* Estado */}
+        <FormSection title="Estado">
           <FormField
-            label="Teléfono"
-            name="emergencyContactPhone"
-            type="tel"
-            value={formData.emergencyContactPhone}
-            onChange={handleChange('emergencyContactPhone')}
+            label="Estado"
+            name="isActive"
+            type="select"
+            value={formData.isActive ? 'active' : 'inactive'}
+            onChange={(val) => setFormData(prev => ({ ...prev, isActive: val === 'active' }))}
+            options={[
+              { value: 'active', label: 'Activo' },
+              { value: 'inactive', label: 'Inactivo' },
+            ]}
+            required
           />
         </FormSection>
 
@@ -291,7 +198,7 @@ export default function EditDriverPage() {
           <FormActions
             onCancel={handleCancel}
             submitLabel="Guardar Cambios"
-            isLoading={isLoading}
+            isLoading={isSubmitting}
           />
         </div>
       </form>

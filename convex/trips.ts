@@ -348,6 +348,105 @@ export const listTripsForDriver = query({
 });
 
 /**
+ * Get trip history for driver (past completed trips)
+ */
+export const getDriverTripHistory = query({
+  args: {
+    userId: v.id("users"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await verifyUser(ctx, args.userId);
+
+    // Get driver profile
+    const driver = await ctx.db
+      .query("drivers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (!driver) {
+      return { trips: [], stats: { totalTrips: 0, totalStudents: 0, totalIncidents: 0, avgDuration: 0 } };
+    }
+
+    const limit = args.limit || 50;
+
+    // Get completed trips ordered by date (most recent first)
+    const trips = await ctx.db
+      .query("trips")
+      .withIndex("by_driver", (q) => q.eq("driverId", driver._id))
+      .filter((q) => q.eq(q.field("status"), "completed"))
+      .order("desc")
+      .take(limit);
+
+    // Enrich with route info and calculate stats
+    let totalStudents = 0;
+    let totalDuration = 0;
+
+    const enriched = await Promise.all(
+      trips.map(async (trip) => {
+        const route = await ctx.db.get(trip.routeId);
+
+        // Get trip students who were scheduled (completed trips mean they were transported)
+        const tripStudents = await ctx.db
+          .query("tripStudents")
+          .withIndex("by_trip", (q) => q.eq("tripId", trip._id))
+          .collect();
+
+        // Count students who were scheduled (not absent or parent pickup)
+        const boardedCount = tripStudents.filter(ts => ts.status === "scheduled" || ts.status === "stop_changed").length;
+
+        // Calculate duration in minutes
+        const duration = trip.startTime && trip.endTime
+          ? Math.round((trip.endTime - trip.startTime) / 60000)
+          : 0;
+
+        totalStudents += boardedCount;
+        totalDuration += duration;
+
+        return {
+          _id: trip._id,
+          type: route?.type === 'pickup' ? 'ida' : 'vuelta',
+          status: trip.status,
+          route: route?.name || 'Ruta',
+          startTime: trip.startTime ? new Date(trip.startTime).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }) : '--:--',
+          endTime: trip.endTime ? new Date(trip.endTime).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }) : '--:--',
+          date: trip.scheduledDate,
+          duration,
+          studentsTransported: boardedCount,
+          incidents: 0, // TODO: count incidents when available
+        };
+      })
+    );
+
+    // Group by date
+    const groupedByDate: Record<string, typeof enriched> = {};
+    enriched.forEach((trip) => {
+      if (!groupedByDate[trip.date]) {
+        groupedByDate[trip.date] = [];
+      }
+      groupedByDate[trip.date]!.push(trip);
+    });
+
+    // Convert to array format
+    const tripsByDate = Object.entries(groupedByDate)
+      .map(([date, trips]) => ({
+        date,
+        trips,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    const stats = {
+      totalTrips: trips.length,
+      totalStudents,
+      totalIncidents: 0,
+      avgDuration: trips.length > 0 ? Math.round(totalDuration / trips.length) : 0,
+    };
+
+    return { tripsByDate, stats };
+  },
+});
+
+/**
  * Start trip
  */
 export const startTrip = mutation({

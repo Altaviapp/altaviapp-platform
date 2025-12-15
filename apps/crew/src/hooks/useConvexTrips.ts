@@ -103,3 +103,25 @@ export function useActiveConvexTrip() {
     hasActiveTrip: activeTrip !== null,
   };
 }
+
+// ============================================
+// TRIP HISTORY (past completed trips)
+// ============================================
+
+export function useTripHistory(limit?: number) {
+  const { userId } = useConvexAuth();
+
+  const result = useQuery(
+    api.trips.getDriverTripHistory,
+    userId ? { userId, limit } : "skip"
+  );
+
+  const tripsByDate = result?.tripsByDate ?? [];
+
+  return {
+    tripsByDate,
+    stats: result?.stats ?? { totalTrips: 0, totalStudents: 0, totalIncidents: 0, avgDuration: 0 },
+    isLoading: result === undefined,
+    isEmpty: result !== undefined && tripsByDate.length === 0,
+  };
+}

@@ -9,7 +9,7 @@ export { useConvexAuth } from './useConvexAuth';
 export type { ConvexAuthContext } from './useConvexAuth';
 
 // Convex data hooks (real-time)
-export { useMyTrips, useTrip, useTripOperations, useTodaysTrips, useActiveConvexTrip } from './useConvexTrips';
+export { useMyTrips, useTrip, useTripOperations, useTodaysTrips, useActiveConvexTrip, useTripHistory } from './useConvexTrips';
 export { useTripCheckins, usePendingStudents, useCheckinMutations, useStudentByQR } from './useConvexCheckins';
 export { useConvexDashboard } from './useConvexDashboard';
 

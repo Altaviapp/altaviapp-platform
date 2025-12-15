@@ -2,118 +2,35 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Calendar, ChevronDown, Bus, Clock, MapPin, Users, ChevronRight, CheckCircle, AlertTriangle, Sun, Moon, Search } from 'lucide-react';
+import { Calendar, ChevronDown, Clock, Users, ChevronRight, CheckCircle, AlertTriangle, Sun, Moon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-// Mock user for UI testing
-const mockUser = {
-  name: 'Carlos Pérez',
-  email: 'carlos@test.com',
-  role: 'driver' as const,
-};
-
-// Mock trip history
-const tripHistory = [
-  {
-    date: 'Hoy - 03/12/2024',
-    trips: [
-      {
-        _id: 'trip-h1',
-        type: 'ida',
-        status: 'completed',
-        route: 'Centro - Escuela Altaviapp',
-        startTime: '06:32',
-        endTime: '07:18',
-        duration: 46,
-        distance: 8.5,
-        studentsTransported: 28,
-        studentsExpected: 30,
-        incidents: 0,
-      },
-    ],
-  },
-  {
-    date: 'Ayer - 02/12/2024',
-    trips: [
-      {
-        _id: 'trip-h2',
-        type: 'vuelta',
-        status: 'completed',
-        route: 'Escuela Altaviapp - Centro',
-        startTime: '14:05',
-        endTime: '14:58',
-        duration: 53,
-        distance: 8.2,
-        studentsTransported: 28,
-        studentsExpected: 28,
-        incidents: 0,
-      },
-      {
-        _id: 'trip-h3',
-        type: 'ida',
-        status: 'completed',
-        route: 'Centro - Escuela Altaviapp',
-        startTime: '06:28',
-        endTime: '07:22',
-        duration: 54,
-        distance: 8.5,
-        studentsTransported: 30,
-        studentsExpected: 30,
-        incidents: 1,
-        incidentNote: '1 retraso por tráfico',
-      },
-    ],
-  },
-  {
-    date: '01/12/2024',
-    trips: [
-      {
-        _id: 'trip-h4',
-        type: 'vuelta',
-        status: 'completed',
-        route: 'Escuela Altaviapp - Centro',
-        startTime: '14:02',
-        endTime: '14:55',
-        duration: 53,
-        distance: 8.3,
-        studentsTransported: 29,
-        studentsExpected: 30,
-        incidents: 0,
-      },
-      {
-        _id: 'trip-h5',
-        type: 'ida',
-        status: 'completed',
-        route: 'Centro - Escuela Altaviapp',
-        startTime: '06:30',
-        endTime: '07:15',
-        duration: 45,
-        distance: 8.5,
-        studentsTransported: 30,
-        studentsExpected: 30,
-        incidents: 0,
-      },
-    ],
-  },
-];
+import { useTripHistory } from '@/hooks';
+import { EmptyState } from '@/components/shared/EmptyState';
 
 const periods = [
-  { value: 'week', label: 'Última semana' },
-  { value: 'month', label: 'Último mes' },
-  { value: 'quarter', label: 'Últimos 3 meses' },
+  { value: 'week', label: 'Última semana', limit: 20 },
+  { value: 'month', label: 'Último mes', limit: 50 },
+  { value: 'quarter', label: 'Últimos 3 meses', limit: 100 },
 ];
 
 export default function HistoryPage() {
   const [selectedPeriod, setSelectedPeriod] = useState(periods[0]!);
   const [showPeriodSelector, setShowPeriodSelector] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const user = mockUser;
 
-  // Stats summary
-  const totalTrips = tripHistory.flatMap(d => d.trips).length;
-  const totalStudents = tripHistory.flatMap(d => d.trips).reduce((acc, t) => acc + t.studentsTransported, 0);
-  const totalIncidents = tripHistory.flatMap(d => d.trips).reduce((acc, t) => acc + t.incidents, 0);
-  const avgDuration = Math.round(tripHistory.flatMap(d => d.trips).reduce((acc, t) => acc + t.duration, 0) / totalTrips);
+  // Use real Convex data
+  const { tripsByDate, stats, isLoading, isEmpty } = useTripHistory(selectedPeriod.limit);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-gray-600">Cargando historial...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -158,31 +75,50 @@ export default function HistoryPage() {
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Resumen del período</h3>
         <div className="grid grid-cols-4 gap-2 text-center">
           <div>
-            <p className="text-xl font-bold text-primary">{totalTrips}</p>
+            <p className="text-xl font-bold text-primary">{stats.totalTrips}</p>
             <p className="text-xs text-gray-500">Viajes</p>
           </div>
           <div>
-            <p className="text-xl font-bold text-success">{totalStudents}</p>
+            <p className="text-xl font-bold text-success">{stats.totalStudents}</p>
             <p className="text-xs text-gray-500">Estudiantes</p>
           </div>
           <div>
-            <p className="text-xl font-bold text-info">{avgDuration}m</p>
+            <p className="text-xl font-bold text-info">{stats.avgDuration}m</p>
             <p className="text-xs text-gray-500">Promedio</p>
           </div>
           <div>
-            <p className="text-xl font-bold text-warning">{totalIncidents}</p>
+            <p className="text-xl font-bold text-warning">{stats.totalIncidents}</p>
             <p className="text-xs text-gray-500">Incidentes</p>
           </div>
         </div>
       </div>
 
+      {/* Empty State */}
+      {isEmpty && (
+        <EmptyState
+          icon={Calendar}
+          title="No hay viajes completados"
+          description="Tus viajes completados aparecerán aquí."
+          action={
+            <Link
+              href="/trips"
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Ver Viajes Programados
+            </Link>
+          }
+        />
+      )}
+
       {/* Trip History */}
-      {tripHistory.map((day) => (
+      {tripsByDate.map((day) => (
         <div key={day.date}>
           {/* Date Header */}
           <div className="flex items-center gap-2 mb-3">
             <Calendar className="w-4 h-4 text-gray-400" />
-            <span className="text-sm font-medium text-gray-600">{day.date}</span>
+            <span className="text-sm font-medium text-gray-600">
+              {formatDateLabel(day.date)}
+            </span>
           </div>
 
           {/* Trips */}
@@ -219,24 +155,21 @@ export default function HistoryPage() {
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Users className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600">{trip.studentsTransported}/{trip.studentsExpected}</span>
+                      <span className="text-gray-600">{trip.studentsTransported} estudiantes</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     <span>Duración: {trip.duration} min</span>
-                    <span>Distancia: {trip.distance} km</span>
                   </div>
 
                   {/* Incidents */}
-                  {trip.incidents > 0 && (
+                  {trip.incidents > 0 ? (
                     <div className="mt-3 p-2 bg-warning/10 rounded-lg flex items-center gap-2 text-sm text-warning-dark">
                       <AlertTriangle className="w-4 h-4" />
-                      {trip.incidentNote}
+                      {trip.incidents} incidente(s)
                     </div>
-                  )}
-
-                  {trip.incidents === 0 && (
+                  ) : (
                     <div className="mt-3 p-2 bg-success/10 rounded-lg flex items-center gap-2 text-sm text-success-dark">
                       <CheckCircle className="w-4 h-4" />
                       Sin incidentes
@@ -245,7 +178,7 @@ export default function HistoryPage() {
 
                   {/* View Details */}
                   <Link
-                    href={`/history/${trip._id}`}
+                    href={`/trips/${trip._id}`}
                     className="mt-3 flex items-center justify-center gap-1 text-sm text-primary hover:underline"
                   >
                     Ver detalles
@@ -257,11 +190,21 @@ export default function HistoryPage() {
           </div>
         </div>
       ))}
-
-      {/* Load More */}
-      <button className="w-full py-3 text-center text-sm text-primary font-medium hover:underline">
-        Cargar más viajes...
-      </button>
     </div>
   );
+}
+
+// Helper to format date labels
+function formatDateLabel(dateStr: string): string {
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+  if (dateStr === today) return `Hoy - ${formatDate(dateStr)}`;
+  if (dateStr === yesterday) return `Ayer - ${formatDate(dateStr)}`;
+  return formatDate(dateStr);
+}
+
+function formatDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-');
+  return `${day}/${month}/${year}`;
 }

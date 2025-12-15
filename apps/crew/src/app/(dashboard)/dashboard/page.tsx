@@ -8,30 +8,24 @@ import { LoadingState } from '@/components/shared/LoadingState';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { AlertCircle, Calendar, Users, QrCode } from 'lucide-react';
 import { useConvexDashboard, useConvexAuth } from '@/hooks';
-import { useDashboardData } from '@/hooks/useDashboardData';
 import { getGreeting } from '@/lib/utils/dates';
 import { formatDate } from '@/lib/utils/dates';
 import Link from 'next/link';
 
 export default function DashboardPage() {
-  // Try to use Convex auth first
-  const { user: authUser, isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor, isLoading: authLoading } = useConvexAuth();
+  // Use real Convex auth - no more mock fallback
+  const { user, isDriver, isMonitor, isLoading: authLoading } = useConvexAuth();
 
-  // Use Convex data when authenticated, mock data otherwise
-  const convexDashboard = useConvexDashboard();
-  const mockDashboard = useDashboardData();
+  // Use real Convex data - no more mock fallback
+  const { data, loading, error } = useConvexDashboard();
 
-  // Use Convex data if authenticated, fallback to mock for UI testing
-  const { data, loading, error } = isAuthenticated ? convexDashboard : mockDashboard;
-
-  // Auth state - prefer real auth, fallback to data for UI testing
-  const user = authUser ?? data?.driver ?? { name: 'Usuario', email: '', role: 'driver' as const };
-  const isDriver = isAuthenticated ? authIsDriver : (data?.driver?.role === 'driver');
-  const isMonitor = isAuthenticated ? authIsMonitor : (data?.driver?.role === 'monitor');
+  // Auth state
+  const userRole = (user as { role?: string })?.role ?? 'driver';
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin';
   const roleDisplayName = isDriver ? 'Conductor' : isMonitor ? 'Monitor' : 'Admin';
 
   // Loading state
-  if (loading) {
+  if (loading || authLoading) {
     return <LoadingState variant="page" />;
   }
 
@@ -56,7 +50,13 @@ export default function DashboardPage() {
 
   // No data state
   if (!data) {
-    return null;
+    return (
+      <EmptyState
+        icon={AlertCircle}
+        title="No hay datos disponibles"
+        description="No se encontraron datos del dashboard. Por favor contacta al administrador."
+      />
+    );
   }
 
   return (
@@ -64,7 +64,7 @@ export default function DashboardPage() {
       {/* Greeting Header */}
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">
-          {getGreeting()}, {user?.name || data.driver.name}
+          {getGreeting()}, {user?.name || 'Usuario'}
         </h1>
         <p className="text-sm text-gray-600 flex items-center gap-2 mt-1">
           <Calendar className="w-4 h-4" />
@@ -75,7 +75,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Role-specific Card */}
-      {isDriver && (
+      {isDriver && data.vehicle && (
         <VehicleCard vehicle={data.vehicle} />
       )}
 
@@ -96,16 +96,16 @@ export default function DashboardPage() {
           </div>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
-              <p className="text-2xl font-bold text-green-600">0</p>
-              <p className="text-xs text-gray-600">Abordados</p>
+              <p className="text-2xl font-bold text-green-600">{data.weeklyStats?.tripsCompleted ?? 0}</p>
+              <p className="text-xs text-gray-600">Completados</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-blue-600">28</p>
-              <p className="text-xs text-gray-600">Esperados</p>
+              <p className="text-2xl font-bold text-blue-600">{data.todayTrips?.length ?? 0}</p>
+              <p className="text-xs text-gray-600">Programados</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-400">0</p>
-              <p className="text-xs text-gray-600">Ausentes</p>
+              <p className="text-2xl font-bold text-gray-400">{data.weeklyStats?.studentsTransported ?? 0}</p>
+              <p className="text-xs text-gray-600">Transportados</p>
             </div>
           </div>
         </div>
@@ -118,7 +118,7 @@ export default function DashboardPage() {
           Viajes de Hoy
         </h2>
 
-        {data.todayTrips.length === 0 ? (
+        {!data.todayTrips || data.todayTrips.length === 0 ? (
           <EmptyState
             icon={Calendar}
             title="No hay viajes programados hoy"
@@ -139,13 +139,17 @@ export default function DashboardPage() {
       </section>
 
       {/* Weekly Stats */}
-      <WeeklyStats stats={data.weeklyStats} />
+      {data.weeklyStats && (
+        <WeeklyStats stats={data.weeklyStats} />
+      )}
 
       {/* Recent Notifications */}
-      <NotificationList
-        notifications={data.recentNotifications}
-        limit={3}
-      />
+      {data.recentNotifications && (
+        <NotificationList
+          notifications={data.recentNotifications}
+          limit={3}
+        />
+      )}
     </div>
   );
 }

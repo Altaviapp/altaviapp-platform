@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Home, Truck, QrCode, History, User, Settings, LogOut, Map, Users, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConvexAuth } from '@/hooks';
@@ -26,13 +26,6 @@ const allNavItems: NavItem[] = [
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 
-// Mock user for UI testing (fallback)
-const mockUser: { name: string; email: string; role: UserRole } = {
-  name: 'Carlos Pérez',
-  email: 'carlos@test.com',
-  role: 'driver',
-};
-
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
@@ -40,15 +33,13 @@ interface SidebarProps {
 
 export function Sidebar({ open = true, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
-  // Use real auth with fallback to mock for UI testing
-  const { user: authUser, isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor } = useConvexAuth();
+  // Use real auth - no more mock fallback
+  const { user, isDriver, isMonitor, logout } = useConvexAuth();
 
-  // Auth state - prefer real auth, fallback to mock for UI testing
-  const user = isAuthenticated && authUser ? authUser : mockUser;
+  // Get user role from authenticated user
   const userRole = (user as { role?: UserRole })?.role ?? 'driver';
-  const isDriver = isAuthenticated ? authIsDriver : userRole === 'driver';
-  const isMonitor = isAuthenticated ? authIsMonitor : userRole === 'monitor';
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
   const roleDisplayName = isDriver ? 'Conductor' : isMonitor ? 'Monitor' : 'Admin';
 
@@ -61,9 +52,14 @@ export function Sidebar({ open = true, onClose }: SidebarProps) {
     return item.roles.includes(userRole as 'driver' | 'monitor' | 'admin');
   });
 
-  const handleLogout = () => {
-    // Mock logout for UI testing
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/login');
+    } catch {
+      // On error, still redirect to login
+      router.push('/login');
+    }
   };
 
   // Get user initials

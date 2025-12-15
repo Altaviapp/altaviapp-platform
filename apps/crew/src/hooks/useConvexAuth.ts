@@ -17,6 +17,7 @@ export type ConvexAuthContext = {
   isDriver: boolean;
   isMonitor: boolean;
   user: ReturnType<typeof useAuth>["user"];
+  logout: () => Promise<void>;
 };
 
 export function useConvexAuth(): ConvexAuthContext {
@@ -30,5 +31,6 @@ export function useConvexAuth(): ConvexAuthContext {
     isDriver: auth.isDriver,
     isMonitor: auth.isMonitor,
     user: auth.user,
+    logout: auth.logout,
   };
 }

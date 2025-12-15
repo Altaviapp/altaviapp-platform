@@ -730,6 +730,83 @@ git pull origin main
 
 ---
 
+## Deployment (Vercel + Convex)
+
+### Infrastructure Overview
+
+| Service | Environment | URL |
+|---------|-------------|-----|
+| **Convex (Dev)** | Development | `https://abundant-mastiff-673.convex.cloud` |
+| **Convex (Prod)** | Production | `https://wooden-armadillo-937.convex.cloud` |
+| **Admin App** | Production | `https://altaviapp-admin.vercel.app` (or `admin.altaviapp.com`) |
+| **Crew App** | Production | `https://altaviapp-crew.vercel.app` (or `crew.altaviapp.com`) |
+| **Parent App** | Production | `https://altaviapp-parent.vercel.app` (or `padres.altaviapp.com`) |
+| **Email (Resend)** | Production | `noreply@altaviapp.com` |
+
+### Vercel Project Configuration
+
+Each app has its own Vercel project with these settings:
+
+| Setting | Value |
+|---------|-------|
+| **Framework** | Next.js |
+| **Root Directory** | `apps/{admin\|crew\|parent}` |
+| **Build Command** | `cd ../.. && pnpm build --filter=@altaviapp/{app}` |
+| **Install Command** | `cd ../.. && pnpm install` |
+
+### Environment Variables (Vercel)
+
+Required for all apps:
+```bash
+NEXT_PUBLIC_CONVEX_URL=https://wooden-armadillo-937.convex.cloud
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<your-key>
+NEXT_PUBLIC_APP_URL=https://{subdomain}.altaviapp.com
+```
+
+### Deployment Commands
+
+```bash
+# Deploy to Convex Production
+npx convex deploy --yes
+
+# Push to GitHub (triggers Vercel auto-deploy)
+git push origin main
+
+# Check Convex environment variables
+npx convex env list
+npx convex env set RESEND_API_KEY <key>
+```
+
+### CI/CD Flow
+
+1. **Local Development**: Test with `pnpm dev` and `npx convex dev`
+2. **Commit & Push**: `git push origin main`
+3. **Auto-Deploy**: Vercel detects push and rebuilds affected apps
+4. **Convex Deploy**: Run `npx convex deploy` for backend changes
+
+### DNS Configuration (Pending)
+
+Custom domains in Namecheap (CNAME records):
+```
+admin  → cname.vercel-dns.com
+crew   → cname.vercel-dns.com
+padres → cname.vercel-dns.com
+```
+
+### Common Deployment Issues
+
+**Build fails with missing env vars:**
+- Add `NEXT_PUBLIC_CONVEX_URL` to Vercel project settings
+
+**Security vulnerability warnings:**
+- Update Next.js: `"next": "^16.0.10"` or latest patched version
+- Run `pnpm install` and push
+
+**Convex changes not reflecting:**
+- Run `npx convex deploy --yes` to push backend changes
+
+---
+
 ## Additional Resources
 
 ### Core Documents
@@ -751,6 +828,9 @@ git pull origin main
 - [docs/modules/IMPLEMENTATION_ORDER.md](docs/modules/IMPLEMENTATION_ORDER.md) - Module dependencies
 - [docs/modules/MODULE_CHECKLIST.md](docs/modules/MODULE_CHECKLIST.md) - Per-module requirements
 - [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) - PR template
+
+### Deployment
+- [docs/deployment/VERCEL_DEPLOYMENT.md](docs/deployment/VERCEL_DEPLOYMENT.md) - Vercel + Convex deployment guide
 
 ---
 

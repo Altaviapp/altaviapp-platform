@@ -142,7 +142,7 @@ export function parseToken(token: string): string | null {
     if (parts.length !== 3) {
       return null;
     }
-    return parts[0];
+    return parts[0] ?? null;
   } catch {
     return null;
   }

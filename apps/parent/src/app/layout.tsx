@@ -1,16 +1,15 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import './globals.css';
+import { MapsProvider } from '@/components/providers/MapsProvider';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { ConvexClientProvider } from '@/providers/ConvexClientProvider';
-import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Altaviapp - Padres',
   description: 'Portal para padres de familia - Seguimiento de transporte escolar',
-  manifest: '/manifest.json',
-  themeColor: '#042940',
 };
 
 export default function RootLayout({
@@ -26,7 +25,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <ConvexClientProvider>
-            {children}
+            <MapsProvider>
+              {children}
+            </MapsProvider>
           </ConvexClientProvider>
         </AuthProvider>
       </body>

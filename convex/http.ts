@@ -233,6 +233,92 @@ http.route({
 });
 
 /**
+ * Resend invitation
+ * POST /invitations/resend
+ * Body: { userId, invitationId }
+ */
+http.route({
+  path: "/invitations/resend",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json();
+      const result = await ctx.runMutation(api.invitations.resendInvitation, body);
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    } catch (error: any) {
+      return new Response(JSON.stringify({ success: false, error: error.message }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    }
+  }),
+});
+
+// CORS preflight for invitation endpoints
+http.route({
+  path: "/invitations/create",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }),
+});
+
+http.route({
+  path: "/invitations/accept",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }),
+});
+
+http.route({
+  path: "/invitations/cancel",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }),
+});
+
+http.route({
+  path: "/invitations/resend",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }),
+});
+
+/**
  * EMAIL VERIFICATION ENDPOINTS
  */
 
@@ -867,6 +953,135 @@ http.route({
 });
 
 /**
+ * Register institution (signup flow)
+ * POST /auth/register-institution
+ *
+ * Body: { firstName, lastName, email, phone, password, institutionName, institutionType, institutionAddress, institutionCity, institutionPhone, plan }
+ */
+http.route({
+  path: "/auth/register-institution",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json();
+
+      const result = await ctx.runMutation(api.authApi.registerInstitution, {
+        firstName: body.firstName,
+        lastName: body.lastName,
+        email: body.email,
+        password: body.password,
+        institutionName: body.institutionName,
+        institutionType: body.institutionType,
+        institutionAddress: body.institutionAddress,
+        institutionCity: body.institutionCity,
+        plan: body.plan,
+      });
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    } catch (error: any) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error.message,
+        }),
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+  }),
+});
+
+// CORS preflight for register-institution
+http.route({
+  path: "/auth/register-institution",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }),
+});
+
+/**
+ * CORS PREFLIGHT FOR AUTH ENDPOINTS
+ */
+http.route({
+  path: "/auth/register",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }),
+});
+
+http.route({
+  path: "/auth/login",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }),
+});
+
+http.route({
+  path: "/auth/me",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }),
+});
+
+http.route({
+  path: "/auth/logout",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }),
+});
+
+/**
  * PASSWORD RESET ENDPOINTS
  */
 
@@ -1486,6 +1701,79 @@ http.route({
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
       });
     }
+  }),
+});
+
+/**
+ * External GPS Device Endpoint
+ * POST /gps/device
+ *
+ * Receives GPS data from external devices/APIs.
+ * Authentication via X-Institution-Token header or Bearer token.
+ *
+ * Body: { deviceId, latitude, longitude, speed?, heading?, timestamp? }
+ */
+http.route({
+  path: "/gps/device",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Get authentication token
+      const authHeader = request.headers.get("Authorization");
+      const institutionToken = request.headers.get("X-Institution-Token");
+
+      let token = "";
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      } else if (institutionToken) {
+        token = institutionToken;
+      } else {
+        throw new Error("No authentication token provided");
+      }
+
+      const body = await request.json();
+
+      // Validate required fields
+      if (!body.deviceId) throw new Error("Missing deviceId");
+      if (typeof body.latitude !== "number") throw new Error("Missing or invalid latitude");
+      if (typeof body.longitude !== "number") throw new Error("Missing or invalid longitude");
+
+      const result = await ctx.runMutation(api.gpsTracking.updateLocationFromDevice, {
+        institutionToken: token,
+        deviceId: body.deviceId,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        speed: body.speed,
+        heading: body.heading,
+        timestamp: body.timestamp,
+      });
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    } catch (error: any) {
+      return new Response(JSON.stringify({ success: false, error: error.message }), {
+        status: error.message.includes("authentication") ? 401 : 400,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    }
+  }),
+});
+
+// CORS preflight for GPS device endpoint
+http.route({
+  path: "/gps/device",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Institution-Token",
+      },
+    });
   }),
 });
 

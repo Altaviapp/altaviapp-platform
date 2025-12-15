@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Truck, QrCode, History, User, Map, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/hooks/useAuth';
+import { useConvexAuth } from '@/hooks';
+import type { UserRole } from '@/types';
 
 interface NavItem {
   icon: typeof Home;
@@ -26,17 +27,31 @@ const allNavItems: NavItem[] = [
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 
+// Mock user for UI testing (fallback)
+const mockUser: { name: string; email: string; role: UserRole } = {
+  name: 'Carlos Pérez',
+  email: 'carlos@test.com',
+  role: 'driver',
+};
+
 export function MobileNav() {
   const pathname = usePathname();
-  const { user, isAdmin } = useAuth();
+
+  // Use real auth with fallback to mock for UI testing
+  const { user: authUser, isAuthenticated } = useConvexAuth();
+
+  // Auth state - prefer real auth, fallback to mock for UI testing
+  const user = isAuthenticated && authUser ? authUser : mockUser;
+  const userRole = (user as { role?: UserRole })?.role ?? 'driver';
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
   // Filter nav items based on user role, limit to 5 items for mobile
   const navItems = allNavItems
     .filter((item) => {
       if (!item.roles) return true;
-      if (!user?.role) return false;
+      if (!userRole) return false;
       if (isAdmin) return true;
-      return item.roles.includes(user.role as 'driver' | 'monitor' | 'admin');
+      return item.roles.includes(userRole as 'driver' | 'monitor' | 'admin');
     })
     .slice(0, 5); // Max 5 items for mobile nav
 

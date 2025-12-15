@@ -2,11 +2,24 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { ArrowLeft, Navigation } from 'lucide-react';
 
 import { useActiveTrip } from '@/hooks/useActiveTrip';
-import { RouteMap } from '@/components/trip';
 import { formatDistance } from '@/lib/utils/tripCalculations';
+
+// Dynamic import of RouteMap to avoid SSR issues with Leaflet
+const RouteMap = dynamic(
+  () => import('@/components/trip').then(mod => mod.RouteMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-gray-600">Cargando mapa...</p>
+      </div>
+    )
+  }
+);
 
 /**
  * Full-Screen Map View Page

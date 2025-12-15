@@ -7,15 +7,28 @@ import { NotificationList } from '@/components/dashboard/NotificationList';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { AlertCircle, Calendar, Users, QrCode } from 'lucide-react';
+import { useConvexDashboard, useConvexAuth } from '@/hooks';
 import { useDashboardData } from '@/hooks/useDashboardData';
-import { useAuth } from '@/hooks/useAuth';
 import { getGreeting } from '@/lib/utils/dates';
 import { formatDate } from '@/lib/utils/dates';
 import Link from 'next/link';
 
 export default function DashboardPage() {
-  const { data, loading, error } = useDashboardData();
-  const { user, isDriver, isMonitor, roleDisplayName } = useAuth();
+  // Try to use Convex auth first
+  const { user: authUser, isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor, isLoading: authLoading } = useConvexAuth();
+
+  // Use Convex data when authenticated, mock data otherwise
+  const convexDashboard = useConvexDashboard();
+  const mockDashboard = useDashboardData();
+
+  // Use Convex data if authenticated, fallback to mock for UI testing
+  const { data, loading, error } = isAuthenticated ? convexDashboard : mockDashboard;
+
+  // Auth state - prefer real auth, fallback to data for UI testing
+  const user = authUser ?? data?.driver ?? { name: 'Usuario', email: '', role: 'driver' as const };
+  const isDriver = isAuthenticated ? authIsDriver : (data?.driver?.role === 'driver');
+  const isMonitor = isAuthenticated ? authIsMonitor : (data?.driver?.role === 'monitor');
+  const roleDisplayName = isDriver ? 'Conductor' : isMonitor ? 'Monitor' : 'Admin';
 
   // Loading state
   if (loading) {

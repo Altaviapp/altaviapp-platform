@@ -1,27 +1,14 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { AuthProvider } from '@/providers/AuthProvider';
-import { ConvexClientProvider } from '@/providers/ConvexClientProvider';
 import './globals.css';
+import { ConvexClientProvider } from '@/providers/ConvexClientProvider';
+import { AuthProvider } from '@/providers/AuthProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Altaviapp - Conductor',
-  description: 'Aplicación para conductores de transporte escolar',
-  manifest: '/manifest.json',
-  themeColor: '#000000',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'Altaviapp',
-  },
+  title: 'Altaviapp - Crew',
+  description: 'Aplicación para conductores y monitores de transporte escolar',
 };
 
 export default function RootLayout({

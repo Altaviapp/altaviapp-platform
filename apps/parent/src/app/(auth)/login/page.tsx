@@ -1,114 +1,195 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useAuth } from "@/providers/AuthProvider";
-import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { GraduationCap, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { useAuth } from '@/providers/AuthProvider';
+
+const loginSchema = z.object({
+  email: z.string().email('Email invalido'),
+  password: z.string().min(6, 'Minimo 6 caracteres'),
+  rememberMe: z.boolean().optional(),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+      rememberMe: false,
+    },
+  });
+
+  const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
+    setLoginError('');
 
-    try {
-      await login(email, password);
-      router.push("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión");
-    } finally {
-      setIsLoading(false);
+    const result = await login(data.email, data.password);
+
+    if (result.success) {
+      if (result.requiresEmailVerification) {
+        router.push('/verify-email');
+        return;
+      }
+      router.push('/dashboard');
+    } else {
+      setLoginError(result.error || 'Error al iniciar sesion');
     }
+
+    setIsLoading(false);
   };
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-center text-gray-900 mb-6">
-        Iniciar Sesión
-      </h2>
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Email
-          </label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
-              placeholder="tu@email.com"
-              required
-            />
+    <div className="w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+        {/* Card Header */}
+      <div className="px-8 pt-8 pb-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
+              <GraduationCap className="w-6 h-6 text-primary" />
+            </div>
+            <span className="font-bold text-xl text-primary">Altaviapp</span>
           </div>
-        </div>
-
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-            Contraseña
-          </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
-              placeholder="••••••••"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full py-2 px-4 bg-primary text-white rounded-md hover:bg-primary-600 focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="animate-spin h-5 w-5 mr-2" />
-              Iniciando...
-            </>
-          ) : (
-            "Iniciar Sesión"
-          )}
-        </button>
-      </form>
-
-      <div className="mt-6 text-center">
-        <p className="text-sm text-gray-600">
-          ¿Tienes código de invitación?{" "}
-          <Link href="/invitation" className="text-primary hover:underline font-medium">
-            Ingresar código
+          <Link
+            href="/"
+            className="text-sm text-gray-500 hover:text-primary flex items-center gap-1"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Inicio
           </Link>
-        </p>
+        </div>
+
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Iniciar Sesion</h2>
+        <p className="text-gray-500 text-sm">Accede a tu cuenta de padre/tutor</p>
+      </div>
+
+      {/* Form */}
+      <div className="px-8 pb-8">
+        {/* Error Alert */}
+        {loginError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {loginError}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                {...register('email')}
+                type="email"
+                autoComplete="email"
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-gray-50 focus:bg-white"
+                placeholder="tu@email.com"
+              />
+            </div>
+            {errors.email && (
+              <p className="mt-2 text-sm text-red-500">{errors.email.message}</p>
+            )}
+          </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Contrasena
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                {...register('password')}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                className="w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-gray-50 focus:bg-white"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+            {errors.password && (
+              <p className="mt-2 text-sm text-red-500">{errors.password.message}</p>
+            )}
+          </div>
+
+          {/* Remember Me & Forgot Password */}
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                {...register('rememberMe')}
+                type="checkbox"
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <span className="text-sm text-gray-600">Recordarme</span>
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-sm text-primary hover:underline"
+            >
+              Olvide mi contrasena
+            </Link>
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-white font-semibold py-3.5 px-4 rounded-xl transition-colors"
+          >
+            {isLoading ? 'Iniciando sesion...' : 'Iniciar Sesion'}
+          </button>
+        </form>
+
+        {/* Divider */}
+        <div className="relative my-8">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-white text-gray-500">o</span>
+          </div>
+        </div>
+
+        {/* Invitation Code */}
+        <div className="text-center">
+          <p className="text-sm text-gray-600 mb-3">
+            Tienes un codigo de invitacion?
+          </p>
+          <Link
+            href="/signup-invitation"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+          >
+            Ingresar codigo
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
       </div>
     </div>
   );

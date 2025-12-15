@@ -1,0 +1,32 @@
+"use client";
+
+/**
+ * Hook to get auth context with Convex-compatible IDs
+ *
+ * Provides userId and institutionId as typed IDs for Convex queries
+ */
+
+import { useAuth } from "@altaviapp/auth";
+import { Id } from "../../../../convex/_generated/dataModel";
+
+export type ConvexAuthContext = {
+  userId: Id<"users"> | null;
+  institutionId: Id<"institutions"> | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  isAdmin: boolean;
+  user: ReturnType<typeof useAuth>["user"];
+};
+
+export function useConvexAuth(): ConvexAuthContext {
+  const auth = useAuth();
+
+  return {
+    userId: auth.user?.id as Id<"users"> | null,
+    institutionId: auth.user?.institutionId as Id<"institutions"> | null,
+    isAuthenticated: auth.isAuthenticated,
+    isLoading: auth.isLoading,
+    isAdmin: auth.isAdmin,
+    user: auth.user,
+  };
+}

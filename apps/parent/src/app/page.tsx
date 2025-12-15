@@ -2,21 +2,14 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/providers/AuthProvider";
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (user) {
-        router.push("/dashboard");
-      } else {
-        router.push("/login");
-      }
-    }
-  }, [user, isLoading, router]);
+    // Skip auth for UI testing - go directly to dashboard
+    router.push("/dashboard");
+  }, [router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-primary">

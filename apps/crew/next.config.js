@@ -20,6 +20,14 @@ const nextConfig = {
         protocol: 'http',
         hostname: 'localhost',
       },
+      {
+        protocol: 'https',
+        hostname: '*.altaviapp.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'altaviapp.com',
+      },
     ],
     formats: ['image/avif', 'image/webp'],
   },

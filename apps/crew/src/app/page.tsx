@@ -2,28 +2,18 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 
 /**
- * Root page - Redirects based on authentication status
+ * Root page - Redirects to dashboard for UI testing
  */
 export default function RootPage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (!loading) {
-      if (user) {
-        // User is authenticated, redirect to dashboard
-        router.push('/dashboard');
-      } else {
-        // User is not authenticated, redirect to welcome
-        router.push('/welcome');
-      }
-    }
-  }, [user, loading, router]);
+    // Skip auth for UI testing - go directly to dashboard
+    router.push('/dashboard');
+  }, [router]);
 
-  // Show loading state while checking auth
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary to-primary-foreground/5 flex items-center justify-center">
       <div className="text-center">

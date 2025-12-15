@@ -1,167 +1,99 @@
-"use client";
+'use client';
 
-import { useAuth } from "@/providers/AuthProvider";
-import {
-  MapPin,
-  Clock,
-  CheckCircle,
-  Bus,
-  GraduationCap,
-  ChevronRight,
-} from "lucide-react";
-import Link from "next/link";
+import { useMemo } from 'react';
+import { Calendar, Users, Loader2, GraduationCap } from 'lucide-react';
+import { StudentCard } from '@/components/dashboard/StudentCard';
+import { ActivityList } from '@/components/dashboard/ActivityList';
+import { QuickActions } from '@/components/dashboard/QuickActions';
+import { getGreeting, formatDate } from '@/lib/utils';
+import { useMyStudents, useConvexAuth } from '@/hooks';
 
-const students = [
-  {
-    id: 1,
-    name: "María García",
-    grade: "5to Grado",
-    photo: null,
-    status: "in_transit",
-    route: "Ruta AM-01",
-    nextStop: "Av. República",
-    eta: "8:15 AM",
-  },
-  {
-    id: 2,
-    name: "Carlos García",
-    grade: "3ro Grado",
-    photo: null,
-    status: "at_school",
-    route: "Ruta AM-01",
-    nextStop: null,
-    eta: null,
-  },
-];
-
+// Mock activity data (would come from check-ins API in full implementation)
 const recentActivity = [
-  { id: 1, student: "María García", action: "Subió al bus", time: "7:45 AM", type: "pickup" },
-  { id: 2, student: "Carlos García", action: "Llegó a la escuela", time: "8:05 AM", type: "dropoff" },
-  { id: 3, student: "María García", action: "Próxima parada: Av. República", time: "8:10 AM", type: "eta" },
+  { id: 1, student: 'Estudiante', action: 'Sin actividad reciente', time: '-', type: 'notification' as const },
 ];
+
+// Helper to determine student status based on time of day
+function getStudentStatus(): 'at_home' | 'in_transit' | 'at_school' {
+  // Check time of day for school/home status
+  const hour = new Date().getHours();
+  if (hour >= 8 && hour <= 15) return 'at_school';
+  return 'at_home';
+}
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useConvexAuth();
+  const { students: rawStudents, isLoading: studentsLoading, isEmpty } = useMyStudents();
+
+  // Transform students to card format
+  const students = useMemo(() => {
+    const status = getStudentStatus();
+    return rawStudents.map((student) => ({
+      id: student._id, // Use real Convex ID for novedad links
+      name: `${student.firstName} ${student.lastName}`,
+      grade: student.grade || 'Sin grado',
+      photo: null,
+      status,
+      route: undefined,
+      nextStop: null,
+      eta: null,
+    }));
+  }, [rawStudents]);
+
+  const isLoading = authLoading || studentsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-gray-500">Cargando información...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Welcome */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <h1 className="text-xl font-bold text-gray-900">
-          Hola, {user?.name?.split(" ")[0]}
+      {/* Greeting Header */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h1 className="text-2xl font-semibold text-gray-900">
+          {getGreeting()}, {user?.name?.split(' ')[0] ?? 'Padre'}
         </h1>
-        <p className="text-gray-500 text-sm">
-          Seguimiento de tus hijos en tiempo real
+        <p className="text-sm text-gray-600 flex items-center gap-2 mt-1">
+          <Calendar className="w-4 h-4" />
+          {formatDate(new Date())}
         </p>
       </div>
 
-      {/* Students */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Mis Hijos</h2>
-        <div className="space-y-3">
-          {students.map((student) => (
-            <Link
-              key={student.id}
-              href={`/tracking?student=${student.id}`}
-              className="block bg-white rounded-lg shadow p-4"
-            >
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
-                  <GraduationCap className="h-6 w-6 text-primary" />
-                </div>
-                <div className="ml-4 flex-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">{student.name}</p>
-                      <p className="text-sm text-gray-500">{student.grade}</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-gray-400" />
-                  </div>
-                </div>
-              </div>
-
-              {student.status === "in_transit" && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center text-blue-700">
-                    <Bus className="h-5 w-5 mr-2" />
-                    <span className="text-sm font-medium">En camino</span>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-sm">
-                    <div className="flex items-center text-gray-600">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {student.nextStop}
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <Clock className="h-4 w-4 mr-1" />
-                      ETA: {student.eta}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {student.status === "at_school" && (
-                <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                  <div className="flex items-center text-green-700">
-                    <CheckCircle className="h-5 w-5 mr-2" />
-                    <span className="text-sm font-medium">En la escuela</span>
-                  </div>
-                </div>
-              )}
-            </Link>
-          ))}
-        </div>
-      </div>
+      {/* Students Section */}
+      <section>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Users className="w-5 h-5 text-primary" />
+          Mis Hijos
+        </h2>
+        {isEmpty ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+            <GraduationCap className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Sin estudiantes registrados</h3>
+            <p className="text-gray-500">
+              No tienes estudiantes asociados a tu cuenta. Contacta a la institución para más información.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {students.map((student) => (
+              <StudentCard key={student.id} student={student} />
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Recent Activity */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Actividad Reciente</h2>
-        <div className="bg-white rounded-lg shadow divide-y divide-gray-100">
-          {recentActivity.map((activity) => (
-            <div key={activity.id} className="p-4 flex items-center">
-              <div
-                className={`p-2 rounded-full ${
-                  activity.type === "pickup"
-                    ? "bg-blue-100"
-                    : activity.type === "dropoff"
-                    ? "bg-green-100"
-                    : "bg-yellow-100"
-                }`}
-              >
-                {activity.type === "pickup" ? (
-                  <Bus className="h-4 w-4 text-blue-600" />
-                ) : activity.type === "dropoff" ? (
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                ) : (
-                  <Clock className="h-4 w-4 text-yellow-600" />
-                )}
-              </div>
-              <div className="ml-3 flex-1">
-                <p className="text-sm font-medium text-gray-900">{activity.student}</p>
-                <p className="text-sm text-gray-500">{activity.action}</p>
-              </div>
-              <span className="text-xs text-gray-400">{activity.time}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ActivityList activities={recentActivity} limit={5} />
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          href="/tracking"
-          className="bg-primary text-white rounded-lg p-4 flex flex-col items-center"
-        >
-          <MapPin className="h-8 w-8 mb-2" />
-          <span className="font-medium">Ver en Mapa</span>
-        </Link>
-        <Link
-          href="/history"
-          className="bg-white border border-gray-200 rounded-lg p-4 flex flex-col items-center"
-        >
-          <Clock className="h-8 w-8 mb-2 text-gray-600" />
-          <span className="font-medium text-gray-900">Historial</span>
-        </Link>
-      </div>
+      <QuickActions />
     </div>
   );
 }

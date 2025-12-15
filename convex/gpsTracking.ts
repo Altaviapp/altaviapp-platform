@@ -49,6 +49,7 @@ export const updateLocation = mutation({
       speed: args.speed,
       heading: args.heading,
       timestamp: now,
+      source: "mobile", // GPS from crew member's mobile device
     });
 
     // Check geofences for nearby stops
@@ -242,6 +243,148 @@ export const subscribeToLocation = query({
         scheduledTime: s.scheduledTime,
         order: s.order,
       })),
+    };
+  },
+});
+
+/**
+ * Update GPS location from external device
+ * Used by external GPS devices/APIs via HTTP endpoint
+ */
+export const updateLocationFromDevice = mutation({
+  args: {
+    institutionToken: v.string(),
+    deviceId: v.string(),
+    latitude: v.number(),
+    longitude: v.number(),
+    speed: v.optional(v.number()),
+    heading: v.optional(v.number()),
+    timestamp: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    // 1. Verify institution by API token
+    const institution = await ctx.db
+      .query("institutions")
+      .withIndex("by_api_token", (q) => q.eq("apiToken", args.institutionToken))
+      .first();
+
+    if (!institution) {
+      throw new Error("Token de institución inválido");
+    }
+
+    if (!institution.isActive) {
+      throw new Error("La institución está inactiva");
+    }
+
+    // 2. Find vehicle by deviceId in this institution
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_institution", (q) => q.eq("institutionId", institution._id))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    const vehicle = vehicles.find(
+      (v) => v.gpsDeviceConfig?.deviceId === args.deviceId
+    );
+
+    if (!vehicle) {
+      throw new Error(`Dispositivo GPS no encontrado: ${args.deviceId}`);
+    }
+
+    // 3. Find active trip for this vehicle
+    const activeTrips = await ctx.db
+      .query("trips")
+      .withIndex("by_date", (q) => q.eq("scheduledDate", new Date().toISOString().split("T")[0]!))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("vehicleId"), vehicle._id),
+          q.eq(q.field("status"), "in_progress")
+        )
+      )
+      .collect();
+
+    if (activeTrips.length === 0) {
+      // No active trip - just acknowledge receipt
+      return {
+        success: true,
+        message: "GPS recibido, pero no hay viaje activo",
+        recorded: false,
+      };
+    }
+
+    const trip = activeTrips[0]!;
+    const now = args.timestamp || Date.now();
+
+    // 4. Insert GPS tracking record
+    await ctx.db.insert("gpsTracking", {
+      tripId: trip._id,
+      latitude: args.latitude,
+      longitude: args.longitude,
+      speed: args.speed,
+      heading: args.heading,
+      timestamp: now,
+      source: "device",
+      deviceId: args.deviceId,
+    });
+
+    // 5. Check geofences for nearby stops
+    const route = await ctx.db.get(trip.routeId);
+    const stops = route
+      ? await ctx.db
+          .query("routeStops")
+          .withIndex("by_route", (q) => q.eq("routeId", route._id))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect()
+      : [];
+
+    const alerts = [];
+    for (const stop of stops) {
+      const distance = calculateDistance(
+        args.latitude,
+        args.longitude,
+        stop.latitude,
+        stop.longitude
+      );
+      if (distance <= stop.geofenceRadius) {
+        alerts.push({
+          stopId: stop._id,
+          stopName: stop.name,
+          message: "Vehículo llegó a la parada",
+        });
+      }
+    }
+
+    return {
+      success: true,
+      recorded: true,
+      tripId: trip._id,
+      geofenceAlerts: alerts,
+    };
+  },
+});
+
+/**
+ * Get last GPS update time for a trip (used for fallback detection)
+ */
+export const getLastGpsUpdate = query({
+  args: {
+    tripId: v.id("trips"),
+  },
+  handler: async (ctx, args) => {
+    const latestGps = await ctx.db
+      .query("gpsTracking")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .order("desc")
+      .first();
+
+    if (!latestGps) {
+      return null;
+    }
+
+    return {
+      timestamp: latestGps.timestamp,
+      source: latestGps.source || "mobile",
+      deviceId: latestGps.deviceId,
     };
   },
 });

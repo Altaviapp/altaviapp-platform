@@ -15,7 +15,7 @@
  */
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
-import type { AuthUser, AuthContextType, LoginResult, UserRole } from "./types";
+import type { AuthUser, AuthContextType, LoginResult, UserRole, RegisterInstitutionData, RegisterResult } from "./types";
 import { hasMinimumRole } from "./types";
 
 // ============================================
@@ -428,6 +428,50 @@ export function AuthProvider({
   }, [API_BASE_URL, saveToken, refreshSession]);
 
   // ============================================
+  // INSTITUTION REGISTRATION (Signup Flow)
+  // ============================================
+
+  const registerInstitution = useCallback(async (
+    data: RegisterInstitutionData
+  ): Promise<RegisterResult> => {
+    try {
+      const response = await apiRequest<{
+        success: boolean;
+        token?: string;
+        userId?: string;
+        institutionId?: string;
+        clientId?: string;
+        user?: AuthUser;
+        error?: string;
+      }>(API_BASE_URL, "/auth/register-institution", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+
+      if (response.success && response.token) {
+        // Auto-login after registration
+        saveToken(response.token);
+        await refreshSession();
+        return {
+          success: true,
+          userId: response.userId,
+          institutionId: response.institutionId,
+          clientId: response.clientId,
+          requiresEmailVerification: true,
+        };
+      } else {
+        return {
+          success: false,
+          error: response.error || "Error al registrar institución"
+        };
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error de conexión";
+      return { success: false, error: message };
+    }
+  }, [API_BASE_URL, saveToken, refreshSession]);
+
+  // ============================================
   // ROLE HELPERS
   // ============================================
 
@@ -473,6 +517,9 @@ export function AuthProvider({
         // Invitation flow
         verifyInvitationCode,
         acceptInvitation,
+
+        // Institution registration (signup flow)
+        registerInstitution,
 
         // Role helpers
         isDriver,

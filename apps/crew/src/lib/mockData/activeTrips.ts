@@ -262,6 +262,8 @@ export function clearAllActiveTrips(): void {
  * @param tripId - Trip ID
  */
 export function saveActiveTripToStorage(tripId: string): void {
+  if (typeof window === 'undefined') return;
+
   const activeTrip = activeTripStore.get(tripId);
   if (!activeTrip) return;
 
@@ -282,6 +284,8 @@ export function saveActiveTripToStorage(tripId: string): void {
  * @returns Loaded active trip state or null
  */
 export function loadActiveTripFromStorage(tripId: string): ActiveTripState | null {
+  if (typeof window === 'undefined') return null;
+
   try {
     const stored = localStorage.getItem(`activeTrip_${tripId}`);
     if (!stored) return null;
@@ -302,6 +306,8 @@ export function loadActiveTripFromStorage(tripId: string): ActiveTripState | nul
  * @param tripId - Trip ID
  */
 export function removeActiveTripFromStorage(tripId: string): void {
+  if (typeof window === 'undefined') return;
+
   try {
     localStorage.removeItem(`activeTrip_${tripId}`);
   } catch (error) {

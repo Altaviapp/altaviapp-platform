@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Truck, QrCode, History, User, Settings, LogOut, Map, Users, ClipboardCheck, AlertTriangle } from 'lucide-react';
+import { Home, Truck, QrCode, History, User, Settings, LogOut, Map, Users, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/hooks/useAuth';
+import { useConvexAuth } from '@/hooks';
+import type { UserRole } from '@/types';
 
 interface NavItem {
   icon: typeof Home;
@@ -25,6 +26,13 @@ const allNavItems: NavItem[] = [
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 
+// Mock user for UI testing (fallback)
+const mockUser: { name: string; email: string; role: UserRole } = {
+  name: 'Carlos Pérez',
+  email: 'carlos@test.com',
+  role: 'driver',
+};
+
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
@@ -32,19 +40,29 @@ interface SidebarProps {
 
 export function Sidebar({ open = true, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { user, logout, isDriver, isMonitor, isAdmin, roleDisplayName } = useAuth();
+
+  // Use real auth with fallback to mock for UI testing
+  const { user: authUser, isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor } = useConvexAuth();
+
+  // Auth state - prefer real auth, fallback to mock for UI testing
+  const user = isAuthenticated && authUser ? authUser : mockUser;
+  const userRole = (user as { role?: UserRole })?.role ?? 'driver';
+  const isDriver = isAuthenticated ? authIsDriver : userRole === 'driver';
+  const isMonitor = isAuthenticated ? authIsMonitor : userRole === 'monitor';
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+  const roleDisplayName = isDriver ? 'Conductor' : isMonitor ? 'Monitor' : 'Admin';
 
   // Filter nav items based on user role
   const navItems = allNavItems.filter((item) => {
     if (!item.roles) return true; // Show for all roles
-    if (!user?.role) return false;
+    if (!userRole) return false;
     // Admin can see everything, others only see their allowed items
     if (isAdmin) return true;
-    return item.roles.includes(user.role as 'driver' | 'monitor' | 'admin');
+    return item.roles.includes(userRole as 'driver' | 'monitor' | 'admin');
   });
 
   const handleLogout = () => {
-    logout();
+    // Mock logout for UI testing
     window.location.href = '/login';
   };
 

@@ -14,6 +14,7 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
   generateInvitationCode,
@@ -130,13 +131,13 @@ export const createInvitation = mutation({
       updatedAt: now,
     });
 
-    // Generate email HTML
-    const emailContent = generateInvitationEmail({
+    // Schedule invitation email to be sent via Resend
+    await ctx.scheduler.runAfter(0, api.email.sendInvitationEmail, {
+      to: args.email.toLowerCase(),
       firstName: args.firstName || "Usuario",
       invitationCode,
       role: args.role,
       institutionName: institution.name,
-      invitedBy: currentUser.name || "Administrador",
     });
 
     return {
@@ -144,9 +145,7 @@ export const createInvitation = mutation({
       invitationId,
       invitationCode,
       email: args.email,
-      emailHtml: emailContent.html,
-      emailText: emailContent.text,
-      emailSubject: emailContent.subject,
+      emailSent: true,
     };
   },
 });
@@ -250,22 +249,20 @@ export const createBulkInvitations = mutation({
           updatedAt: now,
         });
 
-        // Generate email
-        const emailContent = generateInvitationEmail({
+        // Schedule invitation email to be sent via Resend
+        await ctx.scheduler.runAfter(0, api.email.sendInvitationEmail, {
+          to: inv.email.toLowerCase(),
           firstName: inv.firstName || "Usuario",
           invitationCode,
           role: inv.role,
           institutionName: institution.name,
-          invitedBy: currentUser.name || "Administrador",
         });
 
         results.push({
           invitationId,
           email: inv.email,
           invitationCode,
-          emailHtml: emailContent.html,
-          emailText: emailContent.text,
-          emailSubject: emailContent.subject,
+          emailSent: true,
         });
       } catch (error: any) {
         errors.push({ email: inv.email, error: error.message });
@@ -463,20 +460,18 @@ export const acceptInvitation = mutation({
       updatedAt: now,
     });
 
-    // Generate verification email
-    const emailContent = generateEmailVerificationEmail({
+    // Schedule verification email to be sent via Resend
+    await ctx.scheduler.runAfter(0, api.email.sendVerificationEmail, {
+      to: invitation.email,
       firstName: invitation.firstName || "Usuario",
-      verificationToken: emailVerificationToken,
+      verificationCode: emailVerificationToken,
     });
 
     return {
       success: true,
       userId,
       token: sessionToken,
-      emailVerificationToken,
-      emailHtml: emailContent.html,
-      emailText: emailContent.text,
-      emailSubject: emailContent.subject,
+      emailSent: true,
       user: {
         email: invitation.email,
         name: `${invitation.firstName || ""} ${invitation.lastName || ""}`.trim(),
@@ -564,6 +559,92 @@ export const cancelInvitation = mutation({
     return {
       success: true,
       message: "Invitación cancelada exitosamente",
+    };
+  },
+});
+
+/**
+ * Resend invitation email
+ * Generates new code if expired, keeps same code if still valid
+ */
+export const resendInvitation = mutation({
+  args: {
+    userId: v.id("users"), // Current user (from Bubble backend_user_id)
+    invitationId: v.id("invitations"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is admin or super_admin
+    const currentUser = await verifyRole(ctx, args.userId, "admin");
+
+    const invitation = await ctx.db.get(args.invitationId);
+    if (!invitation) {
+      throw new Error("Invitación no encontrada");
+    }
+
+    // Verify user has access to this institution
+    await verifyInstitutionAccess(ctx, args.userId, invitation.institutionId);
+
+    if (invitation.status !== "pending") {
+      throw new Error("Solo se pueden reenviar invitaciones pendientes");
+    }
+
+    // Get institution for email
+    const institution = await ctx.db.get(invitation.institutionId);
+    if (!institution) {
+      throw new Error("Institución no encontrada");
+    }
+
+    // Check if code is expired - generate new one if so
+    let invitationCode = invitation.invitationCode;
+    const now = Date.now();
+
+    if (isTokenExpired(invitation.codeExpiresAt)) {
+      // Generate new unique code
+      invitationCode = generateInvitationCode();
+      let attempts = 0;
+      while (attempts < 10) {
+        const existingCode = await ctx.db
+          .query("invitations")
+          .withIndex("by_code", (q) => q.eq("invitationCode", invitationCode))
+          .first();
+
+        if (!existingCode) break;
+        invitationCode = generateInvitationCode();
+        attempts++;
+      }
+
+      if (attempts >= 10) {
+        throw new Error("No se pudo generar un código único. Intenta de nuevo.");
+      }
+
+      // Update invitation with new code
+      await ctx.db.patch(args.invitationId, {
+        invitationCode,
+        codeExpiresAt: getTokenExpiration(168), // 7 days
+        updatedAt: now,
+      });
+    } else {
+      // Just update the timestamp
+      await ctx.db.patch(args.invitationId, {
+        updatedAt: now,
+      });
+    }
+
+    // Schedule invitation email to be sent via Resend
+    await ctx.scheduler.runAfter(0, api.email.sendInvitationEmail, {
+      to: invitation.email,
+      firstName: invitation.firstName || "Usuario",
+      invitationCode,
+      role: invitation.role,
+      institutionName: institution.name,
+    });
+
+    return {
+      success: true,
+      invitationId: args.invitationId,
+      invitationCode,
+      email: invitation.email,
+      emailSent: true,
     };
   },
 });

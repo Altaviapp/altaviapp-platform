@@ -11,6 +11,7 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { api } from "./_generated/api";
 import {
   generateEmailVerificationToken,
   getTokenExpiration,
@@ -110,19 +111,16 @@ export const resendVerificationEmail = mutation({
       updatedAt: Date.now(),
     });
 
-    // Generate email HTML
-    const emailContent = generateEmailVerificationEmail({
+    // Schedule verification email to be sent via Resend
+    await ctx.scheduler.runAfter(0, api.email.sendVerificationEmail, {
+      to: user.email,
       firstName: user.firstName || user.name || "Usuario",
-      verificationToken: emailVerificationToken,
+      verificationCode: emailVerificationToken,
     });
 
     return {
       success: true,
-      token: emailVerificationToken,
-      email: user.email,
-      emailHtml: emailContent.html,
-      emailText: emailContent.text,
-      emailSubject: `${emailContent.subject} (Reenvío)`,
+      emailSent: true,
     };
   },
 });

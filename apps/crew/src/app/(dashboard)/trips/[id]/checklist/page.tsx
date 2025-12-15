@@ -5,8 +5,7 @@ import { useState, useEffect } from 'react';
 import { Wrench, Lightbulb, Shield, Sparkles, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
-import { useChecklistState } from '@/hooks/useChecklistState';
-import { useAuth } from '@/hooks/useAuth';
+import { useChecklistState, useConvexAuth } from '@/hooks';
 import {
   ChecklistProgress,
   ChecklistCategory,
@@ -25,7 +24,12 @@ export default function ChecklistPage() {
   const params = useParams();
   const router = useRouter();
   const tripId = (params?.id as string) || '';
-  const { canAccessChecklist, isMonitor, loading: authLoading } = useAuth();
+
+  // Use real auth with fallback for UI testing
+  const { isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor, isLoading: authLoading } = useConvexAuth();
+  const isDriver = isAuthenticated ? authIsDriver : true; // Default to driver for UI testing
+  const isMonitor = isAuthenticated ? authIsMonitor : false;
+  const canAccessChecklist = isDriver; // Only drivers can access checklist
 
   // Redirect monitors away from checklist - they don't do vehicle inspection
   useEffect(() => {

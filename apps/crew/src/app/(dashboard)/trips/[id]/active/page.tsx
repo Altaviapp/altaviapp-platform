@@ -1,20 +1,21 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { ArrowLeft, X, QrCode, Users } from 'lucide-react';
+import { useEffect, useCallback, useState } from 'react';
+import { ArrowLeft, X, QrCode, Users, Bus } from 'lucide-react';
 import Link from 'next/link';
 
-import { useActiveTrip } from '@/hooks/useActiveTrip';
-import { useAuth } from '@/hooks/useAuth';
+import { useActiveTrip, useConvexAuth, useGPSTracking } from '@/hooks';
+import type { GeofenceAlert, GPSSourceType } from '@/hooks';
 import { mockTodayTrips, mockStudents } from '@/lib/mockData';
-import {
-  TripHeader,
-  TripProgress,
-  GPSStatus,
-  NextStopCard,
-  QuickActions,
-} from '@/components/trip';
+// Import components directly to avoid loading RouteMap (Leaflet) during SSR
+import { TripHeader } from '@/components/trip/TripHeader';
+import { TripProgress } from '@/components/trip/TripProgress';
+import { GPSStatus } from '@/components/trip/GPSStatus';
+import { NextStopCard } from '@/components/trip/NextStopCard';
+import { QuickActions } from '@/components/trip/QuickActions';
+import { RelayModeModal } from '@/components/trip/RelayModeModal';
+import { Id } from '../../../../../../../../convex/_generated/dataModel';
 
 /**
  * Active Trip Page
@@ -28,19 +29,56 @@ export default function ActiveTripPage() {
   const params = useParams();
   const router = useRouter();
   const tripId = (params?.id as string) || '';
-  const {
-    isDriver,
-    isMonitor,
-    canControlTrip,
-    getCanPerformCheckin,
-    canReportIncident,
-    roleDisplayName
-  } = useAuth();
+
+  // Relay Mode state
+  const [isRelayModalOpen, setIsRelayModalOpen] = useState(false);
+  const [currentVehiclePlate, setCurrentVehiclePlate] = useState('');
+  const [gpsSourceType, setGpsSourceType] = useState<GPSSourceType>('mobile');
+
+  // Use real auth with fallback for UI testing
+  const { isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor } = useConvexAuth();
+  const isDriver = isAuthenticated ? authIsDriver : true; // Default to driver for UI testing
+  const isMonitor = isAuthenticated ? authIsMonitor : false;
+  const canControlTrip = isDriver; // Drivers can control trips
+  const canReportIncident = isMonitor; // Only monitors report incidents
+  const getCanPerformCheckin = (tripMonitorId: string | null) => {
+    if (isMonitor) return true; // Monitors can always check-in
+    if (isDriver && !tripMonitorId) return true; // Drivers only if no monitor
+    return false;
+  };
 
   // Check if user can perform check-in for this trip (monitors always, drivers only if no monitor)
   // TODO: Get actual trip.monitorId from backend
   const tripMonitorId = null; // For now, assume no monitor assigned (driver can check-in)
   const canCheckin = getCanPerformCheckin(tripMonitorId);
+
+  // Handle geofence alerts from GPS tracking
+  const handleGeofenceAlert = useCallback((alerts: GeofenceAlert[]) => {
+    // Show notification for each geofence alert
+    alerts.forEach((alert) => {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Alerta de Parada', {
+          body: alert.message,
+          icon: '/icons/icon-192x192.png',
+        });
+      }
+    });
+  }, []);
+
+  // GPS Tracking - only for drivers
+  const {
+    position: gpsPosition,
+    isTracking: gpsIsTracking,
+    error: gpsError,
+    permissionStatus: gpsPermission,
+    startTracking: startGPSTracking,
+    stopTracking: stopGPSTracking,
+    requestPermission: requestGPSPermission,
+    geofenceAlerts,
+  } = useGPSTracking({
+    highAccuracy: true,
+    onGeofenceAlert: handleGeofenceAlert,
+  });
 
   // Active trip state management
   const {
@@ -73,9 +111,38 @@ export default function ActiveTripPage() {
     }
   }, [isLoading, isActive, tripId, startTrip]);
 
+  // Start GPS tracking when trip is active (for drivers only)
+  useEffect(() => {
+    if (isActive && isDriver && tripId && !gpsIsTracking) {
+      // Request permission first if needed
+      if (gpsPermission === 'prompt' || gpsPermission === 'unknown') {
+        requestGPSPermission().then((granted) => {
+          if (granted) {
+            startGPSTracking(tripId as any); // Cast needed for Convex Id type
+          }
+        });
+      } else if (gpsPermission === 'granted') {
+        startGPSTracking(tripId as any);
+      }
+    }
+  }, [isActive, isDriver, tripId, gpsIsTracking, gpsPermission, requestGPSPermission, startGPSTracking]);
+
+  // Cleanup GPS tracking on unmount
+  useEffect(() => {
+    return () => {
+      if (gpsIsTracking) {
+        stopGPSTracking();
+      }
+    };
+  }, [gpsIsTracking, stopGPSTracking]);
+
   // Handle finish trip
   const handleFinishTrip = () => {
     if (confirm('¿Estás seguro de que deseas finalizar el viaje?')) {
+      // Stop GPS tracking before finishing
+      if (gpsIsTracking) {
+        stopGPSTracking();
+      }
       finishTrip();
       router.push('/dashboard');
     }
@@ -130,6 +197,37 @@ export default function ActiveTripPage() {
     }
   };
 
+  // Handle relay mode
+  const handleOpenRelay = () => {
+    // Set current vehicle plate from trip data
+    const tripData = mockTodayTrips.find(t => t._id === tripId);
+    if (tripData) {
+      setCurrentVehiclePlate(tripData.vehicle?.plate || 'N/A');
+    }
+    setIsRelayModalOpen(true);
+  };
+
+  const handleRelayComplete = (newVehicle: { gpsSourceType: GPSSourceType }) => {
+    // Update GPS source based on new vehicle configuration
+    setGpsSourceType(newVehicle.gpsSourceType);
+
+    // If new vehicle uses mobile GPS, restart tracking
+    if (newVehicle.gpsSourceType === 'mobile') {
+      stopGPSTracking();
+      if (gpsPermission === 'granted') {
+        startGPSTracking(tripId as unknown as Id<"trips">, {
+          gpsSource: 'mobile',
+        });
+      }
+    } else {
+      // External GPS - stop mobile tracking
+      stopGPSTracking();
+    }
+
+    // Show success message
+    alert(`Vehículo cambiado exitosamente. ${newVehicle.gpsSourceType === 'mobile' ? 'Usando GPS del celular.' : 'Usando GPS externo del vehículo.'}`);
+  };
+
   const totalStops = trip.stops?.length || 0;
 
   return (
@@ -149,13 +247,35 @@ export default function ActiveTripPage() {
         progress={progress}
       />
 
-      {/* GPS Status */}
+      {/* GPS Status - use real GPS data when available */}
       <GPSStatus
-        speed={currentSpeed}
-        accuracy={currentLocation?.accuracy}
-        isActive={isActive}
+        speed={gpsPosition?.speed !== null ? Math.round((gpsPosition?.speed ?? 0) * 3.6) : currentSpeed}
+        accuracy={gpsPosition?.accuracy ?? currentLocation?.accuracy}
+        isActive={gpsIsTracking || isActive}
         tripId={tripId}
       />
+
+      {/* GPS Error Alert */}
+      {gpsError && (
+        <div className="mx-4 mt-2 p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error">
+          {gpsError.message}
+        </div>
+      )}
+
+      {/* Geofence Alerts */}
+      {geofenceAlerts.length > 0 && (
+        <div className="mx-4 mt-2 space-y-2">
+          {geofenceAlerts.map((alert, index) => (
+            <div
+              key={`${alert.stopId}-${index}`}
+              className="p-3 bg-info/10 border border-info/20 rounded-lg text-sm"
+            >
+              <p className="font-semibold text-info">{alert.stopName}</p>
+              <p className="text-gray-700">{alert.message}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="p-4 space-y-4 pb-32">
@@ -212,6 +332,15 @@ export default function ActiveTripPage() {
           onMessage={handleMessage}
         />
 
+        {/* Relay Mode Button */}
+        <button
+          onClick={handleOpenRelay}
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-warning/10 border border-warning/30 rounded-lg text-warning-dark hover:bg-warning/20 transition-colors"
+        >
+          <Bus className="w-5 h-5" />
+          <span className="font-medium">Modo Relevo - Cambiar Vehículo</span>
+        </button>
+
         {/* Trip Summary */}
         <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
@@ -232,7 +361,11 @@ export default function ActiveTripPage() {
             </div>
             <div>
               <p className="text-gray-600">Velocidad actual</p>
-              <p className="font-bold text-gray-900">{currentSpeed} km/h</p>
+              <p className="font-bold text-gray-900">
+                {gpsPosition?.speed !== null
+                  ? Math.round((gpsPosition?.speed ?? 0) * 3.6)
+                  : currentSpeed} km/h
+              </p>
             </div>
           </div>
         </div>
@@ -292,6 +425,15 @@ export default function ActiveTripPage() {
           </div>
         </div>
       </div>
+
+      {/* Relay Mode Modal */}
+      <RelayModeModal
+        tripId={tripId as unknown as Id<"trips">}
+        currentVehiclePlate={currentVehiclePlate}
+        isOpen={isRelayModalOpen}
+        onClose={() => setIsRelayModalOpen(false)}
+        onRelayComplete={handleRelayComplete}
+      />
     </div>
   );
 }

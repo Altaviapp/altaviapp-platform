@@ -15,6 +15,8 @@ export type {
   AuthContextType,
   LoginResult,
   InvitationInfo,
+  RegisterInstitutionData,
+  RegisterResult,
 } from './types';
 
 // Role utilities

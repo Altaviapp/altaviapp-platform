@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Truck, Mail, Lock, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
+import { Truck, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 import { useAuth } from '@/providers/AuthProvider';
 
 const loginSchema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Mínimo 6 caracteres'),
+  email: z.string().email('Email invalido'),
+  password: z.string().min(6, 'Minimo 6 caracteres'),
   rememberMe: z.boolean().optional(),
 });
 
@@ -43,177 +44,159 @@ export default function LoginPage() {
     const result = await login(data.email, data.password);
 
     if (result.success) {
-      // Check if email verification is required
       if (result.requiresEmailVerification) {
         router.push('/verify-email');
         return;
       }
 
-      // Check if permissions are granted (for PWA)
       const permissionsGranted = localStorage.getItem('permissions_granted') === 'true';
-
       if (permissionsGranted) {
         router.push('/dashboard');
       } else {
         router.push('/permissions');
       }
     } else {
-      setLoginError(result.error || 'Error al iniciar sesión');
+      setLoginError(result.error || 'Error al iniciar sesion');
     }
 
     setIsLoading(false);
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl p-8">
-      {/* Logo */}
-      <div className="flex justify-center mb-6">
-        <div className="w-16 h-16 bg-accent rounded-xl flex items-center justify-center">
-          <Truck className="w-9 h-9 text-primary" />
+    <div className="w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+        {/* Card Header */}
+      <div className="px-8 pt-8 pb-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
+              <Truck className="w-6 h-6 text-primary" />
+            </div>
+            <span className="font-bold text-xl text-primary">Altaviapp</span>
+          </div>
+          <Link
+            href="/"
+            className="text-sm text-gray-500 hover:text-primary flex items-center gap-1"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Inicio
+          </Link>
         </div>
+
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Iniciar Sesion</h2>
+        <p className="text-gray-500 text-sm">Accede como conductor o monitor</p>
       </div>
-
-      {/* Title */}
-      <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-primary mb-1">Altaviapp</h1>
-        <p className="text-sm text-gray-600">Driver App</p>
-      </div>
-
-      <div className="border-t border-gray-200 mb-6" />
-
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">
-        Iniciar Sesión
-      </h2>
-
-      {/* Error Alert */}
-      {loginError && (
-        <div className="mb-4 p-3 bg-error-light border border-error rounded-lg text-sm text-error-dark">
-          {loginError}
-        </div>
-      )}
 
       {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Email Field */}
-        <div>
-          <label
-            htmlFor="email"
-            className="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Email o Usuario
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Mail className="w-5 h-5 text-gray-400" />
-            </div>
-            <input
-              {...register('email')}
-              id="email"
-              type="email"
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors"
-              placeholder="conductor@altaviapp.ec"
-            />
+      <div className="px-8 pb-8">
+        {/* Error Alert */}
+        {loginError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {loginError}
           </div>
-          {errors.email && (
-            <p className="mt-1 text-sm text-error">{errors.email.message}</p>
-          )}
-        </div>
+        )}
 
-        {/* Password Field */}
-        <div>
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium text-gray-700 mb-2"
-          >
-            Contraseña
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Lock className="w-5 h-5 text-gray-400" />
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                {...register('email')}
+                type="email"
+                autoComplete="email"
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-gray-50 focus:bg-white"
+                placeholder="conductor@altaviapp.ec"
+              />
             </div>
-            <input
-              {...register('password')}
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors"
-              placeholder="••••••"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            {errors.email && (
+              <p className="mt-2 text-sm text-red-500">{errors.email.message}</p>
+            )}
+          </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Contrasena
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                {...register('password')}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                className="w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-gray-50 focus:bg-white"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+            {errors.password && (
+              <p className="mt-2 text-sm text-red-500">{errors.password.message}</p>
+            )}
+          </div>
+
+          {/* Remember Me & Forgot Password */}
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                {...register('rememberMe')}
+                type="checkbox"
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <span className="text-sm text-gray-600">Recordarme</span>
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-sm text-primary hover:underline"
             >
-              {showPassword ? (
-                <EyeOff className="w-5 h-5 text-gray-400 hover:text-gray-600" />
-              ) : (
-                <Eye className="w-5 h-5 text-gray-400 hover:text-gray-600" />
-              )}
-            </button>
+              Olvide mi contrasena
+            </Link>
           </div>
-          {errors.password && (
-            <p className="mt-1 text-sm text-error">{errors.password.message}</p>
-          )}
-        </div>
 
-        {/* Remember Me */}
-        <div className="flex items-center">
-          <input
-            {...register('rememberMe')}
-            id="rememberMe"
-            type="checkbox"
-            className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-          />
-          <label
-            htmlFor="rememberMe"
-            className="ml-2 text-sm text-gray-700"
-          >
-            Mantener sesión iniciada
-          </label>
-        </div>
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-        >
-          {isLoading ? 'Iniciando sesión...' : 'INICIAR SESIÓN'}
-        </button>
-
-        {/* Forgot Password */}
-        <div className="text-center">
+          {/* Submit */}
           <button
-            type="button"
-            onClick={() => router.push('/forgot-password')}
-            className="text-sm text-primary hover:underline"
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-white font-semibold py-3.5 px-4 rounded-xl transition-colors"
           >
-            ¿Olvidaste tu contraseña?
+            {isLoading ? 'Iniciando sesion...' : 'Iniciar Sesion'}
           </button>
+        </form>
+
+        {/* Divider */}
+        <div className="relative my-8">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-white text-gray-500">o</span>
+          </div>
         </div>
-      </form>
 
-      {/* Invitation Code Link */}
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <p className="text-sm text-gray-600 text-center mb-3">
-          ¿Tienes un código de invitación?
-        </p>
-        <button
-          onClick={() => router.push('/signup-invitation')}
-          className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-        >
-          Ingresar código
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Security Info */}
-      <div className="mt-8 pt-6 border-t border-gray-200">
-        <div className="flex items-center justify-center gap-2 text-xs text-gray-600">
-          <Shield className="w-4 h-4 text-success" />
-          <span>Conexión segura - Certificado SSL activo</span>
+        {/* Invitation Code */}
+        <div className="text-center">
+          <p className="text-sm text-gray-600 mb-3">
+            Tienes un codigo de invitacion?
+          </p>
+          <Link
+            href="/signup-invitation"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+          >
+            Ingresar codigo
+            <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </div>
-
+      </div>
     </div>
   );
 }

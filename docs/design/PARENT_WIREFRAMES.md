@@ -1328,48 +1328,6 @@ Otros:
 🆘 - Soporte/Emergencia
 ```
 
-### 8.4 Paleta de Colores
-
-```
-Colores Principales:
-- Azul primario:    #2196F3 (Botones principales, enlaces)
-- Azul oscuro:      #1565C0 (Headers, navegación)
-- Gris claro:       #F5F5F5 (Fondos)
-- Blanco:           #FFFFFF (Tarjetas, contenido)
-- Gris texto:       #424242 (Texto principal)
-- Gris secundario:  #757575 (Texto secundario)
-
-Colores de Estado:
-- Verde:    #4CAF50 (Éxito, en ruta)
-- Amarillo: #FFC107 (Advertencia, recogida)
-- Naranja:  #FF9800 (Retraso)
-- Rojo:     #F44336 (Error, cancelado, emergencia)
-- Morado:   #9C27B0 (Incidentes)
-
-Colores de Acento:
-- Azul claro:  #BBDEFB (Fondos destacados)
-- Verde claro: #C8E6C9 (Notificaciones positivas)
-- Rojo claro:  #FFCDD2 (Notificaciones de alerta)
-```
-
-### 8.5 Tipografía
-
-```
-Desktop/Tablet:
-- Títulos principales (H1): 24px, Bold
-- Títulos sección (H2):     20px, Semibold
-- Subtítulos (H3):          16px, Semibold
-- Texto normal:             14px, Regular
-- Texto pequeño:            12px, Regular
-
-Mobile:
-- Títulos principales (H1): 20px, Bold
-- Títulos sección (H2):     18px, Semibold
-- Subtítulos (H3):          14px, Semibold
-- Texto normal:             14px, Regular
-- Texto pequeño:            12px, Regular
-
-Fuente: Roboto, Inter, o sistema (sans-serif)
 ```
 
 ### 8.6 Tarjetas de Información

@@ -34,6 +34,9 @@ export const createStudent = mutation({
     grade: v.string(),
     dateOfBirth: v.number(),
     address: v.string(),
+    // Home coordinates for route optimization
+    homeLatitude: v.optional(v.number()),
+    homeLongitude: v.optional(v.number()),
     parentPhone: v.string(),
     parentEmail: v.string(),
     parentName: v.string(),
@@ -53,6 +56,8 @@ export const createStudent = mutation({
       grade: args.grade,
       dateOfBirth: args.dateOfBirth,
       address: args.address,
+      homeLatitude: args.homeLatitude,
+      homeLongitude: args.homeLongitude,
       parentPhone: args.parentPhone,
       parentEmail: args.parentEmail.toLowerCase(),
       parentName: args.parentName,
@@ -195,6 +200,9 @@ export const updateStudent = mutation({
     grade: v.optional(v.string()),
     dateOfBirth: v.optional(v.number()),
     address: v.optional(v.string()),
+    // Home coordinates for route optimization
+    homeLatitude: v.optional(v.number()),
+    homeLongitude: v.optional(v.number()),
     parentPhone: v.optional(v.string()),
     parentEmail: v.optional(v.string()),
     parentName: v.optional(v.string()),
@@ -218,6 +226,8 @@ export const updateStudent = mutation({
     if (args.grade !== undefined) updates.grade = args.grade;
     if (args.dateOfBirth !== undefined) updates.dateOfBirth = args.dateOfBirth;
     if (args.address !== undefined) updates.address = args.address;
+    if (args.homeLatitude !== undefined) updates.homeLatitude = args.homeLatitude;
+    if (args.homeLongitude !== undefined) updates.homeLongitude = args.homeLongitude;
     if (args.parentPhone !== undefined) updates.parentPhone = args.parentPhone;
     if (args.parentEmail !== undefined) updates.parentEmail = args.parentEmail.toLowerCase();
     if (args.parentName !== undefined) updates.parentName = args.parentName;

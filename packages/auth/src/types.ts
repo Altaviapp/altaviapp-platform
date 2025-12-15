@@ -70,6 +70,30 @@ export interface InvitationInfo {
   institutionName: string;
 }
 
+export interface RegisterInstitutionData {
+  // Admin user info
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  // Institution info
+  institutionName: string;
+  institutionType: 'school' | 'corporate';
+  institutionAddress: string;
+  institutionCity: string;
+  // Subscription plan
+  plan: 'basic' | 'professional' | 'enterprise';
+}
+
+export interface RegisterResult {
+  success: boolean;
+  error?: string;
+  userId?: string;
+  institutionId?: string;
+  clientId?: string;
+  requiresEmailVerification?: boolean;
+}
+
 export interface AuthContextType {
   // State
   user: AuthUser | null;
@@ -99,6 +123,9 @@ export interface AuthContextType {
     error?: string;
   }>;
   acceptInvitation: (invitationCode: string, password: string) => Promise<LoginResult>;
+
+  // Institution registration (signup flow)
+  registerInstitution: (data: RegisterInstitutionData) => Promise<RegisterResult>;
 
   // Role helpers
   isDriver: boolean;

@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@altaviapp/auth": "workspace:*",
+    "@altaviapp/maps": "workspace:*",
     "@altaviapp/ui": "workspace:*",
     "@altaviapp/convex-client": "workspace:*",
+    "@react-google-maps/api": "^2.19.2",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-slot": "^1.0.2",
     "class-variance-authority": "^0.7.0",

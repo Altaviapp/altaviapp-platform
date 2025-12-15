@@ -205,3 +205,132 @@ export const deactivateVehicle = mutation({
     return { success: true };
   },
 });
+
+/**
+ * Update vehicle GPS configuration
+ * Configures the GPS source type and device settings
+ */
+export const updateGpsConfig = mutation({
+  args: {
+    userId: v.id("users"),
+    vehicleId: v.id("vehicles"),
+    gpsSourceType: v.union(
+      v.literal("mobile"),
+      v.literal("device"),
+      v.literal("api")
+    ),
+    gpsDeviceConfig: v.optional(v.object({
+      deviceId: v.string(),
+      provider: v.optional(v.string()),
+      apiEndpoint: v.optional(v.string()),
+      updateIntervalSeconds: v.optional(v.number()),
+      fallbackToMobile: v.boolean(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle) {
+      throw new Error("Vehículo no encontrado");
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, vehicle.institutionId);
+
+    // Validate: device/api source requires gpsDeviceConfig
+    if ((args.gpsSourceType === "device" || args.gpsSourceType === "api") && !args.gpsDeviceConfig) {
+      throw new Error("Se requiere configuración de dispositivo para GPS externo");
+    }
+
+    // Validate deviceId uniqueness within institution
+    if (args.gpsDeviceConfig?.deviceId) {
+      const existingVehicles = await ctx.db
+        .query("vehicles")
+        .withIndex("by_institution", (q) => q.eq("institutionId", vehicle.institutionId))
+        .filter((q) => q.neq(q.field("_id"), args.vehicleId))
+        .collect();
+
+      const duplicate = existingVehicles.find(
+        (v) => v.gpsDeviceConfig?.deviceId === args.gpsDeviceConfig!.deviceId
+      );
+
+      if (duplicate) {
+        throw new Error(`El ID de dispositivo ya está asignado al vehículo ${duplicate.licensePlate}`);
+      }
+    }
+
+    await ctx.db.patch(args.vehicleId, {
+      gpsSourceType: args.gpsSourceType,
+      gpsDeviceConfig: args.gpsSourceType === "mobile" ? undefined : args.gpsDeviceConfig,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Remove GPS device configuration (reset to mobile)
+ */
+export const removeGpsConfig = mutation({
+  args: {
+    userId: v.id("users"),
+    vehicleId: v.id("vehicles"),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle) {
+      throw new Error("Vehículo no encontrado");
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, vehicle.institutionId);
+
+    await ctx.db.patch(args.vehicleId, {
+      gpsSourceType: "mobile",
+      gpsDeviceConfig: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get vehicles with external GPS configuration
+ */
+export const getVehiclesWithExternalGps = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.or(
+            q.eq(q.field("gpsSourceType"), "device"),
+            q.eq(q.field("gpsSourceType"), "api")
+          )
+        )
+      )
+      .collect();
+
+    return vehicles.map((v) => ({
+      id: v._id,
+      licensePlate: v.licensePlate,
+      brand: v.brand,
+      model: v.model,
+      gpsSourceType: v.gpsSourceType,
+      deviceId: v.gpsDeviceConfig?.deviceId,
+      provider: v.gpsDeviceConfig?.provider,
+      fallbackToMobile: v.gpsDeviceConfig?.fallbackToMobile,
+    }));
+  },
+});

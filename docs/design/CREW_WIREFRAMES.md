@@ -2499,36 +2499,6 @@ Roles (usado en este documento):
 🔄 - Fallback (Conductor si no hay Auxiliar)
 ```
 
-### 11.4 Paleta de Colores (PWA)
-
-```
-Colores Principales:
-- Azul primario:    #2196F3
-- Azul oscuro:      #1565C0
-- Verde éxito:      #4CAF50
-- Rojo urgente:     #F44336
-- Amarillo alerta:  #FFC107
-- Naranja:          #FF9800
-
-Colores de Estado:
-- En ruta:          #4CAF50 (Verde)
-- Programado:       #2196F3 (Azul)
-- Completado:       #757575 (Gris)
-- Cancelado:        #F44336 (Rojo)
-- En pausa:         #FFC107 (Amarillo)
-
-Colores de Fondo:
-- Blanco:           #FFFFFF
-- Gris claro:       #F5F5F5
-- Gris medio:       #E0E0E0
-- Texto:            #212121
-- Texto secundario: #757575
-
-Alto Contraste (Uso en exteriores):
-- Fondo oscuro:     #212121
-- Texto claro:      #FFFFFF
-- Acentos brillantes para visibilidad
-```
 
 ### 11.5 Botones y Controles
 

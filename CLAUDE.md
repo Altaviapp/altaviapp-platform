@@ -265,6 +265,179 @@ For each module implementation, load context from these documents:
 
 ---
 
+## Frontend Design System
+
+**All frontend apps MUST follow these design patterns for consistency:**
+
+### Brand Colors (Tailwind CSS)
+```css
+/* Primary - Altaviapp Blue */
+--primary: #042940;
+--primary-foreground: #F7FCFF;
+
+/* Accent - Altaviapp Lime */
+--accent: #DBF227;
+--accent-foreground: #042940;
+
+/* Status Colors */
+--success: #10B981;  /* Green */
+--info: #3B82F6;     /* Blue */
+--warning: #F59E0B;  /* Orange */
+--error: #EF4444;    /* Red */
+```
+
+### Component Structure (per app)
+```
+apps/{app-name}/src/
+├── lib/
+│   └── utils.ts              # cn(), getGreeting(), formatDate()
+├── components/
+│   ├── layout/
+│   │   ├── Sidebar.tsx       # Desktop sidebar with branding
+│   │   ├── Header.tsx        # Top header with title & notifications
+│   │   └── MobileNav.tsx     # Bottom navigation for mobile
+│   ├── shared/
+│   │   ├── LoadingState.tsx  # Skeleton loaders (card, list, page variants)
+│   │   ├── StatusBadge.tsx   # Status indicators
+│   │   └── EmptyState.tsx    # Empty state placeholders
+│   └── dashboard/
+│       └── [feature-specific components]
+├── app/
+│   ├── layout.tsx            # Root layout (no providers for UI testing)
+│   ├── page.tsx              # Root redirect
+│   ├── globals.css           # Tailwind + CSS variables
+│   └── (dashboard)/
+│       ├── layout.tsx        # Dashboard layout with Sidebar/Header/MobileNav
+│       └── [pages]
+```
+
+### Sidebar Pattern (All Apps)
+```tsx
+// Structure for all apps
+<aside className="w-60 bg-primary min-h-screen flex flex-col">
+  {/* Logo Section */}
+  <div className="p-6">
+    <Icon /> {/* App-specific: Truck (Crew), GraduationCap (Parent), Shield (Admin) */}
+    <span>Altaviapp</span>
+    <span>{appSubtitle}</span> {/* "Crew App", "Portal Padres", "Admin" */}
+  </div>
+
+  {/* User Profile */}
+  <div className="px-6 py-4 border-b border-primary-foreground/10">
+    <Avatar initials={userInitials} />
+    <span>{userName}</span>
+    <RoleBadge role={userRole} />
+  </div>
+
+  {/* Navigation */}
+  <nav className="flex-1 px-3 py-4">
+    {navItems.map(item => <NavLink />)}
+  </nav>
+
+  {/* Footer Actions */}
+  <div className="px-3 py-4 border-t">
+    <SettingsLink />
+    <LogoutButton />
+  </div>
+</aside>
+```
+
+### App-Specific Configurations
+
+| App | Icon | Subtitle | Role Badge Color |
+|-----|------|----------|------------------|
+| Crew | `Truck` | "Crew App" | Driver: blue, Monitor: green, Admin: purple |
+| Parent | `GraduationCap` | "Portal Padres" | Parent: blue |
+| Admin | `Shield` | "Administración" | Admin: purple, SuperAdmin: red |
+
+### Card Styling
+```tsx
+// Standard card pattern
+<div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
+  {/* Content */}
+</div>
+
+// Status card pattern (inside main card)
+<div className={cn('mt-4 p-3 rounded-lg', statusBgColor)}>
+  <Icon className={statusTextColor} />
+  <span>{statusLabel}</span>
+</div>
+```
+
+### Status Color Mapping
+| Status | Background | Text | Icon |
+|--------|------------|------|------|
+| in_transit | `bg-blue-50` | `text-blue-700` | Bus |
+| at_school | `bg-green-50` | `text-green-700` | CheckCircle |
+| at_home | `bg-gray-50` | `text-gray-700` | Home |
+| returning | `bg-orange-50` | `text-orange-700` | Bus |
+| scheduled | `bg-yellow-50` | `text-yellow-700` | Clock |
+
+### Mobile Navigation Pattern
+```tsx
+<nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t safe-area-pb">
+  <div className="flex items-center justify-around px-2 py-2">
+    {navItems.slice(0, 5).map(item => (
+      <Link className={cn(
+        'flex flex-col items-center gap-1 px-3 py-2 rounded-lg',
+        isActive ? 'text-primary' : 'text-gray-600'
+      )}>
+        <Icon className={isActive ? 'text-accent' : ''} />
+        <span className="text-xs font-medium">{label}</span>
+      </Link>
+    ))}
+  </div>
+</nav>
+```
+
+### Required CSS Variables (globals.css)
+```css
+@layer base {
+  :root {
+    /* Must include all these for consistency */
+    --primary: 200 98% 13%;
+    --primary-foreground: 195 100% 97%;
+    --accent: 66 87% 56%;
+    --accent-foreground: 200 98% 13%;
+    --success: 158 64% 52%;
+    --info: 217 91% 60%;
+    --warning: 38 92% 50%;
+    --error: 0 72% 51%;
+    --background: 195 100% 97%;
+    --foreground: 220 13% 9%;
+  }
+}
+
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+```
+
+### UI Testing Mode
+For testing UI without authentication:
+```tsx
+// In layout.tsx - remove providers
+export default function RootLayout({ children }) {
+  return (
+    <html lang="es">
+      <body>
+        {/* Auth and Convex providers disabled for UI testing */}
+        {children}
+      </body>
+    </html>
+  );
+}
+
+// In components - use mock data
+const mockUser = {
+  name: 'Test User',
+  email: 'test@test.com',
+  role: 'driver' as const,
+};
+```
+
+---
+
 ## Context Management Rules
 
 ### Active Context Limit: ~2000 tokens

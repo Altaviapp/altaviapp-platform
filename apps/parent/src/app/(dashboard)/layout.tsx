@@ -1,96 +1,60 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useAuth } from "@/providers/AuthProvider";
-import {
-  Home,
-  MapPin,
-  Clock,
-  Bell,
-  User,
-  LogOut,
-} from "lucide-react";
+import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 
-const navigation = [
-  { name: "Inicio", href: "/dashboard", icon: Home },
-  { name: "Seguimiento", href: "/tracking", icon: MapPin },
-  { name: "Historial", href: "/history", icon: Clock },
-];
+import { Sidebar } from '@/components/layout/Sidebar';
+import { Header } from '@/components/layout/Header';
+import { MobileNav } from '@/components/layout/MobileNav';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
-  const { user, isLoading, logout } = useAuth();
+  const pathname = usePathname();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login");
-    }
-  }, [user, isLoading, router]);
+  // Get page title from pathname
+  const getPageTitle = () => {
+    if (!pathname) return 'Inicio';
+    const path = pathname.split('/').filter(Boolean);
+    if (path.length === 0 || path[0] === 'dashboard') return 'Inicio';
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+    const titles: Record<string, string> = {
+      'tracking': 'Seguimiento',
+      'history': 'Historial',
+      'notifications': 'Notificaciones',
+      'profile': 'Perfil',
+      'settings': 'Configuración',
+    };
 
-  if (!user) {
-    return null;
-  }
-
-  const handleLogout = async () => {
-    await logout();
-    router.push("/login");
+    const lastSegment = path[path.length - 1] ?? '';
+    return titles[lastSegment] ?? (lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1));
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 h-16 bg-primary flex items-center justify-between px-4">
-        <h1 className="text-xl font-bold text-white">Altaviapp</h1>
-        <div className="flex items-center space-x-2">
-          <button className="p-2 text-white/80 hover:text-white relative">
-            <Bell className="h-6 w-6" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
-          </button>
-          <button
-            onClick={handleLogout}
-            className="p-2 text-white/80 hover:text-white"
-          >
-            <LogOut className="h-6 w-6" />
-          </button>
-        </div>
-      </header>
+    <div className="flex min-h-screen bg-background">
+      {/* Sidebar */}
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Page content */}
-      <main className="p-4">{children}</main>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col lg:ml-0">
+        {/* Header */}
+        <Header
+          title={getPageTitle()}
+          onMenuClick={() => setSidebarOpen(true)}
+          notificationCount={3}
+        />
 
-      {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30">
-        <div className="flex justify-around">
-          {navigation.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className="flex flex-col items-center py-3 px-4 text-gray-500 hover:text-primary"
-            >
-              <item.icon className="h-6 w-6" />
-              <span className="text-xs mt-1">{item.name}</span>
-            </Link>
-          ))}
-          <button className="flex flex-col items-center py-3 px-4 text-gray-500 hover:text-primary">
-            <User className="h-6 w-6" />
-            <span className="text-xs mt-1">Perfil</span>
-          </button>
-        </div>
-      </nav>
+        {/* Page Content */}
+        <main className="flex-1 p-4 lg:p-6 overflow-auto pb-20 lg:pb-6">
+          {children}
+        </main>
+
+        {/* Mobile Navigation */}
+        <MobileNav />
+      </div>
     </div>
   );
 }

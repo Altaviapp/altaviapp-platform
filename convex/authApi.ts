@@ -11,6 +11,7 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 import {
   hashPassword,
   verifyPassword,
@@ -113,10 +114,11 @@ export const register = mutation({
     // Get created user
     const user = await ctx.db.get(userId);
 
-    // Generate verification email
-    const emailContent = generateEmailVerificationEmail({
-      firstName: args.name.split(" ")[0],
-      verificationToken: emailVerificationToken,
+    // Schedule verification email to be sent via Resend
+    await ctx.scheduler.runAfter(0, api.email.sendVerificationEmail, {
+      to: args.email.toLowerCase(),
+      firstName: args.name.split(" ")[0] ?? args.name,
+      verificationCode: emailVerificationToken,
     });
 
     return {
@@ -131,10 +133,7 @@ export const register = mutation({
         institutionId: user!.institutionId,
         emailVerified: user!.emailVerified,
       },
-      // Email content for frontend to send
-      emailHtml: emailContent.html,
-      emailText: emailContent.text,
-      emailSubject: emailContent.subject,
+      emailSent: true,
     };
   },
 });
@@ -430,17 +429,16 @@ export const resendVerificationEmail = mutation({
       updatedAt: Date.now(),
     });
 
-    // Generate email
-    const emailContent = generateEmailVerificationEmail({
-      firstName: user.firstName || user.name.split(" ")[0],
-      verificationToken,
+    // Schedule verification email to be sent via Resend
+    await ctx.scheduler.runAfter(0, api.email.sendVerificationEmail, {
+      to: user.email,
+      firstName: user.firstName ?? user.name.split(" ")[0] ?? user.name,
+      verificationCode: verificationToken,
     });
 
     return {
       success: true,
-      emailHtml: emailContent.html,
-      emailText: emailContent.text,
-      emailSubject: emailContent.subject,
+      emailSent: true,
     };
   },
 });
@@ -486,19 +484,17 @@ export const requestPasswordReset = mutation({
       updatedAt: Date.now(),
     });
 
-    // Generate email
-    const emailContent = generatePasswordResetEmail({
-      firstName: user.firstName || user.name.split(" ")[0],
-      resetToken,
+    // Schedule password reset email to be sent via Resend
+    await ctx.scheduler.runAfter(0, api.email.sendPasswordResetEmail, {
+      to: user.email,
+      firstName: user.firstName ?? user.name.split(" ")[0] ?? user.name,
+      resetCode: resetToken,
     });
 
     return {
       success: true,
       message: "Si el email existe, recibirás un código para restablecer tu contraseña.",
-      // Only return email content if user exists (frontend should not expose this)
-      emailHtml: emailContent.html,
-      emailText: emailContent.text,
-      emailSubject: emailContent.subject,
+      emailSent: true,
     };
   },
 });
@@ -619,6 +615,151 @@ export const changePassword = mutation({
     return {
       success: true,
       message: "Contraseña actualizada exitosamente",
+    };
+  },
+});
+
+// ============================================================================
+// INSTITUTION REGISTRATION (Signup Flow)
+// ============================================================================
+
+/**
+ * Register new institution with admin user
+ * Creates client + institution + admin user in one transaction
+ * Used for the signup flow (plans page -> signup page)
+ */
+export const registerInstitution = mutation({
+  args: {
+    // Admin user info
+    firstName: v.string(),
+    lastName: v.string(),
+    email: v.string(),
+    password: v.string(),
+    // Institution info
+    institutionName: v.string(),
+    institutionType: v.union(v.literal("school"), v.literal("corporate")),
+    institutionAddress: v.string(),
+    institutionCity: v.string(),
+    // Subscription plan
+    plan: v.union(
+      v.literal("basic"),
+      v.literal("professional"),
+      v.literal("enterprise")
+    ),
+  },
+  handler: async (ctx, args) => {
+    // Validate email
+    if (!isValidEmail(args.email)) {
+      throw new Error("Formato de email inválido");
+    }
+
+    // Validate password
+    if (!isValidPassword(args.password)) {
+      throw new Error("Contraseña debe tener mínimo 8 caracteres con letras y números");
+    }
+
+    // Check if user already exists
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .first();
+
+    if (existingUser) {
+      throw new Error("Ya existe un usuario con este email");
+    }
+
+    const now = Date.now();
+
+    // 1. Create client (organization that owns the institution)
+    const planLimits = {
+      basic: { maxInstitutions: 1, maxUsers: 10 },
+      professional: { maxInstitutions: 3, maxUsers: 50 },
+      enterprise: { maxInstitutions: 10, maxUsers: 500 },
+    };
+
+    const limits = planLimits[args.plan];
+
+    const clientId = await ctx.db.insert("clients", {
+      name: args.institutionName,
+      contactPerson: `${args.firstName} ${args.lastName}`,
+      contactEmail: args.email.toLowerCase(),
+      address: args.institutionAddress,
+      city: args.institutionCity,
+      province: args.institutionCity, // Default to city for now
+      country: "EC",
+      subscriptionPlan: args.plan,
+      subscriptionStatus: "active",
+      maxInstitutions: limits.maxInstitutions,
+      maxUsers: limits.maxUsers,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2. Create institution
+    const institutionId = await ctx.db.insert("institutions", {
+      clientId,
+      name: args.institutionName,
+      type: args.institutionType,
+      address: args.institutionAddress,
+      city: args.institutionCity,
+      email: args.email.toLowerCase(),
+      contactPerson: `${args.firstName} ${args.lastName}`,
+      isActive: true,
+      subscriptionPlan: args.plan,
+      subscriptionStatus: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 3. Create admin user
+    const passwordHash = await hashPassword(args.password);
+    const emailVerificationToken = generateEmailVerificationToken();
+
+    const userId = await ctx.db.insert("users", {
+      clientId,
+      institutionId,
+      email: args.email.toLowerCase(),
+      passwordHash,
+      emailVerified: false,
+      emailVerificationToken,
+      tokenExpiresAt: getTokenExpiration(24), // 24 hours
+      name: `${args.firstName} ${args.lastName}`,
+      firstName: args.firstName,
+      lastName: args.lastName,
+      role: "admin",
+      accessibleInstitutionIds: [institutionId],
+      failedLoginAttempts: 0,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 4. Create session
+    const token = await createSession(ctx, userId);
+
+    // 5. Schedule verification email to be sent via Resend
+    await ctx.scheduler.runAfter(0, api.email.sendVerificationEmail, {
+      to: args.email.toLowerCase(),
+      firstName: args.firstName,
+      verificationCode: emailVerificationToken,
+    });
+
+    return {
+      success: true,
+      clientId,
+      institutionId,
+      userId,
+      token,
+      user: {
+        id: userId,
+        email: args.email.toLowerCase(),
+        name: `${args.firstName} ${args.lastName}`,
+        role: "admin" as const,
+        institutionId,
+        emailVerified: false,
+      },
+      emailSent: true,
     };
   },
 });

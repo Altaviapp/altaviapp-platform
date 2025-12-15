@@ -3,9 +3,10 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MapPin, Plus, Search, MoreHorizontal, Edit, Trash2, Eye, Copy, Users, Bus, Clock, ChevronLeft, ChevronRight, Map, Loader2, GraduationCap } from 'lucide-react';
+import { MapPin, Plus, Search, MoreHorizontal, Edit, Trash2, Eye, Copy, Users, Bus, Clock, ChevronLeft, ChevronRight, Map, Loader2, GraduationCap, Calendar, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useRoutes } from '@/hooks';
+import { useRoutes, useTripMutations } from '@/hooks';
+import { Id } from '../../../../../../convex/_generated/dataModel';
 
 // Type labels for route types
 const typeLabels: Record<string, { label: string; color: string }> = {
@@ -26,9 +27,29 @@ export default function RoutesPage() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [schedulingRoute, setSchedulingRoute] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Real data from Convex
   const { routes: allRoutes, isLoading } = useRoutes();
+  const { createTrip } = useTripMutations();
+
+  // Schedule trip for today
+  const handleScheduleTrip = async (routeId: string, routeName: string) => {
+    setSchedulingRoute(routeId);
+    setOpenMenu(null);
+    try {
+      const today = new Date().toISOString().split('T')[0]!;
+      await createTrip(routeId as Id<"routes">, today);
+      setSuccessMessage(`Viaje programado para "${routeName}" hoy (${today})`);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al programar viaje';
+      alert(message);
+    } finally {
+      setSchedulingRoute(null);
+    }
+  };
 
   // Filter by status locally
   const routes = useMemo(() => {
@@ -80,6 +101,14 @@ export default function RoutesPage() {
           Nueva Ruta
         </Link>
       </div>
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="bg-success/10 border border-success/20 text-success rounded-lg p-4 flex items-center gap-2">
+          <Calendar className="w-5 h-5" />
+          {successMessage}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -248,6 +277,22 @@ export default function RoutesPage() {
                             </button>
                             {openMenu === route._id && (
                               <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleScheduleTrip(route._id, route.name);
+                                  }}
+                                  disabled={schedulingRoute === route._id}
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-success/10 flex items-center gap-2 text-success font-medium disabled:opacity-50"
+                                >
+                                  {schedulingRoute === route._id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Play className="w-4 h-4" />
+                                  )}
+                                  Programar para Hoy
+                                </button>
+                                <div className="border-t border-gray-100 my-1" />
                                 <Link
                                   href={`/routes/${route._id}`}
                                   onClick={(e) => e.stopPropagation()}

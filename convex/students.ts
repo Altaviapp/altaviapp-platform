@@ -92,9 +92,13 @@ export const getStudent = query({
       throw new Error("Estudiante no encontrado");
     }
 
-    // Parents can view their own children (by matching email)
+    // Parents can view their own children (by matching email AND institutionId)
     if (currentUser.role === "parent") {
       if (currentUser.email?.toLowerCase() !== student.parentEmail.toLowerCase()) {
+        throw new Error("No tienes permiso para ver este estudiante");
+      }
+      // Also verify institutionId for multi-tenant isolation
+      if (student.institutionId !== currentUser.institutionId) {
         throw new Error("No tienes permiso para ver este estudiante");
       }
       return student;
@@ -179,9 +183,15 @@ export const listStudentsForParent = query({
       return [];
     }
 
+    // Filter by email AND institutionId for proper multi-tenant isolation
     const students = await ctx.db
       .query("students")
-      .filter((q) => q.eq(q.field("parentEmail"), currentUser.email!.toLowerCase()))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("parentEmail"), currentUser.email!.toLowerCase()),
+          q.eq(q.field("institutionId"), currentUser.institutionId)
+        )
+      )
       .collect();
 
     return students.filter((s) => s.isActive);

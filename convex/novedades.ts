@@ -552,10 +552,15 @@ export const getMyNovedades = query({
       return [];
     }
 
-    // Find all students for this parent
+    // Find all students for this parent (filter by email AND institutionId)
     const students = await ctx.db
       .query("students")
-      .filter((q) => q.eq(q.field("parentEmail"), user.email.toLowerCase()))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("parentEmail"), user.email.toLowerCase()),
+          q.eq(q.field("institutionId"), user.institutionId)
+        )
+      )
       .collect();
 
     if (students.length === 0) {

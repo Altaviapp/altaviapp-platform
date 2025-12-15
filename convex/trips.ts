@@ -504,9 +504,13 @@ export const getActiveTripForStudent = query({
       throw new Error("Estudiante no encontrado");
     }
 
-    // Parents can only view their own children
+    // Parents can only view their own children within their institution
     if (currentUser.role === "parent") {
       if (currentUser.email?.toLowerCase() !== student.parentEmail.toLowerCase()) {
+        throw new Error("No tienes permiso para ver este estudiante");
+      }
+      // Also verify institutionId for multi-tenant isolation
+      if (student.institutionId !== currentUser.institutionId) {
         throw new Error("No tienes permiso para ver este estudiante");
       }
     } else {

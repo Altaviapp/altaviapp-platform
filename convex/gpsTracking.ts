@@ -183,10 +183,15 @@ export const subscribeToLocation = query({
     const currentUser = await verifyUser(ctx, args.userId);
 
     if (currentUser.role === "parent") {
-      // Check if parent has a student on this route
+      // Check if parent has a student on this route (filter by email AND institutionId)
       const students = await ctx.db
         .query("students")
-        .filter((q) => q.eq(q.field("parentEmail"), currentUser.email?.toLowerCase() || ""))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("parentEmail"), currentUser.email?.toLowerCase() || ""),
+            q.eq(q.field("institutionId"), currentUser.institutionId)
+          )
+        )
         .collect();
 
       const studentIds = students.map((s) => s._id);

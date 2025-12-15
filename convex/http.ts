@@ -325,6 +325,7 @@ http.route({
 /**
  * Verify email with token
  * POST /auth/verify-email
+ * Body: { token: sessionToken, verificationCode: "12345678" }
  */
 http.route({
   path: "/auth/verify-email",
@@ -332,7 +333,16 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     try {
       const body = await request.json();
-      const result = await ctx.runMutation(api.emailVerification.verifyEmailToken, body);
+
+      // Frontend sends verificationCode, but mutation expects it as token
+      const verificationCode = body.verificationCode;
+      if (!verificationCode) {
+        throw new Error("Missing verification code");
+      }
+
+      const result = await ctx.runMutation(api.emailVerification.verifyEmailToken, {
+        token: verificationCode,
+      });
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
@@ -349,6 +359,7 @@ http.route({
 /**
  * Resend verification email
  * POST /auth/resend-verification
+ * Body: { token: sessionToken }
  */
 http.route({
   path: "/auth/resend-verification",
@@ -356,7 +367,25 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     try {
       const body = await request.json();
-      const result = await ctx.runMutation(api.emailVerification.resendVerificationEmail, body);
+
+      // Frontend sends session token, we need to get user's email from it
+      if (!body.token) {
+        throw new Error("Missing session token");
+      }
+
+      // Get user from session token
+      const userResult = await ctx.runQuery(api.authApi.me, {
+        token: body.token,
+      });
+
+      if (!userResult.success || !userResult.user?.email) {
+        throw new Error("Invalid session");
+      }
+
+      // Now resend verification email using the user's email
+      const result = await ctx.runMutation(api.emailVerification.resendVerificationEmail, {
+        email: userResult.user.email,
+      });
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },

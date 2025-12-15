@@ -77,3 +77,12 @@ export {
   useNovedad,
   useNovedadReviewMutations,
 } from "./useNovedades";
+
+// Users
+export {
+  useUsers,
+  useUser,
+  useUserMutations,
+  useUserStats,
+} from "./useUsers";
+export type { UserRole } from "./useUsers";

@@ -14,6 +14,7 @@ export type ConvexAuthContext = {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: ReturnType<typeof useAuth>["user"];
+  logout: () => Promise<void>;
 };
 
 export function useConvexAuth(): ConvexAuthContext {
@@ -24,5 +25,6 @@ export function useConvexAuth(): ConvexAuthContext {
     isAuthenticated: auth.isAuthenticated,
     isLoading: auth.isLoading,
     user: auth.user,
+    logout: auth.logout,
   };
 }

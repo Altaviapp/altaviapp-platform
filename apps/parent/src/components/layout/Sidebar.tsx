@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Home, MapPin, Clock, User, Settings, LogOut, Bell, GraduationCap, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useConvexAuth } from '@/hooks';
 
 interface NavItem {
   icon: typeof Home;
@@ -20,13 +21,6 @@ const navItems: NavItem[] = [
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 
-// Mock user for UI testing
-const mockUser = {
-  name: 'María García',
-  email: 'maria@test.com',
-  role: 'parent' as const,
-};
-
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
@@ -34,12 +28,19 @@ interface SidebarProps {
 
 export function Sidebar({ open = true, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
-  // Mock auth data for UI testing
-  const user = mockUser;
+  // Use real auth - no more mock fallback
+  const { user, logout } = useConvexAuth();
 
-  const handleLogout = () => {
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/login');
+    } catch {
+      // On error, still redirect to login
+      router.push('/login');
+    }
   };
 
   // Get user initials

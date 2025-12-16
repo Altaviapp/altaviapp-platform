@@ -149,6 +149,14 @@ export default function ActiveTripPage() {
     };
   }, [gpsIsTracking, stopGPSTracking]);
 
+  // Stop GPS tracking when trip is no longer active (completed/cancelled externally)
+  useEffect(() => {
+    if (!isActive && gpsIsTracking) {
+      console.log('[GPS] Trip no longer active, stopping GPS tracking');
+      stopGPSTracking();
+    }
+  }, [isActive, gpsIsTracking, stopGPSTracking]);
+
   // Handle finish trip
   const handleFinishTrip = async () => {
     if (confirm('¿Estás seguro de que deseas finalizar el viaje?')) {

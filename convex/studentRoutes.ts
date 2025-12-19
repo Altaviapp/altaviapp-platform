@@ -141,6 +141,7 @@ export const getRouteStudents = query({
         const stop = await ctx.db.get(a.stopId);
         return {
           assignmentId: a._id,
+          excludeDays: a.excludeDays || [],
           student: student ? {
             id: student._id,
             firstName: student.firstName,
@@ -209,6 +210,46 @@ export const removeStudent = mutation({
     // Soft delete
     await ctx.db.patch(args.assignmentId, {
       isActive: false,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Update excluded days for a student-route assignment
+ * Used to configure which days a student doesn't take this route
+ */
+export const updateExcludeDays = mutation({
+  args: {
+    userId: v.id("users"),
+    assignmentId: v.id("studentRoutes"),
+    excludeDays: v.array(v.string()), // ["friday", "saturday"]
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+
+    const assignment = await ctx.db.get(args.assignmentId);
+    if (!assignment) {
+      throw new Error("Asignación no encontrada");
+    }
+
+    const route = await ctx.db.get(assignment.routeId);
+    if (route) {
+      await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+    }
+
+    // Validate day names
+    const validDays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    for (const day of args.excludeDays) {
+      if (!validDays.includes(day.toLowerCase())) {
+        throw new Error(`Día inválido: ${day}`);
+      }
+    }
+
+    await ctx.db.patch(args.assignmentId, {
+      excludeDays: args.excludeDays.map(d => d.toLowerCase()),
       updatedAt: Date.now(),
     });
 

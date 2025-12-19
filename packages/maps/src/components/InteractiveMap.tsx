@@ -6,7 +6,7 @@ import { MAPS_CONFIG } from "../config/maps-config";
 import { useGoogleMapsContext, MapsLoadingState, MapsErrorState } from "./GoogleMapsProvider";
 import type { LatLng, MarkerInfo } from "../types/maps";
 
-type InteractiveMapProps = {
+export type InteractiveMapProps = {
   center?: LatLng;
   zoom?: number;
   markers?: MarkerInfo[];
@@ -14,6 +14,7 @@ type InteractiveMapProps = {
   onMapClick?: (position: LatLng) => void;
   onMarkerClick?: (markerId: string) => void;
   onMarkerDragEnd?: (markerId: string, position: LatLng) => void;
+  onMapLoad?: (map: google.maps.Map) => void;
   className?: string;
   style?: React.CSSProperties;
 };
@@ -39,6 +40,7 @@ export function InteractiveMap({
   onMapClick,
   onMarkerClick,
   onMarkerDragEnd,
+  onMapLoad,
   className,
   style,
 }: InteractiveMapProps) {
@@ -52,7 +54,10 @@ export function InteractiveMap({
 
   const onLoad = useCallback((map: google.maps.Map) => {
     setMap(map);
-  }, []);
+    if (onMapLoad) {
+      onMapLoad(map);
+    }
+  }, [onMapLoad]);
 
   const onUnmount = useCallback(() => {
     setMap(null);

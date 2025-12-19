@@ -94,3 +94,6 @@ export {
   useInvitationStats,
 } from "./useInvitations";
 export type { InvitationRole, InvitationStatus } from "./useInvitations";
+
+// Institution
+export { useInstitution, useSchoolLocationMutation } from "./useInstitution";

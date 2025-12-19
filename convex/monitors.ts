@@ -6,7 +6,12 @@
  * - Incident reporting
  * - Student safety during trips
  *
- * RBAC: Admin+ can manage monitors, monitors can view their own profile
+ * Monitor profiles are auto-created when a user accepts an invitation with role="monitor".
+ * Monitors complete their professional information from the Crew app.
+ *
+ * RBAC:
+ * - Admin+ can list and manage all monitors in their institution
+ * - Monitors can view and update their own profile
  */
 
 import { v } from "convex/values";
@@ -14,62 +19,37 @@ import { query, mutation } from "./_generated/server";
 import { verifyUser, verifyRole, verifyInstitutionAccess } from "./lib/simpleAuth";
 
 /**
- * Create a new monitor profile
- * Called when a user with role "monitor" is created or when
- * assigning monitor role to an existing user
+ * Get current user's monitor profile
+ * Used by monitors in Crew app to view/complete their profile
  */
-export const createMonitor = mutation({
+export const getMyMonitorProfile = query({
   args: {
-    userId: v.id("users"), // Current user making the request
-    targetUserId: v.id("users"), // User to create monitor profile for
-    institutionId: v.id("institutions"),
-    idNumber: v.string(),
-    phone: v.string(),
-    emergencyContact: v.string(),
-    firstAidCertified: v.optional(v.boolean()),
-    firstAidCertExpiry: v.optional(v.number()),
-    childCareCertified: v.optional(v.boolean()),
+    userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    // Require admin or higher
-    await verifyRole(ctx, args.userId, "admin");
+    const currentUser = await verifyUser(ctx, args.userId);
 
-    // Verify user exists and has monitor role
-    const user = await ctx.db.get(args.targetUserId);
-    if (!user) {
-      throw new Error("Usuario no encontrado");
-    }
-    if (user.role !== "monitor") {
-      throw new Error("El usuario debe tener rol de monitor para crear un perfil de monitor");
+    if (currentUser.role !== "monitor") {
+      throw new Error("Solo monitores pueden acceder a su perfil de monitor");
     }
 
-    // Check if monitor profile already exists
-    const existingMonitor = await ctx.db
+    const monitor = await ctx.db
       .query("monitors")
-      .withIndex("by_user", (q) => q.eq("userId", args.targetUserId))
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
-    if (existingMonitor) {
-      throw new Error("Ya existe un perfil de monitor para este usuario");
+    if (!monitor) {
+      return null;
     }
 
-    const now = Date.now();
-
-    const monitorId = await ctx.db.insert("monitors", {
-      userId: args.targetUserId,
-      institutionId: args.institutionId,
-      idNumber: args.idNumber,
-      phone: args.phone,
-      emergencyContact: args.emergencyContact,
-      firstAidCertified: args.firstAidCertified ?? false,
-      firstAidCertExpiry: args.firstAidCertExpiry,
-      childCareCertified: args.childCareCertified ?? false,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return { monitorId, success: true };
+    return {
+      ...monitor,
+      user: {
+        name: currentUser.name,
+        email: currentUser.email,
+        phone: currentUser.phone,
+      },
+    };
   },
 });
 
@@ -203,6 +183,8 @@ export const listMonitorsByInstitution = query({
 
 /**
  * Update monitor profile
+ * Monitors can update their own profile from Crew app
+ * Admin can update any monitor in their institution
  */
 export const updateMonitor = mutation({
   args: {
@@ -252,9 +234,20 @@ export const updateMonitor = mutation({
     if (args.childCareCertified !== undefined) updates.childCareCertified = args.childCareCertified;
     if (args.isActive !== undefined) updates.isActive = args.isActive;
 
+    // Calculate profileCompleted based on required professional fields
+    const newIdNumber = args.idNumber ?? monitor.idNumber;
+    const newPhone = args.phone ?? monitor.phone;
+    const newEmergencyContact = args.emergencyContact ?? monitor.emergencyContact;
+
+    updates.profileCompleted = !!(
+      newIdNumber &&
+      newPhone &&
+      newEmergencyContact
+    );
+
     await ctx.db.patch(args.monitorId, updates);
 
-    return { success: true };
+    return { success: true, profileCompleted: updates.profileCompleted };
   },
 });
 

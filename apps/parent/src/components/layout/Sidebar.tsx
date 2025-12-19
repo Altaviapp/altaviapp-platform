@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, MapPin, Clock, User, Settings, LogOut, Bell, GraduationCap, FileText } from 'lucide-react';
+import { Home, MapPin, Clock, Settings, LogOut, Bell, GraduationCap, FileText, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConvexAuth } from '@/hooks';
 
@@ -14,11 +14,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: Home, label: 'Inicio', href: '/dashboard' },
+  { icon: Users, label: 'Mis Hijos', href: '/students' },
   { icon: MapPin, label: 'Seguimiento', href: '/tracking' },
   { icon: FileText, label: 'Novedades', href: '/novedades' },
   { icon: Clock, label: 'Historial', href: '/history' },
   { icon: Bell, label: 'Notificaciones', href: '/notifications' },
-  { icon: User, label: 'Perfil', href: '/profile' },
 ];
 
 interface SidebarProps {

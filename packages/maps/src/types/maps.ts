@@ -66,3 +66,45 @@ export type MarkerInfo = {
   title?: string;
   draggable?: boolean;
 };
+
+/**
+ * Student input for route optimization
+ */
+export type StudentForRoute = {
+  id: string;
+  name: string;
+  position: LatLng;
+  address?: string;
+};
+
+/**
+ * Optimized stop with ETA information
+ */
+export type OptimizedStop = {
+  studentId: string;
+  studentName: string;
+  position: LatLng;
+  address: string;
+  order: number;
+  estimatedArrivalTime: string; // HH:mm format
+  durationFromPrevious: number; // seconds
+  distanceFromPrevious: number; // meters
+};
+
+/**
+ * Result of route optimization for students
+ */
+export type RouteOptimizationResult = {
+  stops: OptimizedStop[];
+  totalDuration: number; // seconds
+  totalDistance: number; // meters
+  encodedPolyline: string;
+  startTime: string; // HH:mm format
+  endTime: string; // HH:mm format
+  bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  };
+};

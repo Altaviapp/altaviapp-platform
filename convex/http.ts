@@ -1414,24 +1414,22 @@ http.route({
 
 /**
  * DRIVERS ENDPOINTS
+ *
+ * Note: Driver profiles are auto-created when users accept invitations with role="driver".
+ * The /drivers/create endpoint is deprecated.
  */
 http.route({
   path: "/drivers/create",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      const body = await request.json();
-      const result = await ctx.runMutation(api.drivers.createDriver, body);
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      });
-    } catch (error: any) {
-      return new Response(JSON.stringify({ success: false, error: error.message }), {
-        status: 400,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      });
-    }
+  handler: httpAction(async () => {
+    // Driver profiles are now auto-created when user accepts invitation
+    return new Response(JSON.stringify({
+      success: false,
+      error: "Este endpoint está deprecado. Los perfiles de conductor se crean automáticamente cuando el usuario acepta la invitación con rol 'driver'.",
+    }), {
+      status: 410, // Gone
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    });
   }),
 });
 

@@ -66,6 +66,7 @@ export function useRouteMutations() {
   const { userId, institutionId } = useConvexAuth();
 
   const createRoute = useMutation(api.routes.createRoute);
+  const createRouteWithStops = useMutation(api.routes.createRouteWithStops);
   const updateRoute = useMutation(api.routes.updateRoute);
   const deactivateRoute = useMutation(api.routes.deactivateRoute);
 
@@ -109,6 +110,45 @@ export function useRouteMutations() {
     deactivateRoute: async (routeId: Id<"routes">) => {
       if (!userId) throw new Error("Not authenticated");
       return deactivateRoute({ userId, routeId });
+    },
+
+    // Create route with stops (from wizard)
+    createRouteWithStops: async (data: {
+      name: string;
+      type: "pickup" | "dropoff";
+      vehicleId: Id<"vehicles">;
+      driverId: Id<"drivers">;
+      monitorId?: Id<"monitors">;
+      scheduledStartTime: string;
+      scheduledEndTime: string;
+      schoolArrivalTime?: string;
+      schoolDepartureTime?: string;
+      recurrence?: {
+        type: "daily" | "weekly" | "monthly" | "one_time";
+        daysOfWeek?: string[];
+        dayOfWeek?: string;
+        dayOfMonth?: number;
+        specificDate?: string;
+      };
+      optimizedPolyline?: string;
+      estimatedDuration?: number;
+      estimatedDistance?: number;
+      stops: Array<{
+        name: string;
+        address: string;
+        latitude: number;
+        longitude: number;
+        scheduledTime: string;
+        estimatedArrivalTime?: string;
+        durationFromPrevious?: number;
+        order: number;
+        geofenceRadius?: number;
+        studentId: Id<"students">;
+      }>;
+      isActive?: boolean;
+    }) => {
+      if (!userId || !institutionId) throw new Error("Not authenticated");
+      return createRouteWithStops({ userId, institutionId, ...data });
     },
 
     // Stop mutations

@@ -1,127 +1,150 @@
 'use client';
 
-import { useState } from 'react';
-import { Bell, Check, MapPin, Bus, AlertTriangle, CheckCircle, Clock, Calendar, Settings, ChevronDown } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Bell, Check, MapPin, Bus, AlertTriangle, CheckCircle, Clock, Calendar, Settings, ChevronDown, Loader2, Info, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-
-// Mock notifications data
-const notifications = [
-  {
-    date: 'Hoy - 03/12/2024',
-    items: [
-      {
-        id: 1,
-        type: 'checkin',
-        title: 'Check-in exitoso',
-        message: 'Sofía García abordó el bus a las 07:45',
-        detail: 'Ruta: Centro - Escuela Altaviapp',
-        time: 'Hace 15 min',
-        read: false,
-        priority: 'normal',
-      },
-      {
-        id: 2,
-        type: 'proximity',
-        title: 'Bus cerca de tu parada',
-        message: 'El bus llegará a la parada de Sofía en 5 minutos',
-        detail: 'Hora estimada: 07:45',
-        time: 'Hace 20 min',
-        read: false,
-        priority: 'high',
-      },
-      {
-        id: 3,
-        type: 'trip_started',
-        title: 'Viaje iniciado',
-        message: 'El conductor Juan Pérez ha iniciado el viaje de ida',
-        detail: 'Ruta: Centro - Escuela Altaviapp',
-        time: 'Hace 35 min',
-        read: true,
-        priority: 'normal',
-      },
-      {
-        id: 4,
-        type: 'delay',
-        title: 'Retraso en la ruta',
-        message: 'La ruta Centro - Escuela tiene un retraso de 10 minutos',
-        detail: 'Debido a tráfico. Nueva hora estimada: 08:25',
-        time: 'Hace 1 hora',
-        read: true,
-        priority: 'urgent',
-      },
-    ],
-  },
-  {
-    date: 'Ayer - 02/12/2024',
-    items: [
-      {
-        id: 5,
-        type: 'checkout',
-        title: 'Llegada exitosa',
-        message: 'Sofía llegó a casa. Check-out completado.',
-        detail: 'Duración del viaje: 29 minutos',
-        time: '14:32',
-        read: true,
-        priority: 'normal',
-      },
-      {
-        id: 6,
-        type: 'checkin',
-        title: 'Check-in exitoso',
-        message: 'Sofía abordó el bus a las 14:03',
-        detail: 'Ruta: Escuela Altaviapp - Centro',
-        time: '14:03',
-        read: true,
-        priority: 'normal',
-      },
-      {
-        id: 7,
-        type: 'checkout',
-        title: 'Llegada a la escuela',
-        message: 'Sofía llegó a Escuela Altaviapp. Check-out completado.',
-        detail: 'Duración del viaje: 26 minutos',
-        time: '08:08',
-        read: true,
-        priority: 'normal',
-      },
-    ],
-  },
-];
+import { useNotifications, useUnreadCount, useNotificationMutations, useMyStudents } from '@/hooks';
 
 const filters = [
   { value: 'all', label: 'Todas' },
   { value: 'unread', label: 'No leídas' },
-  { value: 'important', label: 'Importantes' },
 ];
 
-const students = [
-  { id: 'all', name: 'Todos' },
-  { id: 1, name: 'Sofía García' },
-  { id: 2, name: 'Carlos García' },
-];
-
+// Map notification types to icons and colors
 const typeConfig: Record<string, { icon: typeof Bell; color: string; bg: string }> = {
-  checkin: { icon: CheckCircle, color: 'text-success', bg: 'bg-success/10' },
-  checkout: { icon: CheckCircle, color: 'text-success', bg: 'bg-success/10' },
-  proximity: { icon: MapPin, color: 'text-warning', bg: 'bg-warning/10' },
-  trip_started: { icon: Bus, color: 'text-info', bg: 'bg-info/10' },
-  delay: { icon: AlertTriangle, color: 'text-error', bg: 'bg-error/10' },
-  incident: { icon: AlertTriangle, color: 'text-error', bg: 'bg-error/10' },
+  success: { icon: CheckCircle, color: 'text-success', bg: 'bg-success/10' },
+  info: { icon: Info, color: 'text-info', bg: 'bg-info/10' },
+  warning: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10' },
+  error: { icon: AlertCircle, color: 'text-error', bg: 'bg-error/10' },
 };
 
-const priorityColors: Record<string, string> = {
-  normal: 'bg-success',
-  high: 'bg-warning',
-  urgent: 'bg-error',
+// Map categories to specific icons
+const categoryConfig: Record<string, { icon: typeof Bell; color: string; bg: string }> = {
+  checkin: { icon: CheckCircle, color: 'text-success', bg: 'bg-success/10' },
+  trip_update: { icon: Bus, color: 'text-info', bg: 'bg-info/10' },
+  eta: { icon: MapPin, color: 'text-warning', bg: 'bg-warning/10' },
+  novedad: { icon: Bell, color: 'text-primary', bg: 'bg-primary/10' },
+  incident: { icon: AlertTriangle, color: 'text-error', bg: 'bg-error/10' },
+  relay: { icon: Bus, color: 'text-info', bg: 'bg-info/10' },
+  approval_request: { icon: Clock, color: 'text-warning', bg: 'bg-warning/10' },
+  system: { icon: Info, color: 'text-gray-500', bg: 'bg-gray-100' },
 };
+
+// Group notifications by date
+function groupNotificationsByDate(notifications: Array<{
+  _id: string;
+  title: string;
+  message: string;
+  type: string;
+  category?: string;
+  read: boolean;
+  createdAt: number;
+}>) {
+  const groups: { [key: string]: typeof notifications } = {};
+
+  for (const notification of notifications) {
+    const date = new Date(notification.createdAt);
+    const dateKey = date.toISOString().split('T')[0] ?? 'unknown';
+    if (!groups[dateKey]) {
+      groups[dateKey] = [];
+    }
+    groups[dateKey].push(notification);
+  }
+
+  return Object.entries(groups)
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, items]) => ({
+      date,
+      formattedDate: formatDateLabel(date),
+      items,
+    }));
+}
+
+function formatDateLabel(dateStr: string): string {
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  if (dateStr === today) {
+    return 'Hoy';
+  }
+  if (dateStr === yesterdayStr) {
+    return 'Ayer';
+  }
+
+  const date = new Date(dateStr + 'T12:00:00');
+  return date.toLocaleDateString('es-EC', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function formatTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+
+  if (minutes < 1) return 'Ahora';
+  if (minutes < 60) return `Hace ${minutes} min`;
+  if (hours < 24) return `Hace ${hours}h`;
+
+  return date.toLocaleTimeString('es-EC', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export default function NotificationsPage() {
+  const { students } = useMyStudents();
   const [selectedFilter, setSelectedFilter] = useState('all');
-  const [selectedStudent, setSelectedStudent] = useState(students[0]!);
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string }>({ id: 'all', name: 'Todos' });
   const [showStudentSelector, setShowStudentSelector] = useState(false);
 
-  const unreadCount = notifications.flatMap(d => d.items).filter(n => !n.read).length;
+  const { notifications, isLoading, isEmpty } = useNotifications({
+    unreadOnly: selectedFilter === 'unread',
+    limit: 100,
+  });
+  const { count: unreadCount } = useUnreadCount();
+  const { markAsRead, markAllAsRead } = useNotificationMutations();
+
+  const studentOptions = useMemo(() => [
+    { id: 'all', name: 'Todos' },
+    ...students.map((s) => ({ id: s._id, name: `${s.firstName} ${s.lastName}` })),
+  ], [students]);
+
+  const groupedNotifications = useMemo(() => groupNotificationsByDate(notifications as any[]), [notifications]);
+
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      await markAsRead(notificationId as any);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-gray-500">Cargando notificaciones...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -133,12 +156,22 @@ export default function NotificationsPage() {
             <p className="text-sm text-gray-500">{unreadCount} sin leer</p>
           )}
         </div>
-        <Link
-          href="/settings"
-          className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
-        >
-          <Settings className="w-5 h-5 text-gray-600" />
-        </Link>
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllAsRead}
+              className="px-3 py-1.5 text-sm text-primary hover:bg-primary/10 rounded-lg transition-colors"
+            >
+              Marcar todas
+            </button>
+          )}
+          <Link
+            href="/settings"
+            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+          >
+            <Settings className="w-5 h-5 text-gray-600" />
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -159,55 +192,75 @@ export default function NotificationsPage() {
         ))}
 
         {/* Student Filter */}
-        <div className="relative ml-auto">
-          <button
-            onClick={() => setShowStudentSelector(!showStudentSelector)}
-            className="flex items-center gap-1 px-3 py-2 rounded-full bg-gray-100 text-sm text-gray-600 hover:bg-gray-200 transition-colors whitespace-nowrap"
-          >
-            {selectedStudent.name}
-            <ChevronDown className={cn('w-4 h-4 transition-transform', showStudentSelector && 'rotate-180')} />
-          </button>
+        {students.length > 1 && (
+          <div className="relative ml-auto">
+            <button
+              onClick={() => setShowStudentSelector(!showStudentSelector)}
+              className="flex items-center gap-1 px-3 py-2 rounded-full bg-gray-100 text-sm text-gray-600 hover:bg-gray-200 transition-colors whitespace-nowrap"
+            >
+              {selectedStudent.name}
+              <ChevronDown className={cn('w-4 h-4 transition-transform', showStudentSelector && 'rotate-180')} />
+            </button>
 
-          {showStudentSelector && (
-            <div className="absolute top-full right-0 mt-2 bg-white rounded-xl border border-gray-200 shadow-lg z-10 overflow-hidden min-w-[150px]">
-              {students.map((student) => (
-                <button
-                  key={student.id}
-                  onClick={() => {
-                    setSelectedStudent(student);
-                    setShowStudentSelector(false);
-                  }}
-                  className={cn(
-                    'w-full p-3 text-left text-sm hover:bg-gray-50 transition-colors',
-                    selectedStudent.id === student.id && 'bg-primary-50 text-primary'
-                  )}
-                >
-                  {student.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            {showStudentSelector && (
+              <div className="absolute top-full right-0 mt-2 bg-white rounded-xl border border-gray-200 shadow-lg z-10 overflow-hidden min-w-[150px]">
+                {studentOptions.map((student) => (
+                  <button
+                    key={student.id}
+                    onClick={() => {
+                      setSelectedStudent(student);
+                      setShowStudentSelector(false);
+                    }}
+                    className={cn(
+                      'w-full p-3 text-left text-sm hover:bg-gray-50 transition-colors',
+                      selectedStudent.id === student.id && 'bg-primary-50 text-primary'
+                    )}
+                  >
+                    {student.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Empty State */}
+      {isEmpty && (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Sin notificaciones</h3>
+          <p className="text-gray-500">
+            {selectedFilter === 'unread'
+              ? 'No tienes notificaciones sin leer.'
+              : 'No tienes notificaciones aún.'}
+          </p>
+        </div>
+      )}
+
       {/* Notifications List */}
-      {notifications.map((day) => (
-        <div key={day.date}>
+      {groupedNotifications.map((group) => (
+        <div key={group.date}>
           {/* Date Header */}
           <div className="flex items-center gap-2 mb-3">
             <Calendar className="w-4 h-4 text-gray-400" />
-            <span className="text-sm font-medium text-gray-600">{day.date}</span>
+            <span className="text-sm font-medium text-gray-600">
+              {group.formattedDate} - {group.date}
+            </span>
           </div>
 
           {/* Notification Items */}
           <div className="space-y-3">
-            {day.items.map((notification) => {
-              const typeInfo = typeConfig[notification.type] ?? typeConfig.checkin!;
-              const IconComponent = typeInfo.icon;
+            {group.items.map((notification) => {
+              // Get config based on category first, then type
+              const config = notification.category
+                ? categoryConfig[notification.category] ?? typeConfig[notification.type]
+                : typeConfig[notification.type];
+              const IconComponent = config?.icon ?? Bell;
 
               return (
                 <div
-                  key={notification.id}
+                  key={notification._id}
                   className={cn(
                     'bg-white rounded-xl border p-4 transition-colors',
                     notification.read ? 'border-gray-200' : 'border-primary/30 bg-primary-50/30'
@@ -215,8 +268,8 @@ export default function NotificationsPage() {
                 >
                   <div className="flex gap-3">
                     {/* Icon */}
-                    <div className={cn('w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0', typeInfo.bg)}>
-                      <IconComponent className={cn('w-5 h-5', typeInfo.color)} />
+                    <div className={cn('w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0', config?.bg ?? 'bg-gray-100')}>
+                      <IconComponent className={cn('w-5 h-5', config?.color ?? 'text-gray-500')} />
                     </div>
 
                     {/* Content */}
@@ -225,17 +278,15 @@ export default function NotificationsPage() {
                         <h3 className={cn('font-medium', notification.read ? 'text-gray-700' : 'text-gray-900')}>
                           {notification.title}
                         </h3>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs text-gray-500">{notification.time}</span>
-                          <div className={cn('w-2 h-2 rounded-full', priorityColors[notification.priority])} />
-                        </div>
+                        <span className="text-xs text-gray-500 flex-shrink-0">
+                          {formatTime(notification.createdAt)}
+                        </span>
                       </div>
                       <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
-                      <p className="text-xs text-gray-500 mt-1">{notification.detail}</p>
 
                       {/* Actions */}
                       <div className="flex items-center gap-4 mt-3">
-                        {(notification.type === 'proximity' || notification.type === 'trip_started') && (
+                        {notification.category === 'trip_update' || notification.category === 'eta' ? (
                           <Link
                             href="/tracking"
                             className="flex items-center gap-1 text-sm text-info hover:underline"
@@ -243,9 +294,12 @@ export default function NotificationsPage() {
                             <MapPin className="w-4 h-4" />
                             Ver en mapa
                           </Link>
-                        )}
+                        ) : null}
                         {!notification.read && (
-                          <button className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+                          <button
+                            onClick={() => handleMarkAsRead(notification._id)}
+                            className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                          >
                             <Check className="w-4 h-4" />
                             Marcar como leída
                           </button>
@@ -259,11 +313,6 @@ export default function NotificationsPage() {
           </div>
         </div>
       ))}
-
-      {/* Load More */}
-      <button className="w-full py-3 text-center text-sm text-primary font-medium hover:underline">
-        Cargar más notificaciones...
-      </button>
     </div>
   );
 }

@@ -2,14 +2,16 @@
  * RouteMap Component
  *
  * Main Leaflet map with route polyline, stop markers, and bus marker
+ * Supports both encoded polylines (from Google Directions API) and simple stop paths
  */
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { decodePolyline } from '@altaviapp/maps';
 
 import type { Stop } from '@/types';
 import type { GPSLocation } from '@/lib/mockData/gpsLocations';
@@ -29,6 +31,8 @@ export interface RouteMapProps {
   showControls?: boolean;
   /** Trip ID for unique map instance */
   tripId?: string;
+  /** Encoded polyline from Google Directions API (optional) */
+  encodedPolyline?: string;
 }
 
 /**
@@ -94,8 +98,9 @@ export function RouteMap({
   height = '400px',
   showControls = true,
   tripId,
+  encodedPolyline,
 }: RouteMapProps) {
-  const [map, setMap] = useState<any>(null);
+  const [map, setMap] = useState<L.Map | null>(null);
   const [isClient, setIsClient] = useState(false);
 
   // Only render map on client (Leaflet requires window)
@@ -133,11 +138,16 @@ export function RouteMap({
       ? [firstStop.latitude, firstStop.longitude]
       : [-2.1894, -79.8891]; // Default: Guayaquil, Ecuador
 
-  // Route polyline coordinates
-  const routeCoordinates: [number, number][] = stops.map(stop => [
-    stop.latitude,
-    stop.longitude,
-  ]);
+  // Route polyline coordinates - prefer decoded polyline for real routes
+  const routeCoordinates: [number, number][] = useMemo(() => {
+    if (encodedPolyline) {
+      // Decode the polyline and convert to Leaflet format [lat, lng]
+      const decoded = decodePolyline(encodedPolyline);
+      return decoded.map(point => [point.lat, point.lng] as [number, number]);
+    }
+    // Fallback to simple path from stops
+    return stops.map(stop => [stop.latitude, stop.longitude] as [number, number]);
+  }, [encodedPolyline, stops]);
 
   // Map control handlers
   const handleZoomIn = () => {

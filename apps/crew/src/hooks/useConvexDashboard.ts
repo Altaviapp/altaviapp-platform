@@ -4,7 +4,7 @@
  * Convex Dashboard hook for Crew App
  *
  * Provides real-time dashboard data from Convex
- * Simplified to match actual API response structure
+ * Uses route-centric approach for lazy trip creation
  */
 
 import { useQuery } from "convex/react";
@@ -31,6 +31,25 @@ type TripFromAPI = {
   vehicle: { licensePlate: string } | null;
 };
 
+// Route available for today (from listRoutesForDriverToday)
+type RouteForTodayFromAPI = {
+  _id: string;
+  name: string;
+  type: "pickup" | "dropoff";
+  scheduledStartTime: string;
+  scheduledEndTime: string;
+  schoolArrivalTime?: string;
+  schoolDepartureTime?: string;
+  optimizedPolyline?: string;
+  estimatedDuration?: number;
+  estimatedDistance?: number;
+  vehicle: { licensePlate: string; brand: string; model: string } | null;
+  studentCount: number;
+  tripStatus: "scheduled" | "in_progress" | "completed" | "cancelled" | null;
+  tripId: string | null;
+  canStart: boolean;
+};
+
 // ============================================
 // DASHBOARD DATA HOOK
 // ============================================
@@ -38,12 +57,18 @@ type TripFromAPI = {
 export function useConvexDashboard() {
   const { userId, institutionId, user, isDriver, isMonitor, isLoading: authLoading } = useConvexAuth();
 
-  // Get driver's today trips
+  // Get driver's today trips (legacy fallback)
   const today = new Date().toISOString().split("T")[0];
   const tripsData = useQuery(
     api.trips.listTripsForDriver,
     userId ? { userId, date: today } : "skip"
   ) as TripFromAPI[] | undefined;
+
+  // Get routes available for today (new lazy trip creation approach)
+  const routesForTodayData = useQuery(
+    api.trips.listRoutesForDriverToday,
+    userId ? { userId } : "skip"
+  ) as RouteForTodayFromAPI[] | undefined;
 
   // Get notifications
   const notificationsData = useQuery(
@@ -162,6 +187,25 @@ export function useConvexDashboard() {
     punctuality: 95,
   };
 
+  // Transform routes for today to include in response
+  const routesForToday = (routesForTodayData ?? []).map((route) => ({
+    _id: route._id,
+    name: route.name,
+    type: route.type,
+    scheduledStartTime: route.scheduledStartTime,
+    scheduledEndTime: route.scheduledEndTime,
+    schoolArrivalTime: route.schoolArrivalTime,
+    schoolDepartureTime: route.schoolDepartureTime,
+    optimizedPolyline: route.optimizedPolyline,
+    estimatedDuration: route.estimatedDuration,
+    estimatedDistance: route.estimatedDistance,
+    vehicle: route.vehicle,
+    studentCount: route.studentCount,
+    tripStatus: route.tripStatus,
+    tripId: route.tripId,
+    canStart: route.canStart,
+  }));
+
   // Build dashboard data
   const data: DashboardData = {
     driver: driverUser,
@@ -171,10 +215,11 @@ export function useConvexDashboard() {
     recentNotifications,
   };
 
-  const isLoading = authLoading || tripsData === undefined;
+  const isLoading = authLoading || tripsData === undefined || routesForTodayData === undefined;
 
   return {
     data: isLoading ? null : data,
+    routesForToday: isLoading ? [] : routesForToday,
     loading: isLoading,
     error: null,
     refetch: () => {

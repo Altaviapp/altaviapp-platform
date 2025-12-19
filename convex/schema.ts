@@ -48,6 +48,11 @@ export default defineSchema({
     subscriptionPlan: v.union(v.literal("trial"), v.literal("basic"), v.literal("professional"), v.literal("enterprise")),
     subscriptionStatus: v.union(v.literal("active"), v.literal("suspended"), v.literal("cancelled")),
 
+    // School location for route calculation (origin/destination)
+    schoolLatitude: v.optional(v.number()),
+    schoolLongitude: v.optional(v.number()),
+    schoolAddress: v.optional(v.string()),
+
     // API Token for external GPS device authentication (centralized per institution)
     apiToken: v.optional(v.string()),
     apiTokenCreatedAt: v.optional(v.number()),
@@ -197,13 +202,20 @@ export default defineSchema({
     .index("by_device_id", ["gpsDeviceConfig.deviceId"]),
 
   // Drivers
+  // Profile auto-created when user accepts invitation with role="driver"
+  // User completes professional fields later from Crew app
   drivers: defineTable({
     userId: v.id("users"),
     institutionId: v.id("institutions"),
-    licenseNumber: v.string(),
-    licenseExpiry: v.number(),
-    phone: v.string(),
-    emergencyContact: v.string(),
+    // Professional data (filled by driver in their profile)
+    licenseNumber: v.optional(v.string()),
+    licenseType: v.optional(v.string()), // C, D, E
+    licenseExpiry: v.optional(v.number()),
+    // Contact (may come from invitation or filled later)
+    phone: v.optional(v.string()),
+    emergencyContact: v.optional(v.string()),
+    // Profile completion tracking
+    profileCompleted: v.optional(v.boolean()),
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -212,16 +224,22 @@ export default defineSchema({
     .index("by_institution", ["institutionId"]),
 
   // Monitors (Auxiliares - responsible for student check-in/out)
+  // Profile auto-created when user accepts invitation with role="monitor"
+  // User completes professional fields later from Crew app
   monitors: defineTable({
     userId: v.id("users"),
     institutionId: v.id("institutions"),
-    idNumber: v.string(), // Cédula de identidad
-    phone: v.string(),
-    emergencyContact: v.string(),
+    // Professional data (filled by monitor in their profile)
+    idNumber: v.optional(v.string()), // Cédula de identidad
+    // Contact (may come from invitation or filled later)
+    phone: v.optional(v.string()),
+    emergencyContact: v.optional(v.string()),
     // Certifications
     firstAidCertified: v.optional(v.boolean()),
     firstAidCertExpiry: v.optional(v.number()),
     childCareCertified: v.optional(v.boolean()),
+    // Profile completion tracking
+    profileCompleted: v.optional(v.boolean()),
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -244,6 +262,9 @@ export default defineSchema({
     parentEmail: v.string(),
     parentName: v.string(),
     emergencyContact: v.string(),
+    emergencyContactSecondary: v.optional(v.string()), // Secondary emergency contact
+    // Profile photo (stored in Convex storage)
+    photoStorageId: v.optional(v.id("_storage")),
     qrCode: v.string(),
     isActive: v.boolean(),
     createdAt: v.number(),
@@ -263,6 +284,32 @@ export default defineSchema({
     isActive: v.boolean(),
     scheduledStartTime: v.string(),
     scheduledEndTime: v.string(),
+
+    // Target time at school
+    schoolArrivalTime: v.optional(v.string()), // For pickup routes - arrival at school
+    schoolDepartureTime: v.optional(v.string()), // For dropoff routes - departure from school
+
+    // Recurrence configuration
+    recurrence: v.optional(
+      v.object({
+        type: v.union(
+          v.literal("daily"),
+          v.literal("weekly"),
+          v.literal("monthly"),
+          v.literal("one_time")
+        ),
+        daysOfWeek: v.optional(v.array(v.string())), // ["monday", "tuesday", ...] for daily
+        dayOfWeek: v.optional(v.string()), // "monday" for weekly
+        dayOfMonth: v.optional(v.number()), // 1-31 for monthly
+        specificDate: v.optional(v.string()), // "YYYY-MM-DD" for one_time
+      })
+    ),
+
+    // Route optimization data from Google Maps Directions API
+    optimizedPolyline: v.optional(v.string()), // Encoded polyline
+    estimatedDuration: v.optional(v.number()), // Minutes
+    estimatedDistance: v.optional(v.number()), // Meters
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -282,6 +329,11 @@ export default defineSchema({
     order: v.number(),
     geofenceRadius: v.number(),
     isActive: v.boolean(),
+
+    // Calculated ETA from route optimization
+    estimatedArrivalTime: v.optional(v.string()), // HH:mm format
+    durationFromPrevious: v.optional(v.number()), // Seconds from previous stop
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -294,6 +346,11 @@ export default defineSchema({
     routeId: v.id("routes"),
     stopId: v.id("routeStops"),
     isActive: v.boolean(),
+
+    // Permanent schedule exceptions - days student does NOT travel
+    // e.g., ["friday", "saturday"] means student doesn't travel those days
+    excludeDays: v.optional(v.array(v.string())),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })

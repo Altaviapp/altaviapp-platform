@@ -143,6 +143,10 @@ export const create = mutation({
     }
 
     // Create the novedad
+    // Parent pickup goes directly to "acknowledged" (no approval needed)
+    // This takes immediate effect when the trip is created/started
+    const initialStatus = args.type === "parent_pickup" ? "acknowledged" : "pending";
+
     const now = Date.now();
     const novedadId = await ctx.db.insert("novedades", {
       institutionId: student.institutionId,
@@ -154,7 +158,10 @@ export const create = mutation({
       newStopId: args.newStopId,
       time: args.time,
       reason: args.reason,
-      status: "pending",
+      status: initialStatus,
+      // For parent_pickup, auto-acknowledge
+      acknowledgedAt: args.type === "parent_pickup" ? now : undefined,
+      acknowledgedBy: args.type === "parent_pickup" ? args.userId : undefined,
       createdAt: now,
       updatedAt: now,
     });
@@ -180,14 +187,24 @@ export const create = mutation({
         continue;
       }
 
+      // Determine notification type and title based on novedad type
+      const isParentPickup = args.type === "parent_pickup";
+      const notifTitle = isParentPickup
+        ? `⚠️ PADRE RECOGE: ${student.firstName} ${student.lastName}`
+        : `Nueva novedad: ${getTypeLabel(args.type)}`;
+      const notifMessage = isParentPickup
+        ? `${student.firstName} ${student.lastName} será recogido por su padre. NO ABORDARÁ. Fecha: ${args.date}`
+        : `${student.firstName} ${student.lastName} - ${args.reason}. Fecha: ${args.date}`;
+      const notifType = isParentPickup ? "warning" : "info";
+
       // Notify driver
       const driver = await ctx.db.get(route.driverId);
       if (driver && !notifiedUsers.has(driver.userId)) {
         await ctx.db.insert("notifications", {
           userId: driver.userId,
-          title: `Nueva novedad: ${getTypeLabel(args.type)}`,
-          message: `${student.firstName} ${student.lastName} - ${args.reason}. Fecha: ${args.date}`,
-          type: "info",
+          title: notifTitle,
+          message: notifMessage,
+          type: notifType,
           category: "novedad",
           relatedEntityType: "novedad",
           relatedEntityId: novedadId,
@@ -203,9 +220,9 @@ export const create = mutation({
         if (monitor && !notifiedUsers.has(monitor.userId)) {
           await ctx.db.insert("notifications", {
             userId: monitor.userId,
-            title: `Nueva novedad: ${getTypeLabel(args.type)}`,
-            message: `${student.firstName} ${student.lastName} - ${args.reason}. Fecha: ${args.date}`,
-            type: "info",
+            title: notifTitle,
+            message: notifMessage,
+            type: notifType,
             category: "novedad",
             relatedEntityType: "novedad",
             relatedEntityId: novedadId,
@@ -217,7 +234,7 @@ export const create = mutation({
       }
     }
 
-    return { success: true, novedadId };
+    return { success: true, novedadId, status: initialStatus };
   },
 });
 
@@ -958,6 +975,104 @@ export const getPendingCountForAdmin = query({
       .collect();
 
     return novedades.length;
+  },
+});
+
+/**
+ * Get novedades for a specific route (before trip exists)
+ * Used by crew app to preview novedades before starting a trip
+ */
+export const getNovedadesForRoute = query({
+  args: {
+    userId: v.id("users"),
+    routeId: v.id("routes"),
+    date: v.string(), // YYYY-MM-DD
+  },
+  handler: async (ctx, args) => {
+    const route = await ctx.db.get(args.routeId);
+    if (!route) {
+      return [];
+    }
+
+    // Get all students assigned to this route
+    const studentRoutes = await ctx.db
+      .query("studentRoutes")
+      .withIndex("by_route", (q) => q.eq("routeId", args.routeId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    if (studentRoutes.length === 0) {
+      return [];
+    }
+
+    const studentIds = studentRoutes.map((sr) => sr.studentId);
+
+    // Get novedades for these students on this date
+    const allNovedades = [];
+
+    for (const studentId of studentIds) {
+      const novedades = await ctx.db
+        .query("novedades")
+        .withIndex("by_student_date", (q) =>
+          q.eq("studentId", studentId).eq("date", args.date)
+        )
+        .filter((q) =>
+          q.and(
+            // Not cancelled or expired
+            q.neq(q.field("status"), "cancelled"),
+            q.neq(q.field("status"), "expired"),
+            // Affects this route type
+            q.or(
+              q.eq(q.field("affectedRouteType"), "both"),
+              q.eq(q.field("affectedRouteType"), route.type)
+            )
+          )
+        )
+        .collect();
+
+      allNovedades.push(...novedades);
+    }
+
+    // Enrich with student info
+    const enriched = await Promise.all(
+      allNovedades.map(async (novedad) => {
+        const student = await ctx.db.get(novedad.studentId);
+        const stop = await ctx.db
+          .query("studentRoutes")
+          .withIndex("by_student", (q) => q.eq("studentId", novedad.studentId))
+          .filter((q) => q.eq(q.field("routeId"), args.routeId))
+          .first();
+        const stopInfo = stop?.stopId ? await ctx.db.get(stop.stopId) : null;
+
+        return {
+          ...novedad,
+          studentName: student ? `${student.firstName} ${student.lastName}` : "Desconocido",
+          studentGrade: student?.grade || "",
+          stopName: stopInfo?.name || null,
+          stopOrder: stopInfo?.order || 0,
+          typeLabel: getTypeLabel(novedad.type),
+          routeTypeLabel: getRouteTypeLabel(novedad.affectedRouteType),
+        };
+      })
+    );
+
+    // Sort by type priority (absence first, then parent_pickup, then stop_change)
+    const typePriority: Record<string, number> = {
+      absence: 1,
+      parent_pickup: 2,
+      stop_change: 3,
+      early_pickup: 4,
+      late_arrival: 5,
+    };
+
+    enriched.sort((a, b) => {
+      const priorityA = typePriority[a.type] || 99;
+      const priorityB = typePriority[b.type] || 99;
+      if (priorityA !== priorityB) return priorityA - priorityB;
+      return (a.stopOrder || 0) - (b.stopOrder || 0);
+    });
+
+    return enriched;
   },
 });
 

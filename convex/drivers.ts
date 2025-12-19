@@ -1,8 +1,12 @@
 /**
  * Driver Management Functions
  *
- * CRUD operations for driver profiles.
- * RBAC: Admin+ can manage drivers, drivers can view their own profile.
+ * Driver profiles are auto-created when a user accepts an invitation with role="driver".
+ * Drivers complete their professional information from the Crew app.
+ *
+ * RBAC:
+ * - Admin+ can list and manage all drivers in their institution
+ * - Drivers can view and update their own profile
  */
 
 import { v } from "convex/values";
@@ -10,54 +14,37 @@ import { query, mutation } from "./_generated/server";
 import { verifyUser, verifyRole, verifyInstitutionAccess } from "./lib/simpleAuth";
 
 /**
- * Create a new driver profile
+ * Get current user's driver profile
+ * Used by drivers in Crew app to view/complete their profile
  */
-export const createDriver = mutation({
+export const getMyDriverProfile = query({
   args: {
     userId: v.id("users"),
-    targetUserId: v.id("users"),
-    institutionId: v.id("institutions"),
-    licenseNumber: v.string(),
-    licenseExpiry: v.number(),
-    phone: v.string(),
-    emergencyContact: v.string(),
   },
   handler: async (ctx, args) => {
-    await verifyRole(ctx, args.userId, "admin");
+    const currentUser = await verifyUser(ctx, args.userId);
 
-    // Verify target user exists and has driver role
-    const user = await ctx.db.get(args.targetUserId);
-    if (!user) {
-      throw new Error("Usuario no encontrado");
-    }
-    if (user.role !== "driver") {
-      throw new Error("El usuario debe tener rol de conductor");
+    if (currentUser.role !== "driver") {
+      throw new Error("Solo conductores pueden acceder a su perfil de conductor");
     }
 
-    // Check if driver profile already exists
-    const existing = await ctx.db
+    const driver = await ctx.db
       .query("drivers")
-      .withIndex("by_user", (q) => q.eq("userId", args.targetUserId))
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
-    if (existing) {
-      throw new Error("Ya existe un perfil de conductor para este usuario");
+    if (!driver) {
+      return null;
     }
 
-    const now = Date.now();
-    const driverId = await ctx.db.insert("drivers", {
-      userId: args.targetUserId,
-      institutionId: args.institutionId,
-      licenseNumber: args.licenseNumber,
-      licenseExpiry: args.licenseExpiry,
-      phone: args.phone,
-      emergencyContact: args.emergencyContact,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return { success: true, driverId };
+    return {
+      ...driver,
+      user: {
+        name: currentUser.name,
+        email: currentUser.email,
+        phone: currentUser.phone,
+      },
+    };
   },
 });
 
@@ -185,12 +172,15 @@ export const listDriversByInstitution = query({
 
 /**
  * Update driver profile
+ * Drivers can update their own profile from Crew app
+ * Admin can update any driver in their institution
  */
 export const updateDriver = mutation({
   args: {
     userId: v.id("users"),
     driverId: v.id("drivers"),
     licenseNumber: v.optional(v.string()),
+    licenseType: v.optional(v.string()), // C, D, E
     licenseExpiry: v.optional(v.number()),
     phone: v.optional(v.string()),
     emergencyContact: v.optional(v.string()),
@@ -222,13 +212,27 @@ export const updateDriver = mutation({
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
 
     if (args.licenseNumber !== undefined) updates.licenseNumber = args.licenseNumber;
+    if (args.licenseType !== undefined) updates.licenseType = args.licenseType;
     if (args.licenseExpiry !== undefined) updates.licenseExpiry = args.licenseExpiry;
     if (args.phone !== undefined) updates.phone = args.phone;
     if (args.emergencyContact !== undefined) updates.emergencyContact = args.emergencyContact;
     if (args.isActive !== undefined) updates.isActive = args.isActive;
 
+    // Calculate profileCompleted based on required professional fields
+    const newLicenseNumber = args.licenseNumber ?? driver.licenseNumber;
+    const newLicenseExpiry = args.licenseExpiry ?? driver.licenseExpiry;
+    const newEmergencyContact = args.emergencyContact ?? driver.emergencyContact;
+    const newPhone = args.phone ?? driver.phone;
+
+    updates.profileCompleted = !!(
+      newLicenseNumber &&
+      newLicenseExpiry &&
+      newEmergencyContact &&
+      newPhone
+    );
+
     await ctx.db.patch(args.driverId, updates);
-    return { success: true };
+    return { success: true, profileCompleted: updates.profileCompleted };
   },
 });
 

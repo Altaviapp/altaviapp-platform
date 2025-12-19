@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection, ConfirmDialog } from '@/components/shared';
 import { cn } from '@/lib/utils';
-import { GoogleMapsProvider, InteractiveMap } from '@altaviapp/maps';
+import { GoogleMapsProvider, InteractiveMap, RoutePolyline } from '@altaviapp/maps';
 import type { MarkerInfo } from '@altaviapp/maps';
 import { useRoute, useRouteMutations } from '@/hooks';
 
@@ -30,6 +30,12 @@ export default function RouteDetailPage() {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+
+  // Handler for when map loads
+  const handleMapLoad = useCallback((mapInstance: google.maps.Map) => {
+    setMap(mapInstance);
+  }, []);
 
   // Real data from Convex
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -216,9 +222,20 @@ export default function RouteDetailPage() {
                   center={mapCenter}
                   zoom={13}
                   markers={mapMarkers}
-                  polyline={routePolyline}
+                  polyline={route.optimizedPolyline ? undefined : routePolyline}
                   style={{ height: '400px' }}
+                  onMapLoad={handleMapLoad}
                 />
+                {/* Use RoutePolyline for optimized route visualization */}
+                {route.optimizedPolyline && (
+                  <RoutePolyline
+                    map={map}
+                    encodedPolyline={route.optimizedPolyline}
+                    strokeColor="#042940"
+                    strokeWeight={5}
+                    strokeOpacity={0.8}
+                  />
+                )}
                 {/* Map Legend */}
                 <div className="p-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-4 text-xs">
                   <div className="flex items-center gap-2">

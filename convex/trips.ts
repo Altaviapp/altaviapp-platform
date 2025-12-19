@@ -1143,3 +1143,524 @@ function getTripStudentStatusLabel(status: string): string {
   };
   return labels[status] || status;
 }
+
+// ============================================
+// LAZY TRIP CREATION (Start from Route)
+// ============================================
+
+/**
+ * Helper function to get day name in lowercase
+ */
+function getDayName(date: Date): string {
+  const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  return days[date.getDay()] || "monday";
+}
+
+/**
+ * Validate that a route's recurrence is valid for today
+ */
+function validateRouteForDate(
+  recurrence: {
+    type: "daily" | "weekly" | "monthly" | "one_time";
+    daysOfWeek?: string[];
+    dayOfWeek?: string;
+    dayOfMonth?: number;
+    specificDate?: string;
+  } | undefined,
+  dateStr: string
+): boolean {
+  // If no recurrence defined, route runs every day (backwards compatible)
+  if (!recurrence) {
+    return true;
+  }
+
+  const date = new Date(dateStr + "T12:00:00"); // Use noon to avoid timezone issues
+  const dayName = getDayName(date);
+
+  switch (recurrence.type) {
+    case "daily":
+      // If daysOfWeek specified, check if today is included
+      if (recurrence.daysOfWeek && recurrence.daysOfWeek.length > 0) {
+        return recurrence.daysOfWeek.includes(dayName);
+      }
+      // No specific days = every day
+      return true;
+
+    case "weekly":
+      return recurrence.dayOfWeek === dayName;
+
+    case "monthly":
+      return recurrence.dayOfMonth === date.getDate();
+
+    case "one_time":
+      return recurrence.specificDate === dateStr;
+
+    default:
+      return true;
+  }
+}
+
+/**
+ * Start a trip lazily from a route (creates trip on-demand)
+ *
+ * This is the preferred way to start trips in the new lazy-creation flow:
+ * 1. Validates route recurrence for today
+ * 2. Checks no existing trip for this route today
+ * 3. Creates the trip with status in_progress
+ * 4. Generates tripStudents (respecting excludeDays)
+ * 5. Records initial GPS location
+ */
+export const startTripFromRoute = mutation({
+  args: {
+    userId: v.id("users"),
+    routeId: v.id("routes"),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await verifyUser(ctx, args.userId);
+
+    // 1. Get and validate route
+    const route = await ctx.db.get(args.routeId);
+    if (!route) {
+      throw new Error("Ruta no encontrada");
+    }
+
+    if (!route.isActive) {
+      throw new Error("Esta ruta no está activa");
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+
+    // 2. Verify user is the driver or admin
+    const driver = await ctx.db.get(route.driverId);
+    if (!driver) {
+      throw new Error("Conductor no encontrado para esta ruta");
+    }
+
+    if (driver.userId !== args.userId && currentUser.role !== "admin" && currentUser.role !== "super_admin") {
+      throw new Error("No tienes permiso para iniciar viajes de esta ruta");
+    }
+
+    // 3. Validate recurrence for today
+    const today = new Date().toISOString().split("T")[0]!;
+    const recurrence = route.recurrence as {
+      type: "daily" | "weekly" | "monthly" | "one_time";
+      daysOfWeek?: string[];
+      dayOfWeek?: string;
+      dayOfMonth?: number;
+      specificDate?: string;
+    } | undefined;
+
+    if (!validateRouteForDate(recurrence, today)) {
+      throw new Error("Esta ruta no está programada para hoy");
+    }
+
+    // 4. Check for existing trip today
+    const existingTrip = await ctx.db
+      .query("trips")
+      .withIndex("by_date", (q) => q.eq("scheduledDate", today))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("routeId"), args.routeId),
+          q.neq(q.field("status"), "cancelled")
+        )
+      )
+      .first();
+
+    if (existingTrip) {
+      if (existingTrip.status === "in_progress") {
+        // Return the existing trip if already in progress
+        return { success: true, tripId: existingTrip._id, alreadyInProgress: true };
+      } else if (existingTrip.status === "completed") {
+        throw new Error("Ya se completó un viaje para esta ruta hoy");
+      } else if (existingTrip.status === "scheduled") {
+        // Use the existing scheduled trip
+        const now = Date.now();
+        await ctx.db.patch(existingTrip._id, {
+          status: "in_progress",
+          startTime: now,
+          updatedAt: now,
+        });
+
+        // Record initial GPS location
+        await ctx.db.insert("gpsTracking", {
+          tripId: existingTrip._id,
+          latitude: args.latitude,
+          longitude: args.longitude,
+          timestamp: now,
+        });
+
+        return { success: true, tripId: existingTrip._id };
+      }
+    }
+
+    // 5. Create new trip
+    const now = Date.now();
+    const tripId = await ctx.db.insert("trips", {
+      routeId: args.routeId,
+      driverId: route.driverId,
+      monitorId: route.monitorId,
+      vehicleId: route.vehicleId,
+      status: "in_progress",
+      scheduledDate: today,
+      startTime: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 6. Generate tripStudents with excludeDays filtering
+    await generateTripStudentsWithExclusions(ctx, tripId, args.routeId, route.type, today);
+
+    // 7. Record initial GPS location
+    await ctx.db.insert("gpsTracking", {
+      tripId,
+      latitude: args.latitude,
+      longitude: args.longitude,
+      timestamp: now,
+    });
+
+    return { success: true, tripId };
+  },
+});
+
+/**
+ * Generate tripStudents entries with excludeDays support
+ * Enhanced version that filters out students with today excluded
+ */
+async function generateTripStudentsWithExclusions(
+  ctx: any,
+  tripId: Id<"trips">,
+  routeId: Id<"routes">,
+  routeType: string,
+  scheduledDate: string
+) {
+  const now = Date.now();
+  const dayName = getDayName(new Date(scheduledDate + "T12:00:00"));
+
+  // Get all active studentRoutes for this route
+  const studentRoutes = await ctx.db
+    .query("studentRoutes")
+    .withIndex("by_route", (q: any) => q.eq("routeId", routeId))
+    .filter((q: any) => q.eq(q.field("isActive"), true))
+    .collect();
+
+  for (const sr of studentRoutes) {
+    // Check excludeDays - skip if today is excluded
+    if (sr.excludeDays && Array.isArray(sr.excludeDays)) {
+      if (sr.excludeDays.includes(dayName)) {
+        // Student is excluded today, skip
+        continue;
+      }
+    }
+
+    // Check for novedades affecting this student on this date
+    const novedades = await ctx.db
+      .query("novedades")
+      .withIndex("by_student_date", (q: any) =>
+        q.eq("studentId", sr.studentId).eq("date", scheduledDate)
+      )
+      .filter((q: any) =>
+        q.and(
+          // Not cancelled or expired
+          q.neq(q.field("status"), "cancelled"),
+          q.neq(q.field("status"), "expired"),
+          // Affects this route type
+          q.or(
+            q.eq(q.field("affectedRouteType"), "both"),
+            q.eq(q.field("affectedRouteType"), routeType)
+          )
+        )
+      )
+      .collect();
+
+    // Determine student status based on novedades
+    let status: "scheduled" | "absent" | "parent_pickup" | "stop_changed" = "scheduled";
+    let stopId = sr.stopId;
+    let originalStopId: Id<"routeStops"> | undefined = undefined;
+    let novedadId: Id<"novedades"> | undefined = undefined;
+
+    // Process novedades (priority: absence > parent_pickup > stop_change)
+    for (const novedad of novedades) {
+      if (novedad.type === "absence") {
+        status = "absent";
+        novedadId = novedad._id;
+        break; // Absence takes priority
+      } else if (novedad.type === "parent_pickup") {
+        status = "parent_pickup";
+        novedadId = novedad._id;
+        // Parent pickup is auto-acknowledged in the new flow
+      } else if (novedad.type === "stop_change" && status === "scheduled") {
+        status = "stop_changed";
+        originalStopId = sr.stopId;
+        stopId = novedad.newStopId || sr.stopId;
+        novedadId = novedad._id;
+      }
+    }
+
+    // Create tripStudent entry
+    await ctx.db.insert("tripStudents", {
+      tripId,
+      studentId: sr.studentId,
+      stopId,
+      status,
+      originalStopId,
+      novedadId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Mark novedades as applied
+    for (const novedad of novedades) {
+      if (novedad.status === "pending" || novedad.status === "acknowledged") {
+        await ctx.db.patch(novedad._id, {
+          status: "applied",
+          tripId,
+          updatedAt: now,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * List routes available for the driver to start today
+ * Returns routes that:
+ * - Are assigned to this driver
+ * - Are active
+ * - Have valid recurrence for today
+ * - Don't have an active/completed trip today
+ */
+export const listRoutesForDriverToday = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await verifyUser(ctx, args.userId);
+
+    // Get driver profile
+    const driver = await ctx.db
+      .query("drivers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (!driver) {
+      return [];
+    }
+
+    const today = new Date().toISOString().split("T")[0]!;
+
+    // Get all active routes for this driver
+    const routes = await ctx.db
+      .query("routes")
+      .withIndex("by_driver", (q) => q.eq("driverId", driver._id))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Get today's trips for these routes
+    const todayTrips = await ctx.db
+      .query("trips")
+      .withIndex("by_date", (q) => q.eq("scheduledDate", today))
+      .collect();
+
+    const tripsByRoute = new Map<string, typeof todayTrips[0]>();
+    for (const trip of todayTrips) {
+      if (trip.status !== "cancelled") {
+        tripsByRoute.set(trip.routeId.toString(), trip);
+      }
+    }
+
+    // Filter and enrich routes
+    const availableRoutes = [];
+    for (const route of routes) {
+      // Check recurrence
+      const recurrence = route.recurrence as {
+        type: "daily" | "weekly" | "monthly" | "one_time";
+        daysOfWeek?: string[];
+        dayOfWeek?: string;
+        dayOfMonth?: number;
+        specificDate?: string;
+      } | undefined;
+
+      if (!validateRouteForDate(recurrence, today)) {
+        continue; // Skip routes not scheduled for today
+      }
+
+      const existingTrip = tripsByRoute.get(route._id.toString());
+      const tripStatus = existingTrip?.status || null;
+
+      // Get vehicle info
+      const vehicle = await ctx.db.get(route.vehicleId);
+
+      // Get student count
+      const studentRoutes = await ctx.db
+        .query("studentRoutes")
+        .withIndex("by_route", (q) => q.eq("routeId", route._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+
+      availableRoutes.push({
+        _id: route._id,
+        name: route.name,
+        type: route.type,
+        scheduledStartTime: route.scheduledStartTime,
+        scheduledEndTime: route.scheduledEndTime,
+        schoolArrivalTime: route.schoolArrivalTime,
+        schoolDepartureTime: route.schoolDepartureTime,
+        optimizedPolyline: route.optimizedPolyline,
+        estimatedDuration: route.estimatedDuration,
+        estimatedDistance: route.estimatedDistance,
+        vehicle: vehicle ? {
+          licensePlate: vehicle.licensePlate,
+          brand: vehicle.brand,
+          model: vehicle.model,
+        } : null,
+        studentCount: studentRoutes.length,
+        // Trip status for today
+        tripStatus,
+        tripId: existingTrip?._id || null,
+        canStart: !existingTrip || existingTrip.status === "scheduled",
+      });
+    }
+
+    // Sort by type (pickup first) then by start time
+    availableRoutes.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "pickup" ? -1 : 1;
+      }
+      return a.scheduledStartTime.localeCompare(b.scheduledStartTime);
+    });
+
+    return availableRoutes;
+  },
+});
+
+/**
+ * Get trip history for a student (for parent portal)
+ * Returns completed and in_progress trips from the last N days
+ */
+export const getTripHistoryForStudent = query({
+  args: {
+    userId: v.id("users"),
+    studentId: v.id("students"),
+    limit: v.optional(v.number()), // Default 30 days
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await verifyUser(ctx, args.userId);
+    const student = await ctx.db.get(args.studentId);
+
+    if (!student) {
+      throw new Error("Estudiante no encontrado");
+    }
+
+    // Parents can only view their own children
+    if (currentUser.role === "parent") {
+      if (currentUser.email?.toLowerCase() !== student.parentEmail.toLowerCase()) {
+        throw new Error("No tienes permiso para ver este estudiante");
+      }
+      if (student.institutionId !== currentUser.institutionId) {
+        throw new Error("No tienes permiso para ver este estudiante");
+      }
+    } else {
+      await verifyInstitutionAccess(ctx, args.userId, student.institutionId);
+    }
+
+    // Get student's route assignments
+    const assignments = await ctx.db
+      .query("studentRoutes")
+      .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
+      .collect();
+
+    if (assignments.length === 0) {
+      return [];
+    }
+
+    const routeIds = assignments.map((a) => a.routeId);
+
+    // Calculate date range (last N days)
+    const daysLimit = args.limit ?? 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysLimit);
+    const startDateStr = startDate.toISOString().split("T")[0] ?? "";
+
+    // Get all trips for these routes in the date range
+    const allTrips: Array<{
+      _id: Id<"trips">;
+      routeId: Id<"routes">;
+      status: string;
+      scheduledDate: string;
+      startedAt?: number;
+      completedAt?: number;
+    }> = [];
+
+    for (const routeId of routeIds) {
+      const trips = await ctx.db
+        .query("trips")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("routeId"), routeId),
+            q.gte(q.field("scheduledDate"), startDateStr),
+            q.or(
+              q.eq(q.field("status"), "completed"),
+              q.eq(q.field("status"), "in_progress")
+            )
+          )
+        )
+        .collect();
+
+      allTrips.push(...trips);
+    }
+
+    // Get trip student entries for this student
+    const tripStudentEntries = await ctx.db
+      .query("tripStudents")
+      .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
+      .collect();
+
+    const tripStudentMap = new Map(tripStudentEntries.map((ts) => [ts.tripId, ts]));
+
+    // Build enriched trip history
+    const tripHistory = await Promise.all(
+      allTrips.map(async (trip) => {
+        const route = await ctx.db.get(trip.routeId);
+        const tripStudent = tripStudentMap.get(trip._id);
+
+        // Get driver info
+        let driverName = "Conductor";
+        if (trip.routeId) {
+          const routeData = await ctx.db.get(trip.routeId);
+          if (routeData?.driverId) {
+            const driver = await ctx.db.get(routeData.driverId);
+            if (driver?.userId) {
+              const user = await ctx.db.get(driver.userId);
+              driverName = user?.name ?? "Conductor";
+            }
+          }
+        }
+
+        return {
+          tripId: trip._id,
+          date: trip.scheduledDate,
+          type: route?.type ?? "pickup",
+          routeName: route?.name ?? "Ruta",
+          status: trip.status,
+          driverName,
+          studentStatus: tripStudent?.status ?? "scheduled",
+          startedAt: trip.startedAt,
+          completedAt: trip.completedAt,
+        };
+      })
+    );
+
+    // Sort by date (newest first) then by type
+    tripHistory.sort((a, b) => {
+      if (a.date !== b.date) {
+        return b.date.localeCompare(a.date);
+      }
+      // Same date: pickup before dropoff
+      return a.type === "pickup" ? -1 : 1;
+    });
+
+    return tripHistory;
+  },
+});

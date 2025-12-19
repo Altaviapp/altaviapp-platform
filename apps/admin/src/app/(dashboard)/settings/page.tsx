@@ -64,6 +64,16 @@ export default function SettingsPage() {
             })}
             <div className="border-t border-gray-100 mt-2 pt-2">
               <Link
+                href="/settings/school"
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-left transition-colors text-gray-600 hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-5 h-5" />
+                  <span className="font-medium">Ubicación del Colegio</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </Link>
+              <Link
                 href="/settings/users"
                 className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-left transition-colors text-gray-600 hover:bg-gray-50"
               >

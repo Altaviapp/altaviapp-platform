@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-import { useVehicleMutations, useDrivers, useRoutes } from '@/hooks';
+import { useVehicleMutations } from '@/hooks';
 
 /**
  * New Vehicle Page
@@ -17,21 +17,8 @@ export default function NewVehiclePage() {
 
   // Real hooks
   const { createVehicle } = useVehicleMutations();
-  const { drivers } = useDrivers();
-  const { routes } = useRoutes();
 
-  // Build dropdown options
-  const driverOptions = drivers.map(d => ({
-    value: d._id,
-    label: d.user?.name || 'Sin nombre',
-  }));
-
-  const routeOptions = routes.map(r => ({
-    value: r._id,
-    label: r.name,
-  }));
-
-  // Form state
+  // Form state - only fields that are sent to backend
   const [formData, setFormData] = useState({
     licensePlate: '',
     brand: '',
@@ -39,15 +26,7 @@ export default function NewVehiclePage() {
     year: '',
     color: '',
     capacity: '',
-    registrationNumber: '',
-    insurancePolicy: '',
-    insuranceExpiry: '',
-    lastInspection: '',
-    nextInspection: '',
     status: 'active',
-    driverId: '',
-    routeId: '',
-    notes: '',
   });
 
   const handleChange = (field: string) => (value: string) => {
@@ -162,54 +141,10 @@ export default function NewVehiclePage() {
           </FormFieldRow>
         </FormSection>
 
-        {/* Documentación */}
-        <FormSection title="Documentación">
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Número de Registro"
-              name="registrationNumber"
-              value={formData.registrationNumber}
-              onChange={handleChange('registrationNumber')}
-              placeholder="Número de matrícula"
-            />
-            <FormField
-              label="Póliza de Seguro"
-              name="insurancePolicy"
-              value={formData.insurancePolicy}
-              onChange={handleChange('insurancePolicy')}
-              placeholder="Número de póliza"
-            />
-          </FormFieldRow>
-
-          <FormFieldRow cols={3}>
-            <FormField
-              label="Vencimiento Seguro"
-              name="insuranceExpiry"
-              type="date"
-              value={formData.insuranceExpiry}
-              onChange={handleChange('insuranceExpiry')}
-            />
-            <FormField
-              label="Última Revisión Técnica"
-              name="lastInspection"
-              type="date"
-              value={formData.lastInspection}
-              onChange={handleChange('lastInspection')}
-            />
-            <FormField
-              label="Próxima Revisión Técnica"
-              name="nextInspection"
-              type="date"
-              value={formData.nextInspection}
-              onChange={handleChange('nextInspection')}
-            />
-          </FormFieldRow>
-        </FormSection>
-
-        {/* Estado y Asignación */}
-        <FormSection title="Estado y Asignación">
+        {/* Estado */}
+        <FormSection title="Estado">
           <FormField
-            label="Estado"
+            label="Estado Inicial"
             name="status"
             type="select"
             value={formData.status}
@@ -219,40 +154,7 @@ export default function NewVehiclePage() {
               { value: 'maintenance', label: 'En mantenimiento' },
               { value: 'out_of_service', label: 'Fuera de servicio' },
             ]}
-            required
-          />
-
-          <FormFieldRow cols={2}>
-            <FormField
-              label="Conductor Asignado"
-              name="driverId"
-              type="select"
-              value={formData.driverId}
-              onChange={handleChange('driverId')}
-              options={driverOptions}
-              placeholder="Seleccionar conductor"
-            />
-            <FormField
-              label="Ruta Asignada"
-              name="routeId"
-              type="select"
-              value={formData.routeId}
-              onChange={handleChange('routeId')}
-              options={routeOptions}
-              placeholder="Seleccionar ruta"
-            />
-          </FormFieldRow>
-        </FormSection>
-
-        {/* Notas Adicionales */}
-        <FormSection title="Notas Adicionales">
-          <FormField
-            label="Notas"
-            name="notes"
-            type="textarea"
-            value={formData.notes}
-            onChange={handleChange('notes')}
-            placeholder="Información adicional sobre el vehículo..."
+            hint="El conductor y la ruta se asignan al crear rutas"
           />
         </FormSection>
 

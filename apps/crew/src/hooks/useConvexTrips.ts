@@ -58,13 +58,27 @@ export function useTripOperations() {
   const { userId } = useConvexAuth();
 
   const startTripMutation = useMutation(api.trips.startTrip);
+  const startTripFromRouteMutation = useMutation(api.trips.startTripFromRoute);
   const completeTripMutation = useMutation(api.trips.completeTrip);
   const cancelTripMutation = useMutation(api.trips.cancelTrip);
 
   return {
+    /**
+     * Start an existing scheduled trip (legacy)
+     */
     startTrip: async (tripId: Id<"trips">, latitude: number, longitude: number) => {
       if (!userId) throw new Error("Not authenticated");
       return startTripMutation({ userId, tripId, latitude, longitude });
+    },
+
+    /**
+     * Start a trip from a route (lazy creation)
+     * Creates the trip on-demand if not already created
+     * Returns the tripId to navigate to
+     */
+    startTripFromRoute: async (routeId: Id<"routes"> | string, latitude: number, longitude: number) => {
+      if (!userId) throw new Error("Not authenticated");
+      return startTripFromRouteMutation({ userId, routeId: routeId as Id<"routes">, latitude, longitude });
     },
 
     completeTrip: async (tripId: Id<"trips">, latitude: number, longitude: number) => {

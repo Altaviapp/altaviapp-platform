@@ -14,6 +14,11 @@ export {
   useStudent,
   useStudentTracking,
   useMyStudentsWithTracking,
+  useStudentLocationMutation,
+  useMyStudentsWithPhotos,
+  useStudentWithPhoto,
+  useStudentMutations,
+  useTripHistory,
 } from "./useMyStudents";
 
 // Notifications

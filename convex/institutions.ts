@@ -502,3 +502,51 @@ export const getInstitutionStats = query({
     };
   },
 });
+
+/**
+ * Update school location
+ *
+ * Used for route planning - all routes use this location as
+ * the origin (dropoff) or destination (pickup).
+ * Admin only.
+ */
+export const updateSchoolLocation = mutation({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    schoolLatitude: v.number(),
+    schoolLongitude: v.number(),
+    schoolAddress: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is admin or super_admin
+    await verifyRole(ctx, args.userId, "admin");
+
+    // Verify user has access to this institution
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const institution = await ctx.db.get(args.institutionId);
+    if (!institution) {
+      throw new Error("Institución no encontrada");
+    }
+
+    // Update location
+    const updates: Record<string, unknown> = {
+      schoolLatitude: args.schoolLatitude,
+      schoolLongitude: args.schoolLongitude,
+      updatedAt: Date.now(),
+    };
+
+    // Update address if provided
+    if (args.schoolAddress !== undefined) {
+      updates.schoolAddress = args.schoolAddress;
+    }
+
+    await ctx.db.patch(args.institutionId, updates);
+
+    return {
+      success: true,
+      message: "Ubicación del colegio actualizada correctamente",
+    };
+  },
+});

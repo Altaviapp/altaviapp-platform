@@ -460,6 +460,30 @@ export const acceptInvitation = mutation({
       updatedAt: now,
     });
 
+    // Auto-create professional profile for drivers and monitors
+    // Profile starts with minimal data; user completes it in Crew app
+    if (invitation.role === "driver") {
+      await ctx.db.insert("drivers", {
+        userId,
+        institutionId: invitation.institutionId,
+        phone: invitation.phone,
+        profileCompleted: false,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else if (invitation.role === "monitor") {
+      await ctx.db.insert("monitors", {
+        userId,
+        institutionId: invitation.institutionId,
+        phone: invitation.phone,
+        profileCompleted: false,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
     // Schedule verification email to be sent via Resend
     await ctx.scheduler.runAfter(0, api.email.sendVerificationEmail, {
       to: invitation.email,

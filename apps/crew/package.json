@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@altaviapp/auth": "workspace:*",
+    "@altaviapp/maps": "workspace:*",
     "@altaviapp/ui": "workspace:*",
     "@altaviapp/convex-client": "workspace:*",
     "html5-qrcode": "^2.3.8",

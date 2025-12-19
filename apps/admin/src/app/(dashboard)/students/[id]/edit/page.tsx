@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MapPin } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
 import { useStudent, useStudentMutations } from '@/hooks';
+import { GoogleMapsProvider, LocationPicker } from '@altaviapp/maps';
+import type { LatLng } from '@altaviapp/maps';
 
 const grades = [
   { value: '1ro', label: '1ro Básica' },
@@ -39,6 +41,13 @@ export default function EditStudentPage() {
     emergencyContact: '',
     isActive: true,
   });
+  const [homeLocation, setHomeLocation] = useState<{
+    position: LatLng | undefined;
+    address: string;
+  }>({
+    position: undefined,
+    address: '',
+  });
 
   // Real data from Convex
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,8 +69,25 @@ export default function EditStudentPage() {
         emergencyContact: student.emergencyContact || '',
         isActive: student.isActive ?? true,
       });
+      // Load home location if available
+      if (student.homeLatitude && student.homeLongitude) {
+        setHomeLocation({
+          position: {
+            lat: student.homeLatitude,
+            lng: student.homeLongitude,
+          },
+          address: student.address || '',
+        });
+      }
     }
   }, [student]);
+
+  // Handle location selection from LocationPicker
+  const handleLocationSelect = useCallback((location: { position: LatLng; address: string }) => {
+    setHomeLocation(location);
+    // Also update the address field
+    setFormData(prev => ({ ...prev, address: location.address }));
+  }, []);
 
   const handleChange = (field: string) => (value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -84,6 +110,9 @@ export default function EditStudentPage() {
         parentEmail: formData.parentEmail,
         emergencyContact: formData.emergencyContact,
         isActive: formData.isActive,
+        // Include home location if set
+        homeLatitude: homeLocation.position?.lat,
+        homeLongitude: homeLocation.position?.lng,
       });
       router.push(`/students/${studentId}`);
     } catch (error) {
@@ -119,6 +148,7 @@ export default function EditStudentPage() {
   const studentName = `${formData.firstName} ${formData.lastName}`;
 
   return (
+    <GoogleMapsProvider>
     <div>
       <PageHeader
         title={`Editar ${studentName}`}
@@ -172,16 +202,31 @@ export default function EditStudentPage() {
           </FormFieldRow>
         </FormSection>
 
+        {/* Ubicación del Hogar */}
+        <FormSection
+          title="Ubicación del Hogar"
+          description="La ubicación del hogar es necesaria para la optimización de rutas de transporte."
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin className="w-5 h-5 text-primary" />
+            <span className="text-sm text-gray-600">
+              {homeLocation.position
+                ? 'Ubicación configurada'
+                : 'Sin ubicación configurada - Busca la dirección o haz clic en el mapa'}
+            </span>
+          </div>
+          <LocationPicker
+            initialPosition={homeLocation.position}
+            initialAddress={homeLocation.address}
+            onLocationSelect={handleLocationSelect}
+            placeholder="Buscar dirección del hogar..."
+            mapHeight="350px"
+            helpText="Puedes buscar la dirección o hacer clic directamente en el mapa para seleccionar la ubicación."
+          />
+        </FormSection>
+
         {/* Información de Contacto */}
         <FormSection title="Información de Contacto">
-          <FormField
-            label="Dirección de Residencia"
-            name="address"
-            type="textarea"
-            value={formData.address}
-            onChange={handleChange('address')}
-          />
-
           <FormField
             label="Contacto de Emergencia"
             name="emergencyContact"
@@ -250,5 +295,6 @@ export default function EditStudentPage() {
         </div>
       </form>
     </div>
+    </GoogleMapsProvider>
   );
 }

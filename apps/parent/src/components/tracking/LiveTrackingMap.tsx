@@ -9,7 +9,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { GoogleMap, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
-import { useGoogleMapsContext, MapsLoadingState, MapsErrorState, MAPS_CONFIG } from '@altaviapp/maps';
+import { useGoogleMapsContext, MapsLoadingState, MapsErrorState, MAPS_CONFIG, decodePolyline } from '@altaviapp/maps';
 import { Bus, School, MapPin, Navigation } from 'lucide-react';
 
 export interface TrackingLocation {
@@ -50,6 +50,8 @@ export interface LiveTrackingMapProps {
     plate: string;
     driverName: string;
   };
+  /** Encoded polyline from Google Directions API */
+  encodedPolyline?: string;
   className?: string;
 }
 
@@ -70,6 +72,7 @@ export function LiveTrackingMap({
   autoCenter = true,
   lastUpdate,
   vehicleInfo,
+  encodedPolyline,
   className,
 }: LiveTrackingMapProps) {
   const { isLoaded, loadError } = useGoogleMapsContext();
@@ -88,11 +91,16 @@ export function LiveTrackingMap({
     return MAPS_CONFIG.defaultCenter;
   }, [vehicleLocation, schoolLocation]);
 
-  // Create polyline path from stops
+  // Create polyline path from encoded polyline or stops
   const routePath = useMemo(() => {
+    // Prefer encoded polyline (real route from Google Directions API)
+    if (encodedPolyline) {
+      return decodePolyline(encodedPolyline);
+    }
+    // Fallback to simple path from stops
     if (stops.length < 2) return [];
     return stops.map(stop => ({ lat: stop.lat, lng: stop.lng }));
-  }, [stops]);
+  }, [encodedPolyline, stops]);
 
   // Auto-center on vehicle when location updates
   useEffect(() => {

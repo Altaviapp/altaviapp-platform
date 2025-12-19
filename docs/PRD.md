@@ -188,19 +188,76 @@ Both **driver** and **monitor** use the same mobile app (**Altaviapp Crew**), bu
 **Timeline**: Week 5-6
 
 **Functional Requirements**:
-- [ ] Route creation with multiple stops
-- [ ] Interactive map interface for stop placement
-- [ ] Stop sequencing (pickup order)
-- [ ] Geofencing per stop (arrival detection radius)
-- [ ] Student assignment to stops
-- [ ] Route schedule (pickup times per stop)
-- [ ] Route optimization suggestions
+
+**5.1 Student Location Management**:
+- [ ] Students must have home location assigned before route assignment
+- [ ] Parent can set/update student home location from Parent Portal
+- [ ] Admin can set/update student home location from Admin Dashboard
+- [ ] Location selection via address input (geocoding) or map click
+- [ ] Store homeLatitude, homeLongitude, homeAddress on student record
+
+**5.2 School Location Configuration**:
+- [ ] Institution must have school location configured
+- [ ] Admin configures school location in Settings
+- [ ] School location used as origin (dropoff) or destination (pickup) in route calculation
+- [ ] Store schoolLatitude, schoolLongitude, schoolAddress on institution record
+
+**5.3 Multi-Step Route Creation Wizard**:
+
+*Step 1 - Route Planning*:
+- [ ] Select route type: pickup (recogida) or dropoff (entrega)
+- [ ] Set target time: school arrival time (pickup) or school departure time (dropoff)
+- [ ] Select vehicle (displays capacity)
+- [ ] Select driver (required)
+- [ ] Select monitor (optional)
+- [ ] Route name (auto-generated or custom)
+
+*Step 2 - Stop Assignment*:
+- [ ] Display header with route info: name, target time
+- [ ] Dynamic stats: #stops, duration, start/end time (calculated)
+- [ ] Student selector with tabs: "Disponibles" / "Seleccionados"
+- [ ] Filter: Search by name, dropdown by grade
+- [ ] Only show students WITHOUT route of same type AND with location assigned
+- [ ] Interactive map showing school marker (distinct icon) and selected students
+- [ ] "Calculate Route" button triggers Google Maps Directions API optimization
+- [ ] Route optimization determines optimal stop order (like Uber)
+- [ ] Calculate ETAs for each stop based on target school time
+- [ ] Display optimized polyline on map
+- [ ] Selected students tab shows: stop number, name, ETA
+- [ ] Allow manual reorder with drag-and-drop
+- [ ] "Recalculate" button after manual changes
+
+*Step 3 - Confirmation*:
+- [ ] Recurrence selector:
+  - Daily: select days of week (checkboxes)
+  - Weekly: select day of week
+  - Monthly: select day of month
+  - One-time: select specific date
+- [ ] Route summary with all details
+- [ ] Mini-map with final route visualization
+- [ ] Active/Inactive toggle
+
+**5.4 Route Optimization (Google Maps API)**:
+- [ ] Use Directions API with `optimizeWaypoints: true`
+- [ ] Calculate optimal stop order minimizing travel time
+- [ ] Store encoded polyline for route visualization
+- [ ] Calculate and store estimated duration and distance
+- [ ] Calculate ETA for each stop based on target arrival/departure time
+- [ ] No traffic consideration at planning time (applied at trip start)
+
+**5.5 Route Visualization**:
+- [ ] Display actual route polyline from Directions API (not straight lines)
+- [ ] Route visualization in Admin (route detail), Parent (tracking), Crew (trip map)
+- [ ] Differentiate stop markers: completed, current, upcoming
+- [ ] School marker with distinct icon
 
 **Success Criteria**:
-- Admin can create routes with 5-20 stops
-- Students assigned to correct stops
-- Route visualized on map
-- Estimated travel time calculated
+- Admin can create routes via 3-step wizard
+- Route optimization calculates optimal stop order
+- Students auto-assigned to stops based on home location
+- Route visualized with actual road paths (like Uber)
+- Estimated travel time calculated per stop
+- Routes configurable with recurrence (daily/weekly/monthly/one-time)
 
 ---
 
@@ -209,18 +266,58 @@ Both **driver** and **monitor** use the same mobile app (**Altaviapp Crew**), bu
 **Timeline**: Week 7
 
 **Functional Requirements**:
-- [ ] Trip scheduling (route + date + vehicle + driver)
-- [ ] Trip status lifecycle (scheduled → in_progress → completed → cancelled)
+
+**6.1 Lazy Trip Creation (On-Demand)**:
+- [ ] Trips are NOT pre-created in database
+- [ ] Trip created automatically when driver taps "Start Trip"
+- [ ] Driver selects route from assigned routes valid for today
+- [ ] Route recurrence validated before allowing trip start
+- [ ] Trip record created with status "in_progress"
+- [ ] TripStudents generated dynamically at trip start:
+  - Query active studentRoutes for the route
+  - Filter by excludeDays (skip students whose excludeDays includes today)
+  - Apply novedades for the date
+  - Priority: absence > parent_pickup > stop_change > scheduled
+
+**6.2 Route Recurrence Validation**:
+- [ ] Daily routes: check if today's day of week is in daysOfWeek array
+- [ ] Weekly routes: check if today matches dayOfWeek
+- [ ] Monthly routes: check if today's date matches dayOfMonth
+- [ ] One-time routes: check if today matches specificDate
+- [ ] Only show routes valid for today in driver's list
+
+**6.3 Student Exclusion Days**:
+- [ ] Admin can configure excludeDays per student-route assignment
+- [ ] Example: ["friday", "saturday"] means student doesn't travel those days
+- [ ] Students with excludeDays including today are NOT added to tripStudents
+- [ ] Used for permanent schedule exceptions
+
+**6.4 Trip Lifecycle**:
+- [ ] Trip status: in_progress → completed (no "scheduled" state with lazy creation)
+- [ ] Start trip: create trip record, generate tripStudents, record initial GPS
+- [ ] Complete trip: set endTime, record final GPS, update status
+- [ ] Cancel trip: allowed while in_progress, notifies parents
 - [ ] Real-time GPS tracking (updates every 15 seconds)
-- [ ] Trip history and logs
-- [ ] Live trip monitoring dashboard
-- [ ] Trip cancellation with notifications
+
+**6.5 Trip History and Logs**:
+- [ ] Trip history searchable by date, route, driver
+- [ ] Each trip stores: duration, distance, students transported, stops completed
+- [ ] GPS location history stored per trip
+- [ ] Check-in/check-out events linked to trip
+
+**6.6 Live Trip Monitoring**:
+- [ ] Admin dashboard shows all active trips in real-time
+- [ ] Map view with vehicle positions
+- [ ] Trip progress (stops completed / total)
+- [ ] ETA updates based on current position and traffic
 
 **Success Criteria**:
-- Drivers can start/end trips
+- Drivers see only routes valid for today based on recurrence
+- Trip created instantly when driver starts (lazy creation)
+- Student exclusion days respected automatically
 - GPS location updates in real-time
 - Admin can monitor all active trips
-- Trip history searchable
+- Trip history searchable with full audit trail
 
 ---
 
@@ -263,6 +360,63 @@ Both **driver** and **monitor** use the same mobile app (**Altaviapp Crew**), bu
 - Critical incidents trigger immediate alerts
 - Admin can review and resolve incidents
 - Parents notified appropriately
+
+---
+
+#### Module 8.1: Novedades (Schedule Exceptions)
+**Owner**: Backend Team
+**Timeline**: Week 9
+
+**Functional Requirements**:
+
+**8.1.1 Temporary Novedades (Daily Exceptions)**:
+- [ ] Parent can create novedad for specific date
+- [ ] Types of temporary novedades:
+  - **Ausencia (absence)**: Student won't travel that day
+  - **Recogida por padre (parent_pickup)**: Parent picks up student directly
+  - **Cambio de parada (stop_change)**: Different pickup/dropoff location for one day
+  - **Salida temprana (early_pickup)**: Student leaves early
+  - **Llegada tardía (late_arrival)**: Student arrives late
+- [ ] Affected route type: pickup, dropoff, or both
+- [ ] Parent provides reason (optional)
+
+**8.1.2 Parent Pickup Workflow (NO APPROVAL REQUIRED)**:
+- [ ] Parent creates parent_pickup novedad
+- [ ] Status goes directly to "acknowledged" (skip pending/approved states)
+- [ ] Crew is notified immediately
+- [ ] Parent can create until trip starts
+- [ ] Used for emergencies and last-minute changes
+
+**8.1.3 Other Novedades Workflow (APPROVAL REQUIRED)**:
+- [ ] Parent creates novedad → status: "pending"
+- [ ] Admin/Coordinator reviews and approves/rejects → status: "approved" or "rejected"
+- [ ] Crew acknowledges seeing the novedad → status: "acknowledged"
+- [ ] Applied to trip at trip start → status: "applied"
+- [ ] Notifications sent at each state change
+
+**8.1.4 Novedad Application to Trips**:
+- [ ] At trip start (lazy creation), query novedades for the date
+- [ ] Priority order for conflicting novedades:
+  1. absence (highest priority - student marked absent)
+  2. parent_pickup (student marked for parent pickup)
+  3. stop_change (student uses different stop)
+  4. scheduled (default - normal trip)
+- [ ] TripStudent record stores novedadId reference
+- [ ] Original stop preserved for stop_change cases
+
+**8.1.5 Permanent Schedule Exceptions**:
+- [ ] excludeDays field on studentRoutes assignment
+- [ ] Admin configures days student doesn't travel (e.g., ["friday"])
+- [ ] Automatically excluded from trip generation
+- [ ] No daily novedad needed
+
+**Success Criteria**:
+- Parent can create novedades from Parent Portal
+- Parent pickup requires NO coordinator approval (immediate effect)
+- Other novedades require coordinator approval
+- Novedades applied correctly at trip start
+- Crew notified of all novedades for their trips
+- Permanent exclusions (excludeDays) work without daily input
 
 ---
 

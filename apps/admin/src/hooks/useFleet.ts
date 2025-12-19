@@ -131,31 +131,19 @@ export function useDriver(driverId: Id<"drivers"> | null) {
 }
 
 export function useDriverMutations() {
-  const { userId, institutionId } = useConvexAuth();
+  const { userId } = useConvexAuth();
 
-  const createDriver = useMutation(api.drivers.createDriver);
+  // Driver profiles are auto-created when user accepts invitation with role="driver"
+  // Admin can only update existing drivers
   const updateDriver = useMutation(api.drivers.updateDriver);
   const deactivateDriver = useMutation(api.drivers.deactivateDriver);
 
   return {
-    // Creates a driver profile for an existing user with role "driver"
-    createDriver: async (
-      targetUserId: Id<"users">,
-      data: {
-        licenseNumber: string;
-        licenseExpiry: number;
-        phone: string;
-        emergencyContact: string;
-      }
-    ) => {
-      if (!userId || !institutionId) throw new Error("Not authenticated");
-      return createDriver({ userId, targetUserId, institutionId, ...data });
-    },
-
     updateDriver: async (
       driverId: Id<"drivers">,
       data: Partial<{
         licenseNumber: string;
+        licenseType: string;
         licenseExpiry: number;
         phone: string;
         emergencyContact: string;
@@ -212,29 +200,14 @@ export function useMonitor(monitorId: Id<"monitors"> | null) {
 }
 
 export function useMonitorMutations() {
-  const { userId, institutionId } = useConvexAuth();
+  const { userId } = useConvexAuth();
 
-  const createMonitor = useMutation(api.monitors.createMonitor);
+  // Monitor profiles are auto-created when user accepts invitation with role="monitor"
+  // Admin can only update existing monitors
   const updateMonitor = useMutation(api.monitors.updateMonitor);
   const deactivateMonitor = useMutation(api.monitors.deactivateMonitor);
 
   return {
-    // Creates a monitor profile for an existing user with role "monitor"
-    createMonitor: async (
-      targetUserId: Id<"users">,
-      data: {
-        idNumber: string;
-        phone: string;
-        emergencyContact: string;
-        firstAidCertified?: boolean;
-        firstAidCertExpiry?: number;
-        childCareCertified?: boolean;
-      }
-    ) => {
-      if (!userId || !institutionId) throw new Error("Not authenticated");
-      return createMonitor({ userId, targetUserId, institutionId, ...data });
-    },
-
     updateMonitor: async (
       monitorId: Id<"monitors">,
       data: Partial<{

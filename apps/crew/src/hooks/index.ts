@@ -36,3 +36,19 @@ export {
   useNovedadesByDate,
   useNovedadesMutations,
 } from './useTripStudents';
+
+// Profile hooks (for drivers/monitors to manage their professional data)
+export {
+  useDriverProfile,
+  useMonitorProfile,
+  useMyProfile,
+} from './useProfile';
+export type { DriverProfile, MonitorProfile } from './useProfile';
+
+// Driver Routes hooks (for lazy trip creation)
+export {
+  useDriverRoutesToday,
+  useNovedadesForRoute,
+  useRouteWithStudents,
+} from './useDriverRoutes';
+export type { RouteForToday, NovedadForRoute } from './useDriverRoutes';

@@ -34,6 +34,9 @@ export type {
   DirectionsResult,
   MarkerType,
   MarkerInfo,
+  StudentForRoute,
+  OptimizedStop,
+  RouteOptimizationResult,
 } from "./types";
 
 // Components
@@ -45,6 +48,10 @@ export {
 } from "./components/GoogleMapsProvider";
 export { InteractiveMap } from "./components/InteractiveMap";
 export { AddressAutocomplete } from "./components/AddressAutocomplete";
+export { LocationPicker } from "./components/LocationPicker";
+export type { LocationPickerProps } from "./components/LocationPicker";
+export { RoutePolyline, fitMapToPolyline } from "./components/RoutePolyline";
+export type { RoutePolylineProps } from "./components/RoutePolyline";
 
 // Services
 export { geocodeAddress, reverseGeocode, clearGeocodeCache } from "./services/geocoding";
@@ -55,6 +62,8 @@ export {
   findNearestStop,
   autoAssignStudentsToStops,
   calculateHaversineDistance,
+  createOptimizedRouteFromStudents,
+  decodePolyline,
 } from "./services/optimization";
 
 // Hooks

@@ -1,12 +1,12 @@
 'use client';
 
 import { VehicleCard } from '@/components/dashboard/VehicleCard';
-import { TripCard } from '@/components/dashboard/TripCard';
+import { RouteCard } from '@/components/dashboard/RouteCard';
 import { WeeklyStats } from '@/components/dashboard/WeeklyStats';
 import { NotificationList } from '@/components/dashboard/NotificationList';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { AlertCircle, Calendar, Users, QrCode } from 'lucide-react';
+import { AlertCircle, Calendar, Users, QrCode, Route } from 'lucide-react';
 import { useConvexDashboard, useConvexAuth } from '@/hooks';
 import { getGreeting } from '@/lib/utils/dates';
 import { formatDate } from '@/lib/utils/dates';
@@ -17,7 +17,8 @@ export default function DashboardPage() {
   const { user, isDriver, isMonitor, isLoading: authLoading } = useConvexAuth();
 
   // Use real Convex data - no more mock fallback
-  const { data, loading, error } = useConvexDashboard();
+  // routesForToday contains routes available for lazy trip creation
+  const { data, routesForToday, loading, error } = useConvexDashboard();
 
   // Auth state
   const userRole = (user as { role?: string })?.role ?? 'driver';
@@ -111,27 +112,27 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Today's Trips Section */}
+      {/* Today's Routes Section (Lazy Trip Creation) */}
       <section>
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-primary" />
-          Viajes de Hoy
+          <Route className="w-5 h-5 text-primary" />
+          Rutas de Hoy
         </h2>
 
-        {!data.todayTrips || data.todayTrips.length === 0 ? (
+        {!routesForToday || routesForToday.length === 0 ? (
           <EmptyState
-            icon={Calendar}
-            title="No hay viajes programados hoy"
-            description="No tienes viajes asignados para el día de hoy."
+            icon={Route}
+            title="No hay rutas programadas hoy"
+            description="No tienes rutas asignadas para el día de hoy."
           />
         ) : (
           <div className="space-y-4">
-            {data.todayTrips.map((trip, index) => (
-              <TripCard
-                key={trip._id}
-                trip={trip}
+            {routesForToday.map((route, index) => (
+              <RouteCard
+                key={route._id}
+                route={route}
                 variant={index === 0 ? 'primary' : 'secondary'}
-                showChecklist={isDriver} // Only show checklist link for drivers
+                isDriver={isDriver}
               />
             ))}
           </div>

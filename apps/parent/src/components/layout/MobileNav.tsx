@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, MapPin, Clock, User, FileText } from 'lucide-react';
+import { Home, MapPin, Clock, FileText, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -13,10 +13,10 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: Home, label: 'Inicio', href: '/dashboard' },
+  { icon: Users, label: 'Hijos', href: '/students' },
   { icon: MapPin, label: 'Seguir', href: '/tracking' },
   { icon: FileText, label: 'Novedades', href: '/novedades' },
   { icon: Clock, label: 'Historial', href: '/history' },
-  { icon: User, label: 'Perfil', href: '/profile' },
 ];
 
 export function MobileNav() {

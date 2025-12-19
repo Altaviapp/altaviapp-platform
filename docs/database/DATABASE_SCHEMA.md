@@ -45,21 +45,26 @@ Primary entity representing schools or corporate clients.
 TABLE: institutions {
   _id: Id<"institutions">                    -- Primary key (auto-generated)
   _creationTime: number                      -- Auto-generated timestamp
-  
+
   -- Basic Information
-  name: string                               -- "Colegio San Francisco" 
+  name: string                               -- "Colegio San Francisco"
   type: "school" | "corporate"               -- Organization type
   address: string                            -- Full address
   city: string                               -- City name
   phone: string                              -- Contact phone
   email: string                              -- Official email
   contactPerson: string                      -- Primary contact name
-  
+
+  -- School Location (for route calculation)
+  schoolLatitude?: number                    -- GPS latitude of school
+  schoolLongitude?: number                   -- GPS longitude of school
+  schoolAddress?: string                     -- Full school address
+
   -- Business Status
   isActive: boolean                          -- Active/suspended status
   subscriptionPlan: "trial" | "basic" | "professional" | "enterprise"
   subscriptionStatus: "active" | "suspended" | "cancelled"
-  
+
   -- Audit
   createdAt: number                          -- Registration timestamp
   updatedAt: number                          -- Last modification
@@ -333,37 +338,48 @@ Defined transportation routes for pickup/dropoff.
 TABLE: routes {
   _id: Id<"routes">
   _creationTime: number
-  
+
   -- Relationships
   institutionId: Id<"institutions">         -- Owner institution
   vehicleId: Id<"vehicles">                 -- Assigned vehicle
   driverId: Id<"drivers">                   -- Primary driver
+  monitorId?: Id<"monitors">                -- Optional monitor
   backupDriverId?: Id<"drivers">            -- Backup driver
-  
+
   -- Route Definition
   name: string                              -- "Ruta Norte AM"
   description?: string                      -- Additional details
   type: "pickup" | "dropoff"                -- Route direction
-  
+
   -- Schedule
   scheduledStartTime: string                -- "07:00" (24h format)
   scheduledEndTime: string                  -- "08:30"
-  estimatedDuration: number                 -- Minutes
-  operatingDays: string[]                   -- ["monday", "tuesday", ...]
-  
+  schoolArrivalTime?: string                -- Target arrival at school (for pickup routes)
+  schoolDepartureTime?: string              -- Departure from school (for dropoff routes)
+
+  -- Recurrence Configuration (NEW)
+  recurrence?: {
+    type: "daily" | "weekly" | "monthly" | "one_time"
+    daysOfWeek?: string[]                   -- ["monday", "tuesday", ...] for daily
+    dayOfWeek?: string                      -- "monday" for weekly
+    dayOfMonth?: number                     -- 1-31 for monthly
+    specificDate?: string                   -- "YYYY-MM-DD" for one_time
+  }
+
+  -- Route Optimization Data (NEW)
+  optimizedPolyline?: string                -- Encoded polyline from Directions API
+  estimatedDuration?: number                -- Minutes (calculated by Google Maps)
+  estimatedDistance?: number                -- Meters (calculated by Google Maps)
+
   -- Route Metrics
-  totalDistance: number                     -- Kilometers
   totalStops: number                        -- Number of stops
   maxCapacity: number                       -- Maximum students
   currentOccupancy: number                  -- Currently assigned students
-  
+
   -- Status
   isActive: boolean                         -- Currently operational
   status: "active" | "suspended" | "under_review"
-  
-  -- Route Geometry (for maps)
-  routePolyline?: string                    -- Encoded polyline
-  
+
   -- Audit
   createdAt: number
   updatedAt: number
@@ -384,46 +400,31 @@ Individual stops along a route.
 TABLE: routeStops {
   _id: Id<"routeStops">
   _creationTime: number
-  
+
   -- Relationships
   routeId: Id<"routes">                     -- Parent route
-  
+
   -- Stop Information
   name: string                              -- "Parada Calle 80"
   address: string                           -- Full address
   landmark?: string                         -- "Frente al parque"
-  
+
   -- GPS Coordinates
   latitude: number                          -- Precise location
   longitude: number                         -- Precise location
-  
+
   -- Schedule
   scheduledTime: string                     -- "07:15" (24h format)
-  estimatedDwellTime: number                -- Stop duration (minutes)
-  
+  estimatedArrivalTime?: string             -- Calculated ETA "07:12" (NEW)
+  durationFromPrevious?: number             -- Seconds from previous stop (NEW)
+
   -- Stop Configuration
   order: number                             -- Stop sequence (1, 2, 3...)
   geofenceRadius: number                    -- Meters (default: 100)
-  isPickupPoint: boolean                    -- Can pick up students
-  isDropoffPoint: boolean                   -- Can drop off students
-  
-  -- Capacity
-  maxStudents: number                       -- Stop capacity limit
-  currentStudents: number                   -- Currently assigned
-  
-  -- Safety Features
-  hasTrafficLight: boolean                  -- Traffic control
-  hasZebraCrossing: boolean                 -- Pedestrian crossing
-  safetyRating: number                      -- 1-5 safety score
-  
+
   -- Status
   isActive: boolean                         -- Currently operational
-  temporarilyDisabled?: {                   -- Temporary closure
-    reason: string
-    startDate: number
-    endDate: number
-  }
-  
+
   -- Audit
   createdAt: number
   updatedAt: number
@@ -442,32 +443,20 @@ Links students to their assigned routes and stops.
 TABLE: studentRoutes {
   _id: Id<"studentRoutes">
   _creationTime: number
-  
+
   -- Relationships
   studentId: Id<"students">                 -- Student assignment
   routeId: Id<"routes">                     -- Assigned route
-  pickupStopId: Id<"routeStops">           -- Pickup location
-  dropoffStopId?: Id<"routeStops">         -- Dropoff (if different)
-  
-  -- Schedule Variations
-  operatingDays: string[]                   -- Days this assignment is active
-  startDate: number                         -- Assignment start
-  endDate?: number                          -- Assignment end (optional)
-  
-  -- Special Instructions
-  pickupInstructions?: string               -- "Wait by the blue gate"
-  dropoffInstructions?: string              -- "Parents pick up at 3:30"
-  specialRequirements?: string              -- Wheelchair, etc.
-  
+  stopId: Id<"routeStops">                  -- Assigned stop for pickup/dropoff
+
+  -- Permanent Schedule Exceptions (NEW)
+  excludeDays?: string[]                    -- Days student does NOT travel
+                                            -- e.g., ["friday", "saturday"]
+                                            -- Used for permanent exclusions
+
   -- Status
   isActive: boolean                         -- Currently active
-  status: "active" | "suspended" | "pending_approval"
-  
-  -- Attendance Tracking
-  totalTrips: number                        -- Total trips taken
-  attendanceRate: number                    -- Percentage attendance
-  lastTripDate?: number                     -- Last trip taken
-  
+
   -- Audit
   createdAt: number
   updatedAt: number

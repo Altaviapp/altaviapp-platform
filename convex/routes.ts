@@ -7,6 +7,7 @@
 
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import { verifyUser, verifyRole, verifyInstitutionAccess } from "./lib/simpleAuth";
 
 /**
@@ -317,5 +318,165 @@ export const deactivateRoute = mutation({
     });
 
     return { success: true };
+  },
+});
+
+/**
+ * Create route with stops (from wizard)
+ *
+ * Creates a complete route with:
+ * - Route data including recurrence and optimization info
+ * - Route stops with ETAs
+ * - Student-route assignments
+ */
+export const createRouteWithStops = mutation({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    // Route data
+    name: v.string(),
+    type: v.union(v.literal("pickup"), v.literal("dropoff")),
+    vehicleId: v.id("vehicles"),
+    driverId: v.id("drivers"),
+    monitorId: v.optional(v.id("monitors")),
+    scheduledStartTime: v.string(),
+    scheduledEndTime: v.string(),
+    // Target times
+    schoolArrivalTime: v.optional(v.string()),
+    schoolDepartureTime: v.optional(v.string()),
+    // Recurrence
+    recurrence: v.optional(
+      v.object({
+        type: v.union(
+          v.literal("daily"),
+          v.literal("weekly"),
+          v.literal("monthly"),
+          v.literal("one_time")
+        ),
+        daysOfWeek: v.optional(v.array(v.string())),
+        dayOfWeek: v.optional(v.string()),
+        dayOfMonth: v.optional(v.number()),
+        specificDate: v.optional(v.string()),
+      })
+    ),
+    // Optimization data
+    optimizedPolyline: v.optional(v.string()),
+    estimatedDuration: v.optional(v.number()),
+    estimatedDistance: v.optional(v.number()),
+    // Stops with students
+    stops: v.array(
+      v.object({
+        name: v.string(),
+        address: v.string(),
+        latitude: v.number(),
+        longitude: v.number(),
+        scheduledTime: v.string(),
+        estimatedArrivalTime: v.optional(v.string()),
+        durationFromPrevious: v.optional(v.number()),
+        order: v.number(),
+        geofenceRadius: v.optional(v.number()),
+        studentId: v.id("students"),
+      })
+    ),
+    // Whether to activate immediately
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    // Verify vehicle belongs to institution
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle || vehicle.institutionId !== args.institutionId) {
+      throw new Error("Vehículo no válido para esta institución");
+    }
+
+    // Verify driver belongs to institution
+    const driver = await ctx.db.get(args.driverId);
+    if (!driver || driver.institutionId !== args.institutionId) {
+      throw new Error("Conductor no válido para esta institución");
+    }
+
+    // Verify monitor if provided
+    if (args.monitorId) {
+      const monitor = await ctx.db.get(args.monitorId);
+      if (!monitor || monitor.institutionId !== args.institutionId) {
+        throw new Error("Monitor no válido para esta institución");
+      }
+    }
+
+    // Verify all students belong to institution
+    for (const stop of args.stops) {
+      const student = await ctx.db.get(stop.studentId);
+      if (!student || student.institutionId !== args.institutionId) {
+        throw new Error(`Estudiante inválido: ${stop.studentId}`);
+      }
+    }
+
+    const now = Date.now();
+
+    // 1. Create the route
+    const routeId = await ctx.db.insert("routes", {
+      institutionId: args.institutionId,
+      name: args.name,
+      type: args.type,
+      vehicleId: args.vehicleId,
+      driverId: args.driverId,
+      monitorId: args.monitorId,
+      scheduledStartTime: args.scheduledStartTime,
+      scheduledEndTime: args.scheduledEndTime,
+      schoolArrivalTime: args.schoolArrivalTime,
+      schoolDepartureTime: args.schoolDepartureTime,
+      recurrence: args.recurrence,
+      optimizedPolyline: args.optimizedPolyline,
+      estimatedDuration: args.estimatedDuration,
+      estimatedDistance: args.estimatedDistance,
+      isActive: args.isActive ?? true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2. Create route stops
+    const stopIds: Map<number, Id<"routeStops">> = new Map();
+    for (const stop of args.stops) {
+      const stopId = await ctx.db.insert("routeStops", {
+        routeId,
+        name: stop.name,
+        address: stop.address,
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        scheduledTime: stop.scheduledTime,
+        estimatedArrivalTime: stop.estimatedArrivalTime,
+        durationFromPrevious: stop.durationFromPrevious,
+        order: stop.order,
+        geofenceRadius: stop.geofenceRadius ?? 100,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      stopIds.set(stop.order, stopId);
+    }
+
+    // 3. Create student-route assignments
+    for (const stop of args.stops) {
+      const stopId = stopIds.get(stop.order);
+      if (!stopId) continue;
+
+      await ctx.db.insert("studentRoutes", {
+        studentId: stop.studentId,
+        routeId,
+        stopId,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      success: true,
+      routeId,
+      stopsCreated: args.stops.length,
+      studentsAssigned: args.stops.length,
+    };
   },
 });

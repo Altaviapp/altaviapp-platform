@@ -4,44 +4,30 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-import { useMonitorMutations, useRoutes, useUsers } from '@/hooks';
+import { useInvitationMutations } from '@/hooks';
+import { CheckCircle, Mail } from 'lucide-react';
 
 /**
- * New Monitor Page
- * Connected to real Convex data
+ * New Monitor Page - Simple invitation form
  *
- * Note: Creating a monitor requires selecting an existing user with role "monitor"
+ * Creates an invitation for a monitor with basic info.
+ * The monitor profile is auto-created when the user accepts the invitation.
+ * The monitor completes their professional info (ID, certificates) in the Crew app.
  */
 export default function NewMonitorPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [invitedEmail, setInvitedEmail] = useState('');
 
-  // Real hooks
-  const { createMonitor } = useMonitorMutations();
-  const { routes } = useRoutes();
-  const { users } = useUsers({ role: 'monitor' });
-
-  // Build options
-  const routeOptions = routes.map(r => ({
-    value: r._id,
-    label: r.name,
-  }));
-
-  // Users with monitor role who don't have a monitor profile yet
-  const userOptions = users.map(u => ({
-    value: u._id,
-    label: `${u.name} (${u.email})`,
-  }));
+  const { createInvitation } = useInvitationMutations();
 
   const [formData, setFormData] = useState({
-    userId: '',
-    idNumber: '',
+    firstName: '',
+    lastName: '',
+    email: '',
     phone: '',
-    emergencyContact: '',
-    firstAidCertified: false,
-    firstAidCertExpiry: '',
-    childCareCertified: false,
   });
 
   const handleChange = (field: string) => (value: string) => {
@@ -54,26 +40,25 @@ export default function NewMonitorPage() {
     setIsSubmitting(true);
     setError(null);
 
-    if (!formData.userId) {
-      setError('Debe seleccionar un usuario');
+    if (!formData.email) {
+      setError('El email es obligatorio');
       setIsSubmitting(false);
       return;
     }
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await createMonitor(formData.userId as any, {
-        idNumber: formData.idNumber,
-        phone: formData.phone,
-        emergencyContact: formData.emergencyContact,
-        firstAidCertified: formData.firstAidCertified,
-        firstAidCertExpiry: formData.firstAidCertExpiry ? new Date(formData.firstAidCertExpiry).getTime() : undefined,
-        childCareCertified: formData.childCareCertified,
+      await createInvitation({
+        email: formData.email,
+        firstName: formData.firstName || undefined,
+        lastName: formData.lastName || undefined,
+        phone: formData.phone || undefined,
+        role: 'monitor',
       });
-      router.push('/fleet?tab=monitors');
+      setInvitedEmail(formData.email);
+      setSuccess(true);
     } catch (err) {
-      console.error('Error creating monitor:', err);
-      setError(err instanceof Error ? err.message : 'Error al crear el monitor');
+      console.error('Error creating invitation:', err);
+      setError(err instanceof Error ? err.message : 'Error al enviar la invitación');
       setIsSubmitting(false);
     }
   };
@@ -82,10 +67,68 @@ export default function NewMonitorPage() {
     router.push('/fleet?tab=monitors');
   };
 
+  const handleInviteAnother = () => {
+    setSuccess(false);
+    setFormData({ firstName: '', lastName: '', email: '', phone: '' });
+    setInvitedEmail('');
+  };
+
+  // Success state
+  if (success) {
+    return (
+      <div>
+        <PageHeader
+          title="Invitar Monitor"
+          breadcrumbs={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Flota', href: '/fleet' },
+            { label: 'Monitores', href: '/fleet?tab=monitors' },
+            { label: 'Nuevo Monitor' },
+          ]}
+          backHref="/fleet?tab=monitors"
+        />
+
+        <div className="max-w-md mx-auto mt-12">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+            <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-success" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              ¡Invitación enviada!
+            </h2>
+            <p className="text-gray-600 mb-1">
+              Se ha enviado un email a:
+            </p>
+            <p className="font-medium text-primary mb-4">
+              {invitedEmail}
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              Cuando el monitor acepte la invitación y cree su cuenta, aparecerá automáticamente en la lista de monitores.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={handleInviteAnother}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Invitar otro
+              </button>
+              <button
+                onClick={() => router.push('/fleet?tab=monitors')}
+                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Ver monitores
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
-        title="Nuevo Monitor"
+        title="Invitar Monitor"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Flota', href: '/fleet' },
@@ -101,37 +144,51 @@ export default function NewMonitorPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Selección de Usuario */}
-        <FormSection title="Usuario">
-          <div className="p-4 bg-info/10 rounded-lg mb-4">
-            <p className="text-sm text-info">
-              Seleccione un usuario existente con rol de monitor para crear su perfil.
-              El usuario debe haber sido creado previamente en la sección de Usuarios.
-            </p>
+      <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+        {/* Info banner */}
+        <div className="p-4 bg-info/10 border border-info/20 rounded-lg">
+          <div className="flex gap-3">
+            <Mail className="w-5 h-5 text-info flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-info">
+              <p className="font-medium mb-1">¿Cómo funciona?</p>
+              <ol className="list-decimal list-inside space-y-1 text-info/80">
+                <li>Complete los datos básicos y envíe la invitación</li>
+                <li>El monitor recibirá un email para crear su cuenta</li>
+                <li>Al aceptar, aparecerá automáticamente en la lista</li>
+                <li>El monitor completa su cédula y certificados en su perfil</li>
+              </ol>
+            </div>
           </div>
-          <FormField
-            label="Usuario"
-            name="userId"
-            type="select"
-            value={formData.userId}
-            onChange={handleChange('userId')}
-            options={userOptions}
-            placeholder="Seleccionar usuario"
-            required
-          />
-        </FormSection>
+        </div>
 
-        {/* Información de Contacto */}
-        <FormSection title="Información de Contacto">
+        {/* Datos Básicos */}
+        <FormSection title="Datos del Monitor">
           <FormFieldRow cols={2}>
             <FormField
-              label="Cédula de Identidad"
-              name="idNumber"
-              value={formData.idNumber}
-              onChange={handleChange('idNumber')}
-              placeholder="10 dígitos"
-              hint="Ejemplo: 1234567890"
+              label="Nombre"
+              name="firstName"
+              value={formData.firstName}
+              onChange={handleChange('firstName')}
+              placeholder="Ej: María"
+            />
+            <FormField
+              label="Apellido"
+              name="lastName"
+              value={formData.lastName}
+              onChange={handleChange('lastName')}
+              placeholder="Ej: García"
+            />
+          </FormFieldRow>
+
+          <FormFieldRow cols={2}>
+            <FormField
+              label="Email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange('email')}
+              placeholder="monitor@ejemplo.com"
+              hint="Se enviará la invitación a este email"
               required
             />
             <FormField
@@ -141,68 +198,19 @@ export default function NewMonitorPage() {
               value={formData.phone}
               onChange={handleChange('phone')}
               placeholder="+593XXXXXXXXX"
-              hint="Formato: +593XXXXXXXXX"
-              required
+              hint="Opcional - El monitor puede agregarlo después"
             />
           </FormFieldRow>
-
-          <FormField
-            label="Contacto de Emergencia"
-            name="emergencyContact"
-            value={formData.emergencyContact}
-            onChange={handleChange('emergencyContact')}
-            placeholder="Nombre y teléfono del contacto"
-            required
-          />
-        </FormSection>
-
-        {/* Certificaciones */}
-        <FormSection title="Certificaciones">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <input
-                type="checkbox"
-                id="firstAidCertified"
-                checked={formData.firstAidCertified}
-                onChange={(e) => setFormData(prev => ({ ...prev, firstAidCertified: e.target.checked }))}
-                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <label htmlFor="firstAidCertified" className="text-sm">
-                <span className="font-medium text-gray-900">Certificado en Primeros Auxilios</span>
-              </label>
-            </div>
-
-            {formData.firstAidCertified && (
-              <FormField
-                label="Fecha de Vencimiento (Primeros Auxilios)"
-                name="firstAidCertExpiry"
-                type="date"
-                value={formData.firstAidCertExpiry}
-                onChange={handleChange('firstAidCertExpiry')}
-              />
-            )}
-
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <input
-                type="checkbox"
-                id="childCareCertified"
-                checked={formData.childCareCertified}
-                onChange={(e) => setFormData(prev => ({ ...prev, childCareCertified: e.target.checked }))}
-                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <label htmlFor="childCareCertified" className="text-sm">
-                <span className="font-medium text-gray-900">Certificado en Cuidado Infantil</span>
-              </label>
-            </div>
-          </div>
         </FormSection>
 
         {/* Form Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <p className="text-sm text-gray-500 mb-4">* Campos obligatorios</p>
+          <p className="text-sm text-gray-500 mb-4">
+            El monitor completará su cédula y certificados desde la app móvil.
+          </p>
           <FormActions
             onCancel={handleCancel}
-            submitLabel="Guardar Monitor"
+            submitLabel="Enviar Invitación"
             isLoading={isSubmitting}
           />
         </div>

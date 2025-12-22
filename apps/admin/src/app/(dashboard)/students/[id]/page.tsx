@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Edit, Trash2, QrCode, Phone, Mail, MapPin, GraduationCap, Calendar, Loader2 } from 'lucide-react';
+import { Edit, Trash2, QrCode, Phone, Mail, MapPin, GraduationCap, Calendar, Loader2, Bus, Clock } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection, DetailItem, DetailGrid, ConfirmDialog } from '@/components/shared';
 import Link from 'next/link';
 import { useStudent, useStudentMutations, useStudentRouteAssignments } from '@/hooks';
@@ -64,7 +64,11 @@ export default function StudentDetailPage() {
   };
 
   const studentName = `${student.firstName} ${student.lastName}`;
-  const activeAssignment = assignments.find(a => a.isActive);
+
+  // Get all active assignments, grouped by route type
+  const activeAssignments = assignments.filter(a => a.isActive);
+  const pickupAssignments = activeAssignments.filter(a => a.route?.type === 'pickup');
+  const dropoffAssignments = activeAssignments.filter(a => a.route?.type === 'dropoff');
 
   return (
     <div>
@@ -175,21 +179,90 @@ export default function StudentDetailPage() {
           </div>
         </DetailSection>
 
-        {/* Ruta Asignada */}
-        <DetailSection title="Ruta de Transporte">
-          {activeAssignment ? (
-            <DetailItem
-              label="Ruta Asignada"
-              value={
-                <Link href={`/routes/${activeAssignment.routeId}`} className="text-primary hover:underline">
-                  Ver ruta asignada
-                </Link>
-              }
-            />
-          ) : (
+        {/* Rutas Asignadas */}
+        <DetailSection title="Rutas de Transporte">
+          {activeAssignments.length === 0 ? (
             <p className="text-sm text-amber-600 bg-amber-50 px-4 py-3 rounded-lg">
-              Este estudiante no tiene ruta de transporte asignada
+              Este estudiante no tiene rutas de transporte asignadas
             </p>
+          ) : (
+            <div className="space-y-4">
+              {/* Rutas de Recogida */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Bus className="w-4 h-4 text-blue-500" />
+                  Recogida (Mañana)
+                </h4>
+                {pickupAssignments.length === 0 ? (
+                  <p className="text-sm text-gray-500 pl-6">Sin ruta de recogida asignada</p>
+                ) : (
+                  <div className="space-y-2">
+                    {pickupAssignments.map((assignment) => (
+                      <div key={assignment._id} className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Bus className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <Link
+                            href={`/routes/${assignment.routeId}`}
+                            className="text-sm font-medium text-gray-900 hover:text-primary"
+                          >
+                            {assignment.route?.name || 'Ruta sin nombre'}
+                          </Link>
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Parada: {assignment.stop?.name} • {assignment.stop?.scheduledTime || '--:--'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Rutas de Entrega */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Bus className="w-4 h-4 text-green-500" />
+                  Entrega (Tarde)
+                </h4>
+                {dropoffAssignments.length === 0 ? (
+                  <p className="text-sm text-gray-500 pl-6">Sin ruta de entrega asignada</p>
+                ) : (
+                  <div className="space-y-2">
+                    {dropoffAssignments.map((assignment) => (
+                      <div key={assignment._id} className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                          <Bus className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div className="flex-1">
+                          <Link
+                            href={`/routes/${assignment.routeId}`}
+                            className="text-sm font-medium text-gray-900 hover:text-primary"
+                          >
+                            {assignment.route?.name || 'Ruta sin nombre'}
+                          </Link>
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Parada: {assignment.stop?.name} • {assignment.stop?.scheduledTime || '--:--'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Warning if multiple routes of same type */}
+              {(pickupAssignments.length > 1 || dropoffAssignments.length > 1) && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-700">
+                    ⚠️ Este estudiante tiene múltiples rutas del mismo tipo asignadas.
+                    Esto podría causar conflictos de horario.
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </DetailSection>
 

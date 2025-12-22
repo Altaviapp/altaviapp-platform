@@ -70,9 +70,18 @@ export function useStudentTracking(studentId: Id<"students"> | null) {
     tracking,
     isLoading: tracking === undefined,
     hasActiveTrip,
+    // Core trip data
     currentLocation: tracking?.currentLocation ?? null,
     route: tracking?.route ?? null,
     trip: tracking?.trip ?? null,
+    // Enhanced tracking data
+    stops: tracking?.stops ?? [],
+    studentStop: tracking?.studentStop ?? null,
+    vehicle: tracking?.vehicle ?? null,
+    driver: tracking?.driver ?? null,
+    school: tracking?.school ?? null,
+    progress: tracking?.progress ?? 0,
+    etaMinutes: tracking?.etaMinutes ?? null,
   };
 }
 

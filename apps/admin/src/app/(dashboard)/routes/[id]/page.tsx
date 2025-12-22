@@ -4,8 +4,8 @@ import { useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  MapPin, Users, Clock, Bus, Phone, Edit, Play, Trash2,
-  ChevronRight, GraduationCap, Route, User, CheckCircle, Loader2
+  MapPin, Users, Clock, Bus, Phone, Edit, Trash2,
+  ChevronRight, GraduationCap, Route, User, Loader2
 } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection, ConfirmDialog } from '@/components/shared';
 import { cn } from '@/lib/utils';
@@ -68,11 +68,11 @@ export default function RouteDetailPage() {
   // Filter out any null students and type the result properly
   const students = (route.students || []).filter((s): s is NonNullable<typeof s> => s !== null);
 
-  // Prepare map markers
-  const mapMarkers: MarkerInfo[] = stops.map((stop, index) => ({
+  // Prepare map markers - all stops are student stops
+  const mapMarkers: MarkerInfo[] = stops.map((stop) => ({
     id: `stop-${stop._id}`,
     position: { lat: stop.latitude, lng: stop.longitude },
-    type: index === stops.length - 1 ? 'school' : 'stop',
+    type: 'stop',
     title: `${stop.order}. ${stop.name}`,
     label: stop.order.toString(),
   }));
@@ -135,12 +135,6 @@ export default function RouteDetailPage() {
               href: `/routes/${route._id}/edit`,
               icon: Edit,
               variant: 'secondary',
-            },
-            {
-              label: 'Iniciar Viaje',
-              onClick: () => console.log('Start trip'),
-              icon: Play,
-              variant: 'primary',
             },
             {
               label: 'Eliminar',
@@ -240,11 +234,7 @@ export default function RouteDetailPage() {
                 <div className="p-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-4 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full bg-primary"></span>
-                    <span className="text-gray-600">Paradas</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-success"></span>
-                    <span className="text-gray-600">Escuela</span>
+                    <span className="text-gray-600">Paradas de estudiantes</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-0.5 bg-primary"></span>
@@ -265,30 +255,21 @@ export default function RouteDetailPage() {
                       No hay paradas configuradas
                     </div>
                   ) : (
-                    stops.map((stop, index) => {
+                    stops.map((stop) => {
                       const stopStudents = studentsByStop[stop._id] || [];
-                      const isSchool = index === stops.length - 1;
 
                       return (
                         <div key={stop._id} className="p-4">
                           <div className="flex items-start gap-4">
                             {/* Order Number */}
-                            <div className={cn(
-                              'w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0',
-                              isSchool ? 'bg-success' : 'bg-primary'
-                            )}>
-                              {isSchool ? <CheckCircle className="w-5 h-5" /> : stop.order}
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 bg-primary">
+                              {stop.order}
                             </div>
 
                             {/* Stop Info */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <p className="font-medium text-gray-900">{stop.name}</p>
-                                {isSchool && (
-                                  <span className="px-2 py-0.5 bg-success/10 text-success rounded text-xs">
-                                    Destino Final
-                                  </span>
-                                )}
                               </div>
                               <p className="text-sm text-gray-500 mb-2">{stop.address}</p>
 
@@ -530,13 +511,9 @@ export default function RouteDetailPage() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                 <h3 className="font-semibold text-gray-900 mb-3">Acciones Rápidas</h3>
                 <div className="space-y-2">
-                  <button className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm">
-                    <Play className="w-4 h-4" />
-                    Iniciar Viaje
-                  </button>
                   <Link
                     href={`/routes/${route._id}/edit`}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm"
                   >
                     <Edit className="w-4 h-4" />
                     Editar Ruta

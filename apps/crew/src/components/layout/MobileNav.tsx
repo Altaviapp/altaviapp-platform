@@ -14,16 +14,17 @@ interface NavItem {
   roles?: ('driver' | 'monitor' | 'admin')[]; // If undefined, show for all roles
 }
 
-// Bottom nav shows only the most important items per role
-// Driver: Inicio, Viajes, Mapa, Historial, Perfil
-// Monitor: Inicio, Viajes, Check-in, Estudiantes, Perfil
+// Bottom nav shows important items for all crew members
+// Both drivers and monitors have access to core functionality:
+// - Check-in: Both can scan QR and register students
+// - Mapa: Both can see route and vehicle location
+// - Historial: Both can see trip history
+// Driver-specific: Vehicle management (shown in dashboard)
 const allNavItems: NavItem[] = [
   { icon: Home, label: 'Inicio', href: '/dashboard' },
   { icon: Truck, label: 'Viajes', href: '/trips' },
-  { icon: Map, label: 'Mapa', href: '/map', roles: ['driver', 'admin'] },
-  { icon: QrCode, label: 'Check-in', href: '/checkin', roles: ['monitor', 'admin'] },
-  { icon: Users, label: 'Estudiantes', href: '/students', roles: ['monitor'] },
-  { icon: History, label: 'Historial', href: '/history', roles: ['driver'] },
+  { icon: QrCode, label: 'Check-in', href: '/checkin' }, // Both driver and monitor
+  { icon: Map, label: 'Mapa', href: '/map' }, // Both driver and monitor
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 

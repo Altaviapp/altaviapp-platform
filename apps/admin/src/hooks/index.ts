@@ -12,7 +12,7 @@ export type { ConvexAuthContext } from "./useConvexAuth";
 export { useRoutes, useRoute, useRouteStops, useRouteMutations } from "./useRoutes";
 
 // Students
-export { useStudents, useStudent, useStudentMutations, useStudentRouteAssignments } from "./useStudents";
+export { useStudents, useStudent, useStudentMutations, useStudentRouteAssignments, useStudentsWithRoutes } from "./useStudents";
 
 // Fleet (Vehicles, Drivers, Monitors)
 export {

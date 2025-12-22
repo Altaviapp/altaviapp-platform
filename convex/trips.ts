@@ -589,6 +589,12 @@ export const cancelTrip = mutation({
 
 /**
  * Get active trip for a student (for parent tracking)
+ * Returns comprehensive data for real-time tracking including:
+ * - Trip status and info
+ * - Route with polyline, stops, and times
+ * - Vehicle location with speed/heading
+ * - Driver and vehicle info
+ * - Student's assigned stop with ETA
  */
 export const getActiveTripForStudent = query({
   args: {
@@ -616,7 +622,7 @@ export const getActiveTripForStudent = query({
       await verifyInstitutionAccess(ctx, args.userId, student.institutionId);
     }
 
-    // Get student's route assignments
+    // Get student's route assignments with stop info
     const assignments = await ctx.db
       .query("studentRoutes")
       .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
@@ -639,19 +645,149 @@ export const getActiveTripForStudent = query({
       return null;
     }
 
-    // Get current location
+    // Get current location with all tracking data
     const latestGps = await ctx.db
       .query("gpsTracking")
       .withIndex("by_trip", (q) => q.eq("tripId", activeTrip._id))
       .order("desc")
       .first();
 
+    // Get route details
     const route = await ctx.db.get(activeTrip.routeId);
+    if (!route) {
+      return null;
+    }
+
+    // Get route stops
+    const stops = await ctx.db
+      .query("routeStops")
+      .withIndex("by_route", (q) => q.eq("routeId", activeTrip.routeId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    const sortedStops = stops.sort((a, b) => a.order - b.order);
+
+    // Find student's assigned stop
+    const studentAssignment = assignments.find((a) => a.routeId === activeTrip.routeId);
+    const studentStopId = studentAssignment?.stopId;
+    const studentStop = studentStopId ? await ctx.db.get(studentStopId) : null;
+
+    // Get vehicle info
+    const vehicle = await ctx.db.get(activeTrip.vehicleId);
+
+    // Get driver info
+    const driver = await ctx.db.get(activeTrip.driverId);
+    let driverUser = null;
+    if (driver?.userId) {
+      driverUser = await ctx.db.get(driver.userId);
+    }
+
+    // Get institution for school location
+    const institution = await ctx.db.get(student.institutionId);
+
+    // Get check-ins to determine completed stops
+    const checkins = await ctx.db
+      .query("studentCheckins")
+      .withIndex("by_trip", (q) => q.eq("tripId", activeTrip._id))
+      .collect();
+
+    // Determine which stops are completed based on check-ins
+    const stopsWithStudents = new Map<string, boolean>();
+    for (const checkin of checkins) {
+      stopsWithStudents.set(checkin.stopId.toString(), true);
+    }
+
+    // Calculate progress (percentage of stops with at least one check-in)
+    const stopsWithCheckins = new Set(checkins.map(c => c.stopId.toString()));
+    const completedStopsCount = stopsWithCheckins.size;
+    const progress = sortedStops.length > 0
+      ? Math.round((completedStopsCount / sortedStops.length) * 100)
+      : 0;
+
+    // Calculate ETA to student's stop (simple estimation based on stop order)
+    let etaMinutes: number | null = null;
+    if (studentStop && latestGps && activeTrip.startTime) {
+      const studentStopOrder = studentStop.order;
+      const elapsedMinutes = Math.floor((Date.now() - activeTrip.startTime) / 60000);
+      const totalStops = sortedStops.length;
+
+      if (completedStopsCount > 0 && completedStopsCount < totalStops) {
+        // Estimate based on current pace
+        const avgTimePerStop = elapsedMinutes / completedStopsCount;
+        const remainingStops = studentStopOrder - completedStopsCount;
+        etaMinutes = remainingStops > 0 ? Math.round(avgTimePerStop * remainingStops) : 0;
+      } else if (route.estimatedDuration && studentStop.estimatedArrivalTime) {
+        // Use scheduled time as fallback
+        const [hours, minutes] = studentStop.estimatedArrivalTime.split(':').map(Number);
+        const scheduledTime = (hours ?? 0) * 60 + (minutes ?? 0);
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        etaMinutes = Math.max(0, scheduledTime - currentMinutes);
+      }
+    }
 
     return {
-      trip: activeTrip,
-      route: route ? { name: route.name, type: route.type } : null,
-      currentLocation: latestGps,
+      trip: {
+        id: activeTrip._id,
+        status: activeTrip.status,
+        startTime: activeTrip.startTime,
+        scheduledDate: activeTrip.scheduledDate,
+      },
+      route: {
+        id: route._id,
+        name: route.name,
+        type: route.type,
+        scheduledStartTime: route.scheduledStartTime,
+        scheduledEndTime: route.scheduledEndTime,
+        optimizedPolyline: route.optimizedPolyline,
+        estimatedDuration: route.estimatedDuration,
+        estimatedDistance: route.estimatedDistance,
+      },
+      stops: sortedStops.map((stop) => ({
+        id: stop._id,
+        name: stop.name,
+        address: stop.address,
+        lat: stop.latitude,
+        lng: stop.longitude,
+        order: stop.order,
+        scheduledTime: stop.scheduledTime || stop.estimatedArrivalTime,
+        completed: stopsWithCheckins.has(stop._id.toString()),
+        isStudentStop: stop._id.toString() === studentStopId?.toString(),
+      })),
+      studentStop: studentStop ? {
+        id: studentStop._id,
+        name: studentStop.name,
+        address: studentStop.address,
+        lat: studentStop.latitude,
+        lng: studentStop.longitude,
+        scheduledTime: studentStop.scheduledTime || studentStop.estimatedArrivalTime,
+        order: studentStop.order,
+      } : null,
+      currentLocation: latestGps ? {
+        latitude: latestGps.latitude,
+        longitude: latestGps.longitude,
+        speed: latestGps.speed,
+        heading: latestGps.heading,
+        timestamp: latestGps.timestamp,
+      } : null,
+      vehicle: vehicle ? {
+        id: vehicle._id,
+        licensePlate: vehicle.licensePlate,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        capacity: vehicle.capacity,
+      } : null,
+      driver: driverUser ? {
+        name: driverUser.name,
+        phone: driverUser.phone,
+      } : null,
+      school: institution && institution.schoolLatitude && institution.schoolLongitude ? {
+        name: institution.name,
+        lat: institution.schoolLatitude,
+        lng: institution.schoolLongitude,
+      } : null,
+      progress,
+      etaMinutes,
     };
   },
 });

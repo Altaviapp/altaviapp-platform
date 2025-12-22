@@ -120,3 +120,20 @@ export function useStudentRouteAssignments(studentId: Id<"students"> | null) {
     isLoading: assignments === undefined,
   };
 }
+
+// Hook for students with their route assignments (for route wizard)
+export function useStudentsWithRoutes() {
+  const { userId, institutionId } = useConvexAuth();
+
+  const students = useQuery(
+    api.students.listStudentsWithRoutes,
+    userId && institutionId
+      ? { userId, institutionId }
+      : "skip"
+  );
+
+  return {
+    students: students ?? [],
+    isLoading: students === undefined,
+  };
+}

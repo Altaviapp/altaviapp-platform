@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { MapPin, Clock, Phone, MessageCircle, ChevronDown, Bus, User, RefreshCw, AlertCircle } from 'lucide-react';
+import { MapPin, Clock, Phone, MessageCircle, ChevronDown, Bus, User, RefreshCw, AlertCircle, Navigation } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMyStudents, useStudentTracking, useConvexAuth } from '@/hooks';
 import { LiveTrackingMap } from '@/components/tracking/LiveTrackingMap';
+import type { RouteStop } from '@/components/tracking/LiveTrackingMap';
 import type { Id } from '../../../../../../convex/_generated/dataModel';
 
 // Helper to get full name from student
@@ -23,11 +24,16 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   delayed: { label: 'RETRASADO', color: 'text-white', bg: 'bg-warning' },
 };
 
-// Mock driver data (will come from backend in production)
-const mockDriver = {
-  name: 'Juan Pérez',
-  phone: '+593 99 123 4567',
-};
+// Format ETA for display
+function formatETA(minutes: number | null): string {
+  if (minutes === null || minutes === undefined) return '--';
+  if (minutes === 0) return '¡Ya llegó!';
+  if (minutes < 1) return '< 1 min';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
 
 export default function TrackingPage() {
   const { isLoading: authLoading } = useConvexAuth();
@@ -45,10 +51,21 @@ export default function TrackingPage() {
     return students[0] ?? null;
   }, [students, selectedStudentId]);
 
-  // Get tracking data for selected student
-  const { tracking, isLoading: trackingLoading, hasActiveTrip, currentLocation } = useStudentTracking(
-    selectedStudent?._id as Id<'students'> | null
-  );
+  // Get tracking data for selected student (now includes all enhanced data)
+  const {
+    tracking,
+    isLoading: trackingLoading,
+    hasActiveTrip,
+    currentLocation,
+    route,
+    stops,
+    studentStop,
+    vehicle,
+    driver,
+    school,
+    progress,
+    etaMinutes,
+  } = useStudentTracking(selectedStudent?._id as Id<'students'> | null);
 
   // Loading state
   if (authLoading || studentsLoading) {
@@ -77,9 +94,6 @@ export default function TrackingPage() {
   const tripStatus = tracking?.trip?.status ?? 'not_started';
   const status = statusConfig[tripStatus] ?? statusConfig.not_started!;
 
-  // Calculate progress
-  const progress = hasActiveTrip ? 50 : 0; // TODO: Calculate real progress from stops
-
   // Calculate time since last update
   const lastUpdate = (() => {
     if (!currentLocation?.timestamp) return null;
@@ -97,6 +111,30 @@ export default function TrackingPage() {
     heading: currentLocation.heading,
     timestamp: currentLocation.timestamp,
   } : null;
+
+  // Convert stops to RouteStop format for map
+  const mapStops: RouteStop[] = useMemo(() => {
+    return stops.map((stop) => ({
+      id: stop.id.toString(),
+      name: stop.name,
+      lat: stop.lat,
+      lng: stop.lng,
+      scheduledTime: stop.scheduledTime,
+      completed: stop.completed,
+      isSchool: false,
+    }));
+  }, [stops]);
+
+  // School location for map
+  const schoolLocation = useMemo(() => {
+    if (school?.lat && school?.lng) {
+      return { lat: school.lat, lng: school.lng, name: school.name };
+    }
+    return undefined;
+  }, [school]);
+
+  // Student's stop ID for highlighting
+  const studentStopId = studentStop?.id?.toString();
 
   return (
     <div className="space-y-4">
@@ -168,13 +206,17 @@ export default function TrackingPage() {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <LiveTrackingMap
           vehicleLocation={vehicleLocation}
+          stops={mapStops}
+          schoolLocation={schoolLocation}
+          studentStopId={studentStopId}
+          encodedPolyline={route?.optimizedPolyline}
           height="280px"
           autoCenter={true}
           lastUpdate={lastUpdate ?? undefined}
-          vehicleInfo={{
-            plate: 'ABC-1234', // TODO: Get from trip data
-            driverName: mockDriver.name,
-          }}
+          vehicleInfo={vehicle && driver ? {
+            plate: vehicle.licensePlate,
+            driverName: driver.name ?? 'Conductor',
+          } : undefined}
         />
 
         {/* Map Controls */}
@@ -208,7 +250,7 @@ export default function TrackingPage() {
             <div className="mb-4">
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-600">Progreso de la ruta</span>
-                <span className="text-gray-900 font-medium">{tracking?.route?.name ?? 'Ruta'}</span>
+                <span className="text-gray-900 font-medium">{route?.name ?? 'Ruta'}</span>
               </div>
               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div
@@ -216,23 +258,44 @@ export default function TrackingPage() {
                   style={{ width: `${progress}%` }}
                 />
               </div>
+              <p className="text-xs text-gray-500 mt-1 text-right">{progress}% completado</p>
             </div>
 
             {/* Trip Details Grid */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">Estado</p>
-                <p className="font-semibold text-gray-900">En ruta</p>
+                <p className="text-xs text-gray-500 mb-1">Tiempo estimado</p>
+                <p className="font-semibold text-gray-900 flex items-center gap-1">
+                  <Clock className="w-4 h-4 text-primary" />
+                  {formatETA(etaMinutes)}
+                </p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-1">Velocidad</p>
-                <p className="font-semibold text-gray-900">
+                <p className="font-semibold text-gray-900 flex items-center gap-1">
+                  <Navigation className="w-4 h-4 text-primary" />
                   {currentLocation.speed !== null && currentLocation.speed !== undefined
                     ? `${Math.round(currentLocation.speed * 3.6)} km/h`
                     : '-- km/h'}
                 </p>
               </div>
             </div>
+
+            {/* Student's Stop Info */}
+            {studentStop && (
+              <div className="mt-3 p-3 bg-accent/10 rounded-lg border border-accent/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-gray-900">Tu parada</span>
+                </div>
+                <p className="text-sm text-gray-700">{studentStop.name}</p>
+                {studentStop.scheduledTime && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Hora programada: {studentStop.scheduledTime}
+                  </p>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="text-center py-4">
@@ -243,35 +306,59 @@ export default function TrackingPage() {
         )}
       </div>
 
-      {/* Driver Card */}
+      {/* Driver & Vehicle Card */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center gap-2 mb-4">
           <User className="w-5 h-5 text-primary" />
-          <span className="font-semibold text-gray-900">Conductor</span>
+          <span className="font-semibold text-gray-900">Conductor y Vehículo</span>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium text-gray-900">{mockDriver.name}</p>
-            <p className="text-sm text-gray-500">{mockDriver.phone}</p>
+        {driver ? (
+          <div className="space-y-4">
+            {/* Driver Info */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">{driver.name}</p>
+                {driver.phone && (
+                  <p className="text-sm text-gray-500">{driver.phone}</p>
+                )}
+              </div>
+              {driver.phone && (
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`tel:${driver.phone.replace(/\s/g, '')}`}
+                    className="p-3 rounded-full bg-success text-white hover:bg-success/90 transition-colors"
+                  >
+                    <Phone className="w-5 h-5" />
+                  </a>
+                  <a
+                    href={`https://wa.me/${driver.phone.replace(/\s/g, '').replace('+', '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-3 rounded-full bg-[#25D366] text-white hover:opacity-90 transition-opacity"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Vehicle Info */}
+            {vehicle && (
+              <div className="pt-3 border-t border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Bus className="w-4 h-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{vehicle.licensePlate}</p>
+                    <p className="text-xs text-gray-500">{vehicle.brand} {vehicle.model}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <a
-              href={`tel:${mockDriver.phone.replace(/\s/g, '')}`}
-              className="p-3 rounded-full bg-success text-white hover:bg-success/90 transition-colors"
-            >
-              <Phone className="w-5 h-5" />
-            </a>
-            <a
-              href={`https://wa.me/${mockDriver.phone.replace(/\s/g, '').replace('+', '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-3 rounded-full bg-[#25D366] text-white hover:opacity-90 transition-opacity"
-            >
-              <MessageCircle className="w-5 h-5" />
-            </a>
-          </div>
-        </div>
+        ) : (
+          <p className="text-sm text-gray-500">Información del conductor no disponible</p>
+        )}
       </div>
 
       {/* Real-time indicator */}

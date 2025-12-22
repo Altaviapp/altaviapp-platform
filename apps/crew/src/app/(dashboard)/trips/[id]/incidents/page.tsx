@@ -2,50 +2,70 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft, AlertTriangle, Car, Stethoscope, User, MapPin, Clock, Camera, Send, CheckCircle, X } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Car, Stethoscope, User, MapPin, Clock, Camera, Send, CheckCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useIncidentMutations, useTripStudents, useCurrentPosition, useConvexAuth } from '@/hooks';
+import type { IncidentType, IncidentSeverity } from '@/hooks';
+
+// Map frontend incident types to backend types
+const incidentTypeMap: Record<string, IncidentType> = {
+  'accident': 'accident',
+  'medical': 'emergency',
+  'student': 'behavior',
+  'route': 'breakdown',
+  'delay': 'other',
+  'other': 'other',
+};
 
 const incidentTypes = [
-  { id: 'accident', label: 'Accidente de Tránsito', icon: Car, color: 'bg-error', severity: 'critical' },
-  { id: 'medical', label: 'Emergencia Médica', icon: Stethoscope, color: 'bg-error', severity: 'critical' },
-  { id: 'student', label: 'Problema con Estudiante', icon: User, color: 'bg-warning', severity: 'high' },
-  { id: 'route', label: 'Problema en la Ruta', icon: MapPin, color: 'bg-warning', severity: 'medium' },
-  { id: 'delay', label: 'Retraso', icon: Clock, color: 'bg-info', severity: 'low' },
-  { id: 'other', label: 'Otro', icon: AlertTriangle, color: 'bg-gray-500', severity: 'low' },
+  { id: 'accident', label: 'Accidente de Tránsito', icon: Car, color: 'bg-error', severity: 'critical' as const },
+  { id: 'medical', label: 'Emergencia Médica', icon: Stethoscope, color: 'bg-error', severity: 'critical' as const },
+  { id: 'student', label: 'Problema con Estudiante', icon: User, color: 'bg-warning', severity: 'high' as const },
+  { id: 'route', label: 'Problema en la Ruta', icon: MapPin, color: 'bg-warning', severity: 'medium' as const },
+  { id: 'delay', label: 'Retraso', icon: Clock, color: 'bg-info', severity: 'low' as const },
+  { id: 'other', label: 'Otro', icon: AlertTriangle, color: 'bg-gray-500', severity: 'low' as const },
 ];
 
-const severityOptions = [
+const severityOptions: { value: IncidentSeverity; label: string; description: string; color: string }[] = [
   { value: 'critical', label: 'Crítico', description: 'Requiere ambulancia/policía', color: 'bg-error' },
   { value: 'high', label: 'Alto', description: 'Sin heridos graves', color: 'bg-warning' },
+  { value: 'medium', label: 'Medio', description: 'Requiere atención', color: 'bg-warning' },
   { value: 'low', label: 'Menor', description: 'Solo información', color: 'bg-info' },
 ];
 
 const delayOptions = [5, 10, 15, 20, 30];
-
-// Mock students
-const students = [
-  { id: 1, name: 'Carlos Rodríguez' },
-  { id: 2, name: 'María López' },
-  { id: 3, name: 'Pedro Gómez' },
-  { id: 4, name: 'Ana Fernández' },
-];
 
 export default function IncidentsPage() {
   const params = useParams();
   const router = useRouter();
   const tripId = params?.id as string ?? '';
 
+  // Convex hooks
+  const { isLoading: authLoading } = useConvexAuth();
+  const { reportIncident, isReady } = useIncidentMutations();
+  const { students: tripStudents, isLoading: studentsLoading } = useTripStudents(tripId || null);
+  const { position: gpsPosition } = useCurrentPosition();
+
+  // Form state
   const [step, setStep] = useState<'type' | 'form' | 'success'>('type');
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [severity, setSeverity] = useState<string>('high');
+  const [severity, setSeverity] = useState<IncidentSeverity>('high');
   const [description, setDescription] = useState('');
-  const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [delayMinutes, setDelayMinutes] = useState(10);
   const [notifyParents, setNotifyParents] = useState(true);
   const [notifyAdmin, setNotifyAdmin] = useState(true);
-  const [photos, setPhotos] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [incidentId, setIncidentId] = useState<string | null>(null);
+
+  // Get valid students from trip (filter out nulls and get student info)
+  const validStudents = tripStudents
+    .filter((ts): ts is NonNullable<typeof ts> => ts !== null && ts.student !== null)
+    .map(ts => ({
+      id: ts.student!.id,
+      name: `${ts.student!.firstName} ${ts.student!.lastName}`,
+    }));
 
   const currentType = incidentTypes.find(t => t.id === selectedType);
 
@@ -53,22 +73,70 @@ export default function IncidentsPage() {
     setSelectedType(typeId);
     const type = incidentTypes.find(t => t.id === typeId);
     if (type) {
-      setSeverity(type.severity === 'critical' ? 'critical' : type.severity === 'high' ? 'high' : 'low');
+      setSeverity(type.severity);
     }
     setStep('form');
   };
 
   const handleSubmit = async () => {
+    if (!currentType || !isReady) return;
+
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setStep('success');
-    setIsSubmitting(false);
+    setError(null);
+
+    try {
+      // Build incident title based on type
+      let title = currentType.label;
+      if (selectedType === 'delay') {
+        title = `Retraso de ${delayMinutes} minutos`;
+      } else if (selectedType === 'student' && selectedStudents.length > 0) {
+        const studentNames = validStudents
+          .filter(s => selectedStudents.includes(s.id))
+          .map(s => s.name)
+          .join(', ');
+        title = `${currentType.label}: ${studentNames}`;
+      }
+
+      // Build description
+      let fullDescription = description || currentType.label;
+      if (selectedType === 'delay') {
+        fullDescription = `Retraso estimado de ${delayMinutes} minutos. ${description}`.trim();
+      }
+
+      const result = await reportIncident({
+        tripId,
+        type: incidentTypeMap[selectedType ?? 'other'] ?? 'other',
+        severity,
+        title,
+        description: fullDescription,
+        latitude: gpsPosition?.latitude,
+        longitude: gpsPosition?.longitude,
+        location: gpsPosition ? `${gpsPosition.latitude.toFixed(6)}, ${gpsPosition.longitude.toFixed(6)}` : undefined,
+      });
+
+      if (result.success) {
+        setIncidentId(result.incidentId);
+        setStep('success');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al reportar incidente');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleGoBack = () => {
     router.push(`/trips/${tripId}/active`);
   };
+
+  // Loading state
+  if (authLoading || studentsLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   // Success screen
   if (step === 'success') {
@@ -87,8 +155,8 @@ export default function IncidentsPage() {
             {currentType && <currentType.icon className="w-5 h-5 text-gray-600" />}
             <span className="font-medium text-gray-900">{currentType?.label}</span>
           </div>
-          <p className="text-sm text-gray-500 mb-2">Número de reporte:</p>
-          <p className="font-mono font-medium text-primary">INC-{new Date().toISOString().slice(0, 10).replace(/-/g, '')}-001</p>
+          <p className="text-sm text-gray-500 mb-2">ID de reporte:</p>
+          <p className="font-mono font-medium text-primary text-xs break-all">{incidentId}</p>
         </div>
 
         <div className="space-y-3 w-full max-w-sm">
@@ -239,38 +307,49 @@ export default function IncidentsPage() {
           {selectedType === 'student' && (
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <h3 className="font-medium text-gray-900 mb-3">Estudiantes involucrados</h3>
-              <div className="space-y-2">
-                {students.map((student) => (
-                  <button
-                    key={student.id}
-                    onClick={() => {
-                      setSelectedStudents(prev =>
-                        prev.includes(student.id)
-                          ? prev.filter(id => id !== student.id)
-                          : [...prev, student.id]
-                      );
-                    }}
-                    className={cn(
-                      'w-full p-3 rounded-lg border text-left flex items-center gap-3 transition-colors',
-                      selectedStudents.includes(student.id)
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    )}
-                  >
-                    <div className={cn(
-                      'w-5 h-5 rounded border flex items-center justify-center',
-                      selectedStudents.includes(student.id)
-                        ? 'bg-primary border-primary'
-                        : 'border-gray-300'
-                    )}>
-                      {selectedStudents.includes(student.id) && (
-                        <CheckCircle className="w-4 h-4 text-white" />
+              {validStudents.length === 0 ? (
+                <p className="text-sm text-gray-500">No hay estudiantes en este viaje</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {validStudents.map((student) => (
+                    <button
+                      key={student.id}
+                      onClick={() => {
+                        setSelectedStudents(prev =>
+                          prev.includes(student.id)
+                            ? prev.filter(id => id !== student.id)
+                            : [...prev, student.id]
+                        );
+                      }}
+                      className={cn(
+                        'w-full p-3 rounded-lg border text-left flex items-center gap-3 transition-colors',
+                        selectedStudents.includes(student.id)
+                          ? 'border-primary bg-primary/5'
+                          : 'border-gray-200 hover:border-gray-300'
                       )}
-                    </div>
-                    <span className="text-gray-900">{student.name}</span>
-                  </button>
-                ))}
-              </div>
+                    >
+                      <div className={cn(
+                        'w-5 h-5 rounded border flex items-center justify-center',
+                        selectedStudents.includes(student.id)
+                          ? 'bg-primary border-primary'
+                          : 'border-gray-300'
+                      )}>
+                        {selectedStudents.includes(student.id) && (
+                          <CheckCircle className="w-4 h-4 text-white" />
+                        )}
+                      </div>
+                      <span className="text-gray-900">{student.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="p-3 bg-error/10 rounded-lg text-sm text-error">
+              {error}
             </div>
           )}
 

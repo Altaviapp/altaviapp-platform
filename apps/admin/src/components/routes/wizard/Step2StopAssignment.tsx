@@ -17,7 +17,7 @@ import {
   CheckCircle, Loader2, RefreshCw, GripVertical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useStudents, useInstitution } from '@/hooks';
+import { useStudentsWithRoutes, useInstitution } from '@/hooks';
 import {
   GoogleMapsProvider,
   InteractiveMap,
@@ -55,8 +55,9 @@ export function Step2StopAssignment({
   const [gradeFilter, setGradeFilter] = useState('');
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
 
-  const { students } = useStudents();
+  const { students } = useStudentsWithRoutes();
   const { institution } = useInstitution();
+  const currentRouteType = step1Data.routeType; // 'pickup' or 'dropoff'
 
   // School location
   const schoolLocation: LatLng | null = institution?.schoolLatitude && institution?.schoolLongitude
@@ -357,26 +358,48 @@ export function Step2StopAssignment({
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-100">
-                    {availableStudents.map(student => (
-                      <button
-                        key={student._id}
-                        onClick={() => toggleStudent(student._id)}
-                        className="w-full p-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
-                      >
-                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
-                          {student.firstName[0]}{student.lastName[0]}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 text-sm truncate">
-                            {student.firstName} {student.lastName}
-                          </p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {student.grade} • {student.address || 'Sin dirección'}
-                          </p>
-                        </div>
-                        <div className="w-5 h-5 border-2 border-gray-300 rounded" />
-                      </button>
-                    ))}
+                    {availableStudents.map(student => {
+                      // Check if student already has a route of the same type
+                      const hasExistingRoute = currentRouteType === 'pickup'
+                        ? student.hasPickupRoute
+                        : student.hasDropoffRoute;
+                      const existingRouteNames = currentRouteType === 'pickup'
+                        ? student.pickupRouteNames
+                        : student.dropoffRouteNames;
+
+                      return (
+                        <button
+                          key={student._id}
+                          onClick={() => toggleStudent(student._id)}
+                          className={cn(
+                            "w-full p-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left",
+                            hasExistingRoute && "bg-amber-50/50"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium",
+                            hasExistingRoute ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
+                          )}>
+                            {student.firstName[0]}{student.lastName[0]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 text-sm truncate">
+                              {student.firstName} {student.lastName}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {student.grade} • {student.address || 'Sin dirección'}
+                            </p>
+                            {hasExistingRoute && (
+                              <p className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
+                                <AlertCircle className="w-3 h-3" />
+                                Ya en: {existingRouteNames?.join(', ')}
+                              </p>
+                            )}
+                          </div>
+                          <div className="w-5 h-5 border-2 border-gray-300 rounded" />
+                        </button>
+                      );
+                    })}
                   </div>
                 )
               ) : (

@@ -14,8 +14,8 @@ import type { MarkerInfo } from '@altaviapp/maps';
 import { useTrip, useTripMutations } from '@/hooks';
 
 const statusConfig: Record<string, { label: string; status: 'active' | 'inactive' | 'warning' | 'error' }> = {
-  scheduled: { label: 'Programado', status: 'inactive' },
-  in_progress: { label: 'En Progreso', status: 'active' },
+  scheduled: { label: 'Programado', status: 'warning' },
+  in_progress: { label: 'En Ruta', status: 'active' },
   completed: { label: 'Completado', status: 'inactive' },
   cancelled: { label: 'Cancelado', status: 'error' },
 };
@@ -84,11 +84,11 @@ export default function TripDetailPage() {
       title: `${trip.vehicle?.licensePlate || 'Vehículo'}`,
       label: '',
     }] : []),
-    // Stop markers
-    ...stops.map((stop, index) => ({
+    // Stop markers (all are student stops, no school marker)
+    ...stops.map((stop) => ({
       id: `stop-${stop._id}`,
       position: { lat: stop.latitude, lng: stop.longitude },
-      type: index === stops.length - 1 ? 'school' as const : 'stop' as const,
+      type: 'stop' as const,
       title: `${stop.order}. ${stop.name}`,
       label: stop.order.toString(),
     })),
@@ -271,10 +271,6 @@ export default function TripDetailPage() {
                     <span className="w-3 h-3 rounded-full bg-primary"></span>
                     <span className="text-gray-600">Paradas</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-success"></span>
-                    <span className="text-gray-600">Escuela</span>
-                  </div>
                 </div>
               </div>
 
@@ -303,32 +299,19 @@ export default function TripDetailPage() {
                       No hay paradas configuradas
                     </div>
                   ) : (
-                    stops.map((stop, index) => {
-                      const isLast = index === stops.length - 1;
-
-                      return (
+                    stops.map((stop) => (
                         <div
                           key={stop._id}
                           className="flex items-center gap-4 p-3 rounded-lg border border-gray-200 bg-gray-50"
                         >
                           {/* Order Number */}
-                          <div className={cn(
-                            'w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0',
-                            isLast ? 'bg-success' : 'bg-primary'
-                          )}>
-                            {isLast ? <CheckCircle className="w-5 h-5" /> : stop.order}
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 bg-primary">
+                            {stop.order}
                           </div>
 
                           {/* Stop Info */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-gray-900">{stop.name}</p>
-                              {isLast && (
-                                <span className="px-2 py-0.5 bg-success/10 text-success rounded text-xs">
-                                  Destino
-                                </span>
-                              )}
-                            </div>
+                            <p className="font-medium text-gray-900">{stop.name}</p>
                             <p className="text-sm text-gray-500 truncate">{stop.address}</p>
                           </div>
 
@@ -338,8 +321,7 @@ export default function TripDetailPage() {
                             <p className="text-gray-400 text-xs">programado</p>
                           </div>
                         </div>
-                      );
-                    })
+                    ))
                   )}
                 </div>
               </DetailSection>

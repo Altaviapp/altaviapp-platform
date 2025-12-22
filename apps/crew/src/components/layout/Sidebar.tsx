@@ -14,15 +14,16 @@ interface NavItem {
   roles?: ('driver' | 'monitor' | 'admin')[]; // If undefined, show for all roles
 }
 
-// Navigation items with role-based visibility
+// Navigation items - both drivers and monitors have equal access to core features
+// The only difference is drivers see vehicle management in dashboard
 const allNavItems: NavItem[] = [
   { icon: Home, label: 'Dashboard', href: '/dashboard' },
   { icon: Truck, label: 'Mis Viajes', href: '/trips' },
-  { icon: Map, label: 'Mapa', href: '/map', roles: ['driver', 'admin'] },
-  { icon: QrCode, label: 'Check-in', href: '/checkin', roles: ['monitor', 'admin'] },
-  { icon: Users, label: 'Estudiantes', href: '/students', roles: ['monitor', 'admin'] },
-  { icon: AlertTriangle, label: 'Incidentes', href: '/incidents', roles: ['monitor', 'admin'] },
-  { icon: History, label: 'Historial', href: '/history' },
+  { icon: QrCode, label: 'Check-in', href: '/checkin' }, // Both can do check-ins
+  { icon: Map, label: 'Mapa', href: '/map' }, // Both can view map
+  { icon: Users, label: 'Estudiantes', href: '/students' }, // Both can view students
+  { icon: AlertTriangle, label: 'Incidentes', href: '/incidents' }, // Both can report incidents
+  { icon: History, label: 'Historial', href: '/history' }, // Both can view history
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 

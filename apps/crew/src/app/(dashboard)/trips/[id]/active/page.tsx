@@ -45,7 +45,7 @@ export default function ActiveTripPage() {
   const isDriver = isAuthenticated ? authIsDriver : true; // Default to driver for UI testing
   const isMonitor = isAuthenticated ? authIsMonitor : false;
   const canControlTrip = isDriver; // Drivers can control trips
-  const canReportIncident = isMonitor; // Only monitors report incidents
+  const canReportIncident = true; // Both drivers and monitors can report incidents
   const getCanPerformCheckin = (tripMonitorId: string | null) => {
     if (isMonitor) return true; // Monitors can always check-in
     if (isDriver && !tripMonitorId) return true; // Drivers only if no monitor
@@ -214,11 +214,7 @@ export default function ActiveTripPage() {
   };
 
   const handleIncident = () => {
-    if (canReportIncident) {
-      router.push(`/trips/${tripId}/incident`);
-    } else {
-      alert('Solo los monitores pueden reportar incidentes');
-    }
+    router.push(`/trips/${tripId}/incidents`);
   };
 
   const handleMessage = () => {

@@ -52,3 +52,7 @@ export {
   useRouteWithStudents,
 } from './useDriverRoutes';
 export type { RouteForToday, NovedadForRoute } from './useDriverRoutes';
+
+// Incidents hooks (for reporting safety issues)
+export { useIncidentMutations } from './useIncidents';
+export type { IncidentType, IncidentSeverity, ReportIncidentInput } from './useIncidents';

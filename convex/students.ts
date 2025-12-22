@@ -681,3 +681,68 @@ export const listStudentsForParentWithPhotos = query({
     return studentsWithPhotos;
   },
 });
+
+/**
+ * List students with their route assignments
+ * Used in route wizard to show which students already have routes
+ */
+export const listStudentsWithRoutes = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    // Get all active students with home location
+    const students = await ctx.db
+      .query("students")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // For each student, get their route assignments
+    const studentsWithRoutes = await Promise.all(
+      students.map(async (student) => {
+        // Get student's route assignments
+        const assignments = await ctx.db
+          .query("studentRoutes")
+          .withIndex("by_student", (q) => q.eq("studentId", student._id))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect();
+
+        // Enrich with route info
+        const routeAssignments = await Promise.all(
+          assignments.map(async (a) => {
+            const route = await ctx.db.get(a.routeId);
+            return route ? {
+              routeId: route._id,
+              routeName: route.name,
+              routeType: route.type,
+            } : null;
+          })
+        );
+
+        const validAssignments = routeAssignments.filter(Boolean);
+        const hasPickupRoute = validAssignments.some(a => a?.routeType === 'pickup');
+        const hasDropoffRoute = validAssignments.some(a => a?.routeType === 'dropoff');
+        const pickupRouteNames = validAssignments
+          .filter(a => a?.routeType === 'pickup')
+          .map(a => a?.routeName);
+        const dropoffRouteNames = validAssignments
+          .filter(a => a?.routeType === 'dropoff')
+          .map(a => a?.routeName);
+
+        return {
+          ...student,
+          hasPickupRoute,
+          hasDropoffRoute,
+          pickupRouteNames,
+          dropoffRouteNames,
+        };
+      })
+    );
+
+    return studentsWithRoutes;
+  },
+});

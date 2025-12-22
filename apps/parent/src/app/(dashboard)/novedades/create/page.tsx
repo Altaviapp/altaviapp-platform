@@ -51,6 +51,14 @@ const novedadTypes = [
     color: 'text-orange-600',
     bg: 'bg-orange-50',
   },
+  {
+    value: 'late_arrival' as NovedadType,
+    label: 'Llegada tarde',
+    description: 'Llegara tarde al punto de recogida',
+    icon: AlertCircle,
+    color: 'text-amber-600',
+    bg: 'bg-amber-50',
+  },
 ];
 
 // Route type options

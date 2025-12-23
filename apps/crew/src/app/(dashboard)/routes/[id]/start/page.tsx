@@ -18,6 +18,8 @@ import {
   Sunrise,
   Sunset,
   CheckCircle,
+  ClipboardCheck,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouteWithStudents, useNovedadesForRoute, useTripOperations, useConvexAuth } from '@/hooks';
@@ -69,6 +71,7 @@ export default function RouteStartPage() {
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [showChecklistModal, setShowChecklistModal] = useState(false);
 
   // Get GPS location
   useEffect(() => {
@@ -91,18 +94,25 @@ export default function RouteStartPage() {
     }
   }, []);
 
-  const handleStartTrip = async () => {
+  // Show checklist decision modal
+  const handleStartTrip = () => {
     if (!location) {
       setError('No se pudo obtener la ubicación GPS. Por favor, permite el acceso a tu ubicación.');
       return;
     }
+    setError(null);
+    setShowChecklistModal(true);
+  };
 
+  // Actually start the trip and navigate
+  const confirmStartTrip = async (goToChecklist: boolean) => {
+    setShowChecklistModal(false);
     setIsStarting(true);
     setError(null);
 
     try {
-      if (!routeId) {
-        setError('ID de ruta no válido');
+      if (!routeId || !location) {
+        setError('ID de ruta o ubicación no válidos');
         return;
       }
 
@@ -113,8 +123,12 @@ export default function RouteStartPage() {
       );
 
       if (result.success && result.tripId) {
-        // Navigate to the active trip page
-        router.push(`/trips/${result.tripId}/active`);
+        // Navigate based on user choice
+        if (goToChecklist) {
+          router.push(`/trips/${result.tripId}/checklist`);
+        } else {
+          router.push(`/trips/${result.tripId}/active`);
+        }
       } else {
         setError('Error al iniciar el viaje. Intenta de nuevo.');
       }
@@ -386,6 +400,53 @@ export default function RouteStartPage() {
           </p>
         )}
       </div>
+
+      {/* Checklist Decision Modal */}
+      {showChecklistModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 relative">
+            <button
+              onClick={() => setShowChecklistModal(false)}
+              className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <ClipboardCheck className="w-8 h-8 text-primary" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                Inspección del Vehículo
+              </h3>
+              <p className="text-sm text-gray-600">
+                ¿Deseas realizar la inspección del vehículo antes de iniciar el viaje?
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => confirmStartTrip(true)}
+                className="w-full py-3 px-4 bg-primary text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
+              >
+                <ClipboardCheck className="w-5 h-5" />
+                Sí, hacer inspección
+              </button>
+              <button
+                onClick={() => confirmStartTrip(false)}
+                className="w-full py-3 px-4 bg-success text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-success/90 transition-colors"
+              >
+                <Play className="w-5 h-5" />
+                No, iniciar directamente
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 text-center mt-4">
+              La inspección es opcional pero recomendada
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

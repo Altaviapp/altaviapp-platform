@@ -26,7 +26,7 @@ export const MAPS_CONFIG = {
 
   // Country restriction for Places API
   countryRestriction: {
-    country: "ec",
+    country: ["ec", "co"], // Ecuador + Colombia para testing
   },
 
   // Geofence defaults

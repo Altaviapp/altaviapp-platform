@@ -28,7 +28,7 @@ export async function geocodeAddress(address: string): Promise<GeocodingResult |
       geocoder.geocode(
         {
           address,
-          componentRestrictions: MAPS_CONFIG.countryRestriction,
+          // No country restriction - address comes from autocomplete which already filters
           region: MAPS_CONFIG.region,
         },
         (results, status) => {

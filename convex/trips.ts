@@ -1427,6 +1427,9 @@ export const startTripFromRoute = mutation({
           timestamp: now,
         });
 
+        // Notify parents that trip has started
+        await notifyParentsOfTripStart(ctx, existingTrip._id, route.name, route.type);
+
         return { success: true, tripId: existingTrip._id };
       }
     }
@@ -1455,6 +1458,9 @@ export const startTripFromRoute = mutation({
       longitude: args.longitude,
       timestamp: now,
     });
+
+    // 8. Notify parents that trip has started
+    await notifyParentsOfTripStart(ctx, tripId, route.name, route.type);
 
     return { success: true, tripId };
   },
@@ -1555,6 +1561,59 @@ async function generateTripStudentsWithExclusions(
           updatedAt: now,
         });
       }
+    }
+  }
+}
+
+/**
+ * Notify parents when a trip starts
+ * Sends a notification to all parents of students scheduled for this trip
+ */
+async function notifyParentsOfTripStart(
+  ctx: any,
+  tripId: Id<"trips">,
+  routeName: string,
+  routeType: string
+) {
+  const now = Date.now();
+  const routeTypeLabel = routeType === "pickup" ? "recogida" : "entrega";
+
+  // Get all tripStudents for this trip (excluding absent students)
+  const tripStudents = await ctx.db
+    .query("tripStudents")
+    .withIndex("by_trip", (q: any) => q.eq("tripId", tripId))
+    .filter((q: any) => q.neq(q.field("status"), "absent"))
+    .collect();
+
+  // Track notified parents to avoid duplicate notifications
+  const notifiedEmails = new Set<string>();
+
+  for (const ts of tripStudents) {
+    const student = await ctx.db.get(ts.studentId);
+    if (!student || !student.parentEmail) continue;
+
+    const parentEmail = student.parentEmail.toLowerCase();
+
+    // Skip if already notified this parent
+    if (notifiedEmails.has(parentEmail)) continue;
+    notifiedEmails.add(parentEmail);
+
+    // Find parent user by email
+    const parentUser = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q: any) => q.eq("email", parentEmail))
+      .first();
+
+    if (parentUser) {
+      await ctx.db.insert("notifications", {
+        userId: parentUser._id,
+        title: "Ruta en camino",
+        message: `El transporte escolar ha iniciado la ruta de ${routeTypeLabel} "${routeName}". Sigue el viaje en tiempo real.`,
+        type: "info",
+        category: "trip_update",
+        read: false,
+        createdAt: now,
+      });
     }
   }
 }

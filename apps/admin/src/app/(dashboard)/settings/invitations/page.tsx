@@ -6,16 +6,12 @@ import {
   ArrowLeft,
   Plus,
   Search,
-  Mail,
   Copy,
-  MoreHorizontal,
-  XCircle,
   Download,
-  RefreshCw,
   Check,
   Loader2,
 } from 'lucide-react';
-import { useInvitations, useInvitationMutations, useInvitationStats } from '@/hooks';
+import { useInvitations, useInvitationStats } from '@/hooks';
 import type { InvitationStatus } from '@/hooks';
 
 // ============================================
@@ -62,14 +58,11 @@ export default function InvitationsPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvitationStatus | 'all'>('all');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Real data from Convex
   const { invitations, isLoading } = useInvitations();
   const { stats } = useInvitationStats();
-  const { cancelInvitation, resendInvitation } = useInvitationMutations();
 
   // Filter invitations
   const filteredInvitations = useMemo(() => {
@@ -87,32 +80,6 @@ export default function InvitationsPage() {
     await navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  // Resend invitation
-  const handleResend = async (id: string) => {
-    setActionLoading(id);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await resendInvitation(id as any);
-    } catch (error) {
-      console.error('Error resending invitation:', error);
-    }
-    setActionLoading(null);
-    setActiveMenu(null);
-  };
-
-  // Cancel invitation
-  const handleCancel = async (id: string) => {
-    setActionLoading(id);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await cancelInvitation(id as any);
-    } catch (error) {
-      console.error('Error cancelling invitation:', error);
-    }
-    setActionLoading(null);
-    setActiveMenu(null);
   };
 
   return (
@@ -242,9 +209,6 @@ export default function InvitationsPage() {
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Código
                     </th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      Acciones
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -301,73 +265,13 @@ export default function InvitationsPage() {
                             </button>
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-right">
-                          <div className="relative">
-                            <button
-                              onClick={() => setActiveMenu(activeMenu === invitation.id ? null : invitation.id)}
-                              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                              disabled={actionLoading === invitation.id}
-                            >
-                              {actionLoading === invitation.id ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                              ) : (
-                                <MoreHorizontal className="w-5 h-5" />
-                              )}
-                            </button>
-
-                            {/* Dropdown Menu */}
-                            {activeMenu === invitation.id && (
-                              <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                                {invitation.status === 'pending' && (
-                                  <>
-                                    <button
-                                      onClick={() => handleResend(invitation.id)}
-                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                    >
-                                      <Mail className="w-4 h-4" />
-                                      Reenviar
-                                    </button>
-                                    <button
-                                      onClick={() => handleCopyCode(invitation.invitationCode)}
-                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                    >
-                                      <Copy className="w-4 h-4" />
-                                      Copiar código
-                                    </button>
-                                    <button
-                                      onClick={() => handleCancel(invitation.id)}
-                                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                    >
-                                      <XCircle className="w-4 h-4" />
-                                      Cancelar
-                                    </button>
-                                  </>
-                                )}
-                                {invitation.status === 'expired' && (
-                                  <button
-                                    onClick={() => handleResend(invitation.id)}
-                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                  >
-                                    <RefreshCw className="w-4 h-4" />
-                                    Reenviar nueva
-                                  </button>
-                                )}
-                                {(invitation.status === 'accepted' || invitation.status === 'cancelled') && (
-                                  <p className="px-4 py-2 text-sm text-gray-400">
-                                    Sin acciones disponibles
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </td>
                       </tr>
                     );
                   })}
 
                   {filteredInvitations.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-12 text-center">
+                      <td colSpan={5} className="px-4 py-12 text-center">
                         <p className="text-gray-500">No se encontraron invitaciones</p>
                       </td>
                     </tr>

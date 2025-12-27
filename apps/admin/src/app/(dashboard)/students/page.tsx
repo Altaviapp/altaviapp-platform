@@ -2,17 +2,18 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { GraduationCap, Plus, Search, MoreHorizontal, Edit, Trash2, Eye, QrCode, MapPin, Users, ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { GraduationCap, Plus, Search, QrCode, MapPin, ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudents } from '@/hooks';
 
 const grades = ['Todos', '1ro', '2do', '3ro', '4to', '5to', '6to'];
 
 export default function StudentsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGrade, setSelectedGrade] = useState('Todos');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   // Use real hook
   const { students, isLoading, isEmpty } = useStudents(
@@ -171,12 +172,15 @@ export default function StudentsPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Ubicación</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">QR</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredStudents.map((student) => (
-                    <tr key={student._id} className="hover:bg-gray-50">
+                    <tr
+                      key={student._id}
+                      onClick={() => router.push(`/students/${student._id}`)}
+                      className="hover:bg-gray-50 cursor-pointer"
+                    >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -211,6 +215,10 @@ export default function StudentsPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (student.qrCode) router.push(`/students/${student._id}/qr`);
+                          }}
                           className={cn(
                             'p-2 rounded-lg',
                             student.qrCode ? 'hover:bg-gray-100 text-primary' : 'text-gray-300 cursor-not-allowed'
@@ -219,38 +227,6 @@ export default function StudentsPage() {
                         >
                           <QrCode className="w-5 h-5" />
                         </button>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="relative">
-                          <button
-                            onClick={() => setOpenMenu(openMenu === student._id ? null : student._id)}
-                            className="p-2 hover:bg-gray-100 rounded-lg"
-                          >
-                            <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                          </button>
-                          {openMenu === student._id && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                              <Link href={`/students/${student._id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Eye className="w-4 h-4" /> Ver detalles
-                              </Link>
-                              <Link href={`/students/${student._id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Edit className="w-4 h-4" /> Editar
-                              </Link>
-                              <Link href={`/students/${student._id}#parents`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <Users className="w-4 h-4" /> Ver padres
-                              </Link>
-                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <MapPin className="w-4 h-4" /> Asignar ruta
-                              </button>
-                              <Link href={`/students/${student._id}/qr`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                <QrCode className="w-4 h-4" /> Descargar QR
-                              </Link>
-                              <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
-                                <Trash2 className="w-4 h-4" /> Eliminar
-                              </button>
-                            </div>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   ))}

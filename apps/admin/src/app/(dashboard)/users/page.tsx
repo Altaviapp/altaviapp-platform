@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Search, MoreHorizontal, Edit, Trash2, Eye, Mail, Shield, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Users, Search, Mail, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InviteUserModal } from '@/components/users/InviteUserModal';
-import { useUsers, useUserStats, useUserMutations } from '@/hooks';
+import { useUsers, useUserStats } from '@/hooks';
 import type { UserRole } from '@/hooks';
 
 const roleLabels: Record<string, { label: string; color: string }> = {
@@ -38,15 +39,14 @@ function formatLastLogin(timestamp: number | undefined): string {
 }
 
 export default function UsersPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   // Real data from Convex
   const { users, isLoading } = useUsers(roleFilter !== 'all' ? { role: roleFilter } : undefined);
   const { stats, isLoading: statsLoading } = useUserStats();
-  const { deactivateUser, reactivateUser } = useUserMutations();
 
   // Filter users by search query
   const filteredUsers = users.filter((user) => {
@@ -56,19 +56,6 @@ export default function UsersPage() {
       user.email?.toLowerCase().includes(searchLower)
     );
   });
-
-  const handleToggleStatus = async (userId: string, isActive: boolean) => {
-    try {
-      if (isActive) {
-        await deactivateUser(userId as any);
-      } else {
-        await reactivateUser(userId as any);
-      }
-      setOpenMenu(null);
-    } catch (error) {
-      console.error('Error toggling user status:', error);
-    }
-  };
 
   const statCards = [
     { label: 'Total Usuarios', value: stats.total, color: 'bg-primary' },
@@ -180,7 +167,6 @@ export default function UsersPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Rol</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Último Acceso</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -196,7 +182,11 @@ export default function UsersPage() {
                       .toUpperCase() || '?';
 
                     return (
-                      <tr key={user._id} className="hover:bg-gray-50">
+                      <tr
+                        key={user._id}
+                        onClick={() => router.push(`/users/${user._id}`)}
+                        className="hover:bg-gray-50 cursor-pointer"
+                      >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -218,39 +208,6 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-3 text-gray-500 text-sm">
                           {formatLastLogin(user.lastLogin)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="relative">
-                            <button
-                              onClick={() => setOpenMenu(openMenu === user._id ? null : user._id)}
-                              className="p-2 hover:bg-gray-100 rounded-lg"
-                            >
-                              <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                            </button>
-                            {openMenu === user._id && (
-                              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                  <Eye className="w-4 h-4" /> Ver perfil
-                                </button>
-                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                  <Edit className="w-4 h-4" /> Editar
-                                </button>
-                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                  <Shield className="w-4 h-4" /> Cambiar rol
-                                </button>
-                                <button
-                                  onClick={() => handleToggleStatus(user._id, isActive)}
-                                  className={cn(
-                                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2',
-                                    isActive ? 'text-error' : 'text-success'
-                                  )}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  {isActive ? 'Desactivar' : 'Reactivar'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
                         </td>
                       </tr>
                     );

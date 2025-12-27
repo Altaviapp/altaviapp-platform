@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
-  Users, Plus, Search, Edit, Trash2,
+  Users, Plus, Search,
   Shield, ChevronLeft, ChevronRight, Mail, Phone, CheckCircle, XCircle, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PageHeader, ConfirmDialog } from '@/components/shared';
-import { useUsers, useUserMutations, useUserStats } from '@/hooks';
+import { PageHeader } from '@/components/shared';
+import { useUsers, useUserStats } from '@/hooks';
 
 const roleConfig: Record<string, { label: string; color: string; bg: string }> = {
   super_admin: { label: 'Super Admin', color: 'text-red-700', bg: 'bg-red-100' },
@@ -23,16 +23,13 @@ const roleConfig: Record<string, { label: string; color: string; bg: string }> =
  * Connected to real Convex data
  */
 export default function UsersPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Real data from Convex
   const { users, isLoading } = useUsers();
   const { stats } = useUserStats();
-  const { deactivateUser } = useUserMutations();
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
@@ -43,25 +40,6 @@ export default function UsersPage() {
       return matchesSearch && matchesRole;
     });
   }, [users, searchQuery, roleFilter]);
-
-  const handleDeleteClick = (userId: string) => {
-    setSelectedUser(userId);
-    setShowDeleteDialog(true);
-  };
-
-  const handleDelete = async () => {
-    if (!selectedUser) return;
-    setIsDeleting(true);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await deactivateUser(selectedUser as any);
-    } catch (error) {
-      console.error('Error deactivating user:', error);
-    }
-    setShowDeleteDialog(false);
-    setSelectedUser(null);
-    setIsDeleting(false);
-  };
 
   return (
     <div>
@@ -226,9 +204,6 @@ export default function UsersPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                         Registro
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
-                        Acciones
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -237,7 +212,11 @@ export default function UsersPage() {
                       const role = roleConfig[user.role] ?? defaultRole;
                       const isActive = user.isActive !== false;
                       return (
-                        <tr key={user._id} className="hover:bg-gray-50">
+                        <tr
+                          key={user._id}
+                          onClick={() => router.push(`/settings/users/${user._id}`)}
+                          className="hover:bg-gray-50 cursor-pointer"
+                        >
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -293,22 +272,6 @@ export default function UsersPage() {
                           <td className="px-4 py-3 text-sm text-gray-600">
                             {user.createdAt ? new Date(user.createdAt).toLocaleDateString('es-EC') : '-'}
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Link
-                                href={`/settings/users/${user._id}/edit`}
-                                className="p-2 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Link>
-                              <button
-                                onClick={() => handleDeleteClick(user._id)}
-                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
                         </tr>
                       );
                     })}
@@ -341,21 +304,6 @@ export default function UsersPage() {
           )}
         </div>
       </div>
-
-      {/* Delete Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={showDeleteDialog}
-        onClose={() => {
-          setShowDeleteDialog(false);
-          setSelectedUser(null);
-        }}
-        onConfirm={handleDelete}
-        title="Desactivar Usuario"
-        message="¿Estás seguro de que deseas desactivar este usuario? No podrá acceder al sistema."
-        confirmLabel="Desactivar"
-        variant="danger"
-        isLoading={isDeleting}
-      />
     </div>
   );
 }

@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Bus, Users, UserCheck, Plus, Search, MoreHorizontal, Edit, Trash2, Eye, Wrench, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bus, Users, UserCheck, Plus, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useVehicles, useDrivers, useMonitors } from '@/hooks';
 
@@ -16,9 +17,9 @@ const statusConfig = {
 };
 
 export default function FleetPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('vehicles');
   const [searchQuery, setSearchQuery] = useState('');
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   // Real data from Convex
   const { vehicles, isLoading: vehiclesLoading } = useVehicles();
@@ -157,14 +158,17 @@ export default function FleetPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Modelo</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Capacidad</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {filteredVehicles.map((vehicle) => {
                       const status = statusConfig[vehicle.status as keyof typeof statusConfig] || statusConfig.inactive;
                       return (
-                        <tr key={vehicle._id} className="hover:bg-gray-50">
+                        <tr
+                          key={vehicle._id}
+                          onClick={() => router.push(`/fleet/vehicles/${vehicle._id}`)}
+                          className="hover:bg-gray-50 cursor-pointer"
+                        >
                           <td className="px-4 py-3">
                             <span className="font-medium text-gray-900">{vehicle.licensePlate}</span>
                           </td>
@@ -179,32 +183,6 @@ export default function FleetPage() {
                             <span className={cn('px-2 py-1 text-xs rounded-full', status.color)}>
                               {status.label}
                             </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="relative">
-                              <button
-                                onClick={() => setOpenMenu(openMenu === vehicle._id ? null : vehicle._id)}
-                                className="p-2 hover:bg-gray-100 rounded-lg"
-                              >
-                                <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                              </button>
-                              {openMenu === vehicle._id && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                                  <Link href={`/fleet/vehicles/${vehicle._id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                    <Eye className="w-4 h-4" /> Ver detalles
-                                  </Link>
-                                  <Link href={`/fleet/vehicles/${vehicle._id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                    <Edit className="w-4 h-4" /> Editar
-                                  </Link>
-                                  <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                    <Wrench className="w-4 h-4" /> Mantenimiento
-                                  </button>
-                                  <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
-                                    <Trash2 className="w-4 h-4" /> Eliminar
-                                  </button>
-                                </div>
-                              )}
-                            </div>
                           </td>
                         </tr>
                       );
@@ -249,14 +227,17 @@ export default function FleetPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teléfono</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Licencia</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredDrivers.map((driver) => {
                     const isActive = driver.isActive !== false;
                     return (
-                      <tr key={driver._id} className="hover:bg-gray-50">
+                      <tr
+                        key={driver._id}
+                        onClick={() => router.push(`/fleet/drivers/${driver._id}`)}
+                        className="hover:bg-gray-50 cursor-pointer"
+                      >
                         <td className="px-4 py-3 font-medium text-gray-900">{driver.user?.name || 'Sin nombre'}</td>
                         <td className="px-4 py-3 text-gray-600">{driver.phone || '-'}</td>
                         <td className="px-4 py-3 text-gray-600">{driver.licenseNumber || '-'}</td>
@@ -264,29 +245,6 @@ export default function FleetPage() {
                           <span className={cn('px-2 py-1 text-xs rounded-full', isActive ? 'bg-success text-white' : 'bg-gray-400 text-white')}>
                             {isActive ? 'Activo' : 'Inactivo'}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="relative">
-                            <button
-                              onClick={() => setOpenMenu(openMenu === driver._id ? null : driver._id)}
-                              className="p-2 hover:bg-gray-100 rounded-lg"
-                            >
-                              <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                            </button>
-                            {openMenu === driver._id && (
-                              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                                <Link href={`/fleet/drivers/${driver._id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                  <Eye className="w-4 h-4" /> Ver detalles
-                                </Link>
-                                <Link href={`/fleet/drivers/${driver._id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                  <Edit className="w-4 h-4" /> Editar
-                                </Link>
-                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
-                                  <Trash2 className="w-4 h-4" /> Eliminar
-                                </button>
-                              </div>
-                            )}
-                          </div>
                         </td>
                       </tr>
                     );
@@ -319,14 +277,17 @@ export default function FleetPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teléfono</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Certificaciones</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredMonitors.map((monitor) => {
                     const isActive = monitor.isActive !== false;
                     return (
-                      <tr key={monitor._id} className="hover:bg-gray-50">
+                      <tr
+                        key={monitor._id}
+                        onClick={() => router.push(`/fleet/monitors/${monitor._id}`)}
+                        className="hover:bg-gray-50 cursor-pointer"
+                      >
                         <td className="px-4 py-3 font-medium text-gray-900">{monitor.user?.name || 'Sin nombre'}</td>
                         <td className="px-4 py-3 text-gray-600">{monitor.phone || '-'}</td>
                         <td className="px-4 py-3 text-gray-600">
@@ -338,29 +299,6 @@ export default function FleetPage() {
                           <span className={cn('px-2 py-1 text-xs rounded-full', isActive ? 'bg-success text-white' : 'bg-gray-400 text-white')}>
                             {isActive ? 'Activo' : 'Inactivo'}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="relative">
-                            <button
-                              onClick={() => setOpenMenu(openMenu === monitor._id ? null : monitor._id)}
-                              className="p-2 hover:bg-gray-100 rounded-lg"
-                            >
-                              <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                            </button>
-                            {openMenu === monitor._id && (
-                              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                                <Link href={`/fleet/monitors/${monitor._id}`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                  <Eye className="w-4 h-4" /> Ver detalles
-                                </Link>
-                                <Link href={`/fleet/monitors/${monitor._id}/edit`} className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-                                  <Edit className="w-4 h-4" /> Editar
-                                </Link>
-                                <button className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-error">
-                                  <Trash2 className="w-4 h-4" /> Eliminar
-                                </button>
-                              </div>
-                            )}
-                          </div>
                         </td>
                       </tr>
                     );

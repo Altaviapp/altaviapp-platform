@@ -829,6 +829,9 @@ padres → cname.vercel-dns.com
 - [docs/modules/MODULE_CHECKLIST.md](docs/modules/MODULE_CHECKLIST.md) - Per-module requirements
 - [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) - PR template
 
+### Feature Documentation
+- [docs/features/REAL_TIME_ETA.md](docs/features/REAL_TIME_ETA.md) - Real-time ETA calculation system (Haversine, delay status, speed tracking)
+
 ### Deployment
 - [docs/deployment/VERCEL_DEPLOYMENT.md](docs/deployment/VERCEL_DEPLOYMENT.md) - Vercel + Convex deployment guide
 

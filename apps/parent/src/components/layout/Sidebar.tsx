@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, MapPin, Clock, Settings, LogOut, Bell, GraduationCap, FileText, Users } from 'lucide-react';
+import { Home, Calendar, Clock, Settings, LogOut, Bell, GraduationCap, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConvexAuth } from '@/hooks';
 
@@ -13,11 +13,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: Home, label: 'Inicio', href: '/dashboard' },
-  { icon: Users, label: 'Mis Hijos', href: '/students' },
-  { icon: MapPin, label: 'Seguimiento', href: '/tracking' },
-  { icon: FileText, label: 'Novedades', href: '/novedades' },
-  { icon: Clock, label: 'Historial', href: '/history' },
+  { icon: Home, label: 'Inicio', href: '/inicio' },
+  { icon: Calendar, label: 'Calendario', href: '/calendario' },
+  { icon: Users, label: 'Mis Hijos', href: '/hijos' },
+  { icon: Clock, label: 'Historial', href: '/historial' },
   { icon: Bell, label: 'Notificaciones', href: '/notifications' },
 ];
 

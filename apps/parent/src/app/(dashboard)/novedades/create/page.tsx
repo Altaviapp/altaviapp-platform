@@ -74,8 +74,10 @@ function CreateNovedadForm() {
   const { students, isLoading: studentsLoading } = useMyStudents();
   const { createNovedad, isReady } = useNovedadesMutations();
 
-  // Get studentId from URL if provided
+  // Get context from URL params
   const preselectedStudentId = searchParams.get('studentId');
+  const preselectedDate = searchParams.get('date');
+  const preselectedRouteType = searchParams.get('routeType') as AffectedRouteType | null;
 
   const [selectedStudent, setSelectedStudent] = useState<string>('');
   const [selectedType, setSelectedType] = useState<NovedadType | ''>('');
@@ -86,16 +88,28 @@ function CreateNovedadForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
 
-  // Pre-select student if provided in URL
+  // Pre-fill form from URL params
   useEffect(() => {
-    if (preselectedStudentId && students.length > 0 && !selectedStudent) {
-      // Verify the student belongs to this parent
-      const studentExists = students.some(s => s._id === preselectedStudentId);
-      if (studentExists) {
-        setSelectedStudent(preselectedStudentId);
+    if (students.length > 0) {
+      // Pre-select student if provided in URL
+      if (preselectedStudentId && !selectedStudent) {
+        const studentExists = students.some(s => s._id === preselectedStudentId);
+        if (studentExists) {
+          setSelectedStudent(preselectedStudentId);
+        }
+      }
+
+      // Pre-fill date if provided
+      if (preselectedDate && !date) {
+        setDate(preselectedDate);
+      }
+
+      // Pre-fill route type if provided
+      if (preselectedRouteType && ['pickup', 'dropoff', 'both'].includes(preselectedRouteType)) {
+        setSelectedRouteType(preselectedRouteType);
       }
     }
-  }, [preselectedStudentId, students, selectedStudent]);
+  }, [preselectedStudentId, preselectedDate, preselectedRouteType, students, selectedStudent, date]);
 
   // Calculate min date (tomorrow)
   const tomorrow = new Date();
@@ -134,7 +148,7 @@ function CreateNovedadForm() {
         reason: reason.trim(),
       });
 
-      router.push('/novedades');
+      router.push('/inicio');
     } catch (err: any) {
       setError(err.message || 'Error al crear la novedad');
     } finally {

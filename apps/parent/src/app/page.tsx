@@ -7,8 +7,8 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Skip auth for UI testing - go directly to dashboard
-    router.push("/dashboard");
+    // Redirect to inicio (main dashboard)
+    router.push("/inicio");
   }, [router]);
 
   return (

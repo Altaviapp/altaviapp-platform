@@ -31,18 +31,22 @@ export default function DashboardLayout({
   const getPageTitle = () => {
     if (!pathname) return 'Inicio';
     const path = pathname.split('/').filter(Boolean);
-    if (path.length === 0 || path[0] === 'dashboard') return 'Inicio';
+    if (path.length === 0) return 'Inicio';
 
     const titles: Record<string, string> = {
-      'tracking': 'Seguimiento',
-      'history': 'Historial',
+      'inicio': 'Inicio',
+      'calendario': 'Calendario',
+      'hijos': 'Mis Hijos',
+      'historial': 'Historial',
       'notifications': 'Notificaciones',
       'profile': 'Perfil',
       'settings': 'Configuración',
+      'novedades': 'Novedades',
     };
 
-    const lastSegment = path[path.length - 1] ?? '';
-    return titles[lastSegment] ?? (lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1));
+    // Get title from first segment
+    const firstSegment = path[0] ?? '';
+    return titles[firstSegment] ?? (firstSegment.charAt(0).toUpperCase() + firstSegment.slice(1));
   };
 
   // Show loading while checking auth

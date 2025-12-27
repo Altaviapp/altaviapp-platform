@@ -21,6 +21,12 @@ export {
   useTripHistory,
 } from "./useMyStudents";
 
+// Aggregated children + trips
+export { useAllChildrenTrips } from "./useAllChildrenTrips";
+
+// Weekly schedule
+export { useWeeklySchedule } from "./useWeeklySchedule";
+
 // Notifications
 export {
   useNotifications,

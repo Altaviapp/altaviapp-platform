@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Truck, QrCode, History, User, Settings, LogOut, Map, Users, AlertTriangle } from 'lucide-react';
+import { Home, Truck, QrCode, History, User, Settings, LogOut, Map, Users, AlertTriangle, Route, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConvexAuth } from '@/hooks';
 import type { UserRole } from '@/types';
@@ -19,11 +19,13 @@ interface NavItem {
 const allNavItems: NavItem[] = [
   { icon: Home, label: 'Dashboard', href: '/dashboard' },
   { icon: Truck, label: 'Mis Viajes', href: '/trips' },
-  { icon: QrCode, label: 'Check-in', href: '/checkin' }, // Both can do check-ins
-  { icon: Map, label: 'Mapa', href: '/map' }, // Both can view map
-  { icon: Users, label: 'Estudiantes', href: '/students' }, // Both can view students
-  { icon: AlertTriangle, label: 'Incidentes', href: '/incidents' }, // Both can report incidents
-  { icon: History, label: 'Historial', href: '/history' }, // Both can view history
+  { icon: Route, label: 'Rutas', href: '/routes' },
+  { icon: Calendar, label: 'Calendario', href: '/calendar' },
+  { icon: QrCode, label: 'Check-in', href: '/checkin' },
+  { icon: Map, label: 'Mapa', href: '/map' },
+  { icon: Users, label: 'Estudiantes', href: '/students' },
+  { icon: AlertTriangle, label: 'Incidentes', href: '/incidents' },
+  { icon: History, label: 'Historial', href: '/history' },
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 

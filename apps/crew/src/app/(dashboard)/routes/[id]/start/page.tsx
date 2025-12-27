@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useRouteWithStudents, useNovedadesForRoute, useTripOperations, useConvexAuth } from '@/hooks';
+import { useRouteWithStudents, useNovedadesForRoute, useTripOperations } from '@/hooks';
 import { LoadingState } from '@/components/shared/LoadingState';
 
 const novedadTypeConfig = {
@@ -63,7 +63,6 @@ export default function RouteStartPage() {
   const router = useRouter();
   const routeId = (params?.id as string) || null;
 
-  const { isDriver, isLoading: authLoading } = useConvexAuth();
   const { route, isLoading: routeLoading } = useRouteWithStudents(routeId);
   const { novedades, summary, isLoading: novedadesLoading } = useNovedadesForRoute(routeId);
   const { startTripFromRoute } = useTripOperations();
@@ -141,7 +140,7 @@ export default function RouteStartPage() {
   };
 
   // Loading state
-  if (authLoading || routeLoading) {
+  if (routeLoading) {
     return <LoadingState variant="page" />;
   }
 
@@ -374,10 +373,10 @@ export default function RouteStartPage() {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 safe-area-pb">
         <button
           onClick={handleStartTrip}
-          disabled={isStarting || !location || !isDriver}
+          disabled={isStarting || !location}
           className={cn(
             'w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-colors',
-            isStarting || !location || !isDriver
+            isStarting || !location
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
               : 'bg-success hover:bg-success/90 text-white'
           )}
@@ -394,11 +393,6 @@ export default function RouteStartPage() {
             </>
           )}
         </button>
-        {!isDriver && (
-          <p className="text-xs text-gray-500 text-center mt-2">
-            Solo los conductores pueden iniciar viajes
-          </p>
-        )}
       </div>
 
       {/* Checklist Decision Modal */}

@@ -13,6 +13,14 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { verifyUser, verifyRole, verifyInstitutionAccess } from "./lib/simpleAuth";
 import { Id } from "./_generated/dataModel";
+import {
+  haversineDistance,
+  calculateStopETAs,
+  getEffectiveSpeed,
+  calculateTripAverageSpeed,
+  getDelayStatus,
+  type StopForETA,
+} from "./lib/eta";
 
 /**
  * Create a scheduled trip
@@ -154,6 +162,7 @@ async function generateTripStudents(
 
 /**
  * Get trip by ID with full details
+ * Includes real-time ETA calculations for all stops
  */
 export const getTrip = query({
   args: {
@@ -180,6 +189,13 @@ export const getTrip = query({
       .order("desc")
       .first();
 
+    // Get first GPS location (trip start position)
+    const firstGps = await ctx.db
+      .query("gpsTracking")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .order("asc")
+      .first();
+
     // Get check-ins
     const checkins = await ctx.db
       .query("studentCheckins")
@@ -192,6 +208,96 @@ export const getTrip = query({
       .withIndex("by_route", (q) => q.eq("routeId", trip.routeId))
       .filter((q) => q.eq(q.field("isActive"), true))
       .collect();
+
+    // Get tripStudents for more accurate completion tracking
+    const tripStudents = await ctx.db
+      .query("tripStudents")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    // Determine completed stops based on check-ins at each stop
+    const checkinsByStop = new Map<string, number>();
+    for (const checkin of checkins) {
+      const stopId = checkin.stopId.toString();
+      checkinsByStop.set(stopId, (checkinsByStop.get(stopId) || 0) + 1);
+    }
+
+    // A stop is considered complete if it has check-ins
+    const completedStopIds = new Set<string>(
+      Array.from(checkinsByStop.keys())
+    );
+
+    // Calculate effective speed for ETA
+    let effectiveSpeed = 25; // Default urban speed
+    if (trip.status === "in_progress" && latestGps && trip.startTime && firstGps) {
+      const calculatedAvgSpeed = calculateTripAverageSpeed(
+        trip.startTime,
+        { lat: firstGps.latitude, lng: firstGps.longitude },
+        { lat: latestGps.latitude, lng: latestGps.longitude },
+        completedStopIds.size
+      );
+      effectiveSpeed = getEffectiveSpeed(latestGps.speed, calculatedAvgSpeed);
+    }
+
+    // Calculate ETAs for all stops if trip is in progress
+    let stopsWithETAs: Array<typeof stops[0] & {
+      etaMinutes: number | null;
+      etaTime: string | null;
+      distanceKm: number | null;
+      isCompleted: boolean;
+      isNext: boolean;
+      delayStatus?: { isDelayed: boolean; delayMinutes: number; status: string };
+    }>;
+
+    if (trip.status === "in_progress" && latestGps) {
+      const stopsForETA: StopForETA[] = stops.map((s) => ({
+        id: s._id.toString(),
+        name: s.name,
+        address: s.address,
+        latitude: s.latitude,
+        longitude: s.longitude,
+        order: s.order,
+        scheduledTime: s.scheduledTime || s.estimatedArrivalTime,
+      }));
+
+      const etaResults = calculateStopETAs(
+        { lat: latestGps.latitude, lng: latestGps.longitude },
+        stopsForETA,
+        completedStopIds,
+        effectiveSpeed
+      );
+
+      stopsWithETAs = stops.map((stop) => {
+        const etaResult = etaResults.find((r) => r.id === stop._id.toString());
+        const scheduledTime = stop.scheduledTime || stop.estimatedArrivalTime;
+        const delayStatus = etaResult?.etaMinutes
+          ? getDelayStatus(etaResult.etaMinutes, scheduledTime)
+          : undefined;
+
+        return {
+          ...stop,
+          etaMinutes: etaResult?.etaMinutes ?? null,
+          etaTime: etaResult?.etaTime ?? null,
+          distanceKm: etaResult?.distanceKm ?? null,
+          isCompleted: etaResult?.isCompleted ?? false,
+          isNext: etaResult?.isNext ?? false,
+          delayStatus,
+        };
+      });
+    } else {
+      // Trip not in progress - no ETAs
+      stopsWithETAs = stops.map((stop) => ({
+        ...stop,
+        etaMinutes: null,
+        etaTime: null,
+        distanceKm: null,
+        isCompleted: completedStopIds.has(stop._id.toString()),
+        isNext: false,
+      }));
+    }
+
+    // Sort by order
+    stopsWithETAs.sort((a, b) => a.order - b.order);
 
     // Enrich checkins with student info
     const enrichedCheckins = await Promise.all(
@@ -211,6 +317,9 @@ export const getTrip = query({
     const driver = await ctx.db.get(trip.driverId);
     const monitor = trip.monitorId ? await ctx.db.get(trip.monitorId) : null;
 
+    // Find the next stop for quick reference
+    const nextStop = stopsWithETAs.find((s) => s.isNext);
+
     return {
       ...trip,
       route: { id: route._id, name: route.name, type: route.type },
@@ -219,16 +328,24 @@ export const getTrip = query({
       monitor,
       currentLocation: latestGps,
       checkins: enrichedCheckins,
-      stops: stops.sort((a, b) => a.order - b.order),
+      stops: stopsWithETAs,
+      nextStop: nextStop
+        ? {
+            id: nextStop._id,
+            name: nextStop.name,
+            etaMinutes: nextStop.etaMinutes,
+            etaTime: nextStop.etaTime,
+            distanceKm: nextStop.distanceKm,
+            delayStatus: nextStop.delayStatus,
+          }
+        : null,
       stats: {
-        totalStudents: await ctx.db
-          .query("studentRoutes")
-          .withIndex("by_route", (q) => q.eq("routeId", trip.routeId))
-          .filter((q) => q.eq(q.field("isActive"), true))
-          .collect()
-          .then((r) => r.length),
+        totalStudents: tripStudents.length,
         checkedIn: checkins.length,
-        stopsCompleted: 0, // Would need stop completion tracking
+        stopsCompleted: completedStopIds.size,
+        totalStops: stops.length,
+        currentSpeed: latestGps?.speed ?? null,
+        avgSpeed: effectiveSpeed,
       },
     };
   },
@@ -594,7 +711,7 @@ export const cancelTrip = mutation({
  * - Route with polyline, stops, and times
  * - Vehicle location with speed/heading
  * - Driver and vehicle info
- * - Student's assigned stop with ETA
+ * - Student's assigned stop with distance-based ETA
  */
 export const getActiveTripForStudent = query({
   args: {
@@ -652,6 +769,13 @@ export const getActiveTripForStudent = query({
       .order("desc")
       .first();
 
+    // Get first GPS location (trip start position)
+    const firstGps = await ctx.db
+      .query("gpsTracking")
+      .withIndex("by_trip", (q) => q.eq("tripId", activeTrip._id))
+      .order("asc")
+      .first();
+
     // Get route details
     const route = await ctx.db.get(activeTrip.routeId);
     if (!route) {
@@ -692,39 +816,120 @@ export const getActiveTripForStudent = query({
       .collect();
 
     // Determine which stops are completed based on check-ins
-    const stopsWithStudents = new Map<string, boolean>();
-    for (const checkin of checkins) {
-      stopsWithStudents.set(checkin.stopId.toString(), true);
-    }
-
-    // Calculate progress (percentage of stops with at least one check-in)
     const stopsWithCheckins = new Set(checkins.map(c => c.stopId.toString()));
     const completedStopsCount = stopsWithCheckins.size;
     const progress = sortedStops.length > 0
       ? Math.round((completedStopsCount / sortedStops.length) * 100)
       : 0;
 
-    // Calculate ETA to student's stop (simple estimation based on stop order)
-    let etaMinutes: number | null = null;
-    if (studentStop && latestGps && activeTrip.startTime) {
-      const studentStopOrder = studentStop.order;
-      const elapsedMinutes = Math.floor((Date.now() - activeTrip.startTime) / 60000);
-      const totalStops = sortedStops.length;
+    // Calculate effective speed for ETA
+    let effectiveSpeed = 25; // Default urban speed
+    if (latestGps && activeTrip.startTime && firstGps) {
+      const calculatedAvgSpeed = calculateTripAverageSpeed(
+        activeTrip.startTime,
+        { lat: firstGps.latitude, lng: firstGps.longitude },
+        { lat: latestGps.latitude, lng: latestGps.longitude },
+        completedStopsCount
+      );
+      effectiveSpeed = getEffectiveSpeed(latestGps.speed, calculatedAvgSpeed);
+    }
 
-      if (completedStopsCount > 0 && completedStopsCount < totalStops) {
-        // Estimate based on current pace
-        const avgTimePerStop = elapsedMinutes / completedStopsCount;
-        const remainingStops = studentStopOrder - completedStopsCount;
-        etaMinutes = remainingStops > 0 ? Math.round(avgTimePerStop * remainingStops) : 0;
-      } else if (route.estimatedDuration && studentStop.estimatedArrivalTime) {
-        // Use scheduled time as fallback
-        const [hours, minutes] = studentStop.estimatedArrivalTime.split(':').map(Number);
-        const scheduledTime = (hours ?? 0) * 60 + (minutes ?? 0);
-        const now = new Date();
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
-        etaMinutes = Math.max(0, scheduledTime - currentMinutes);
+    // Calculate distance-based ETA to student's stop
+    let etaMinutes: number | null = null;
+    let etaTime: string | null = null;
+    let distanceKm: number | null = null;
+    let delayStatus: { isDelayed: boolean; delayMinutes: number; status: string } | null = null;
+
+    if (studentStop && latestGps) {
+      // Check if student's stop is already completed
+      const studentStopCompleted = stopsWithCheckins.has(studentStop._id.toString());
+
+      if (!studentStopCompleted) {
+        // Calculate stops with ETAs
+        const stopsForETA: StopForETA[] = sortedStops.map((s) => ({
+          id: s._id.toString(),
+          name: s.name,
+          address: s.address,
+          latitude: s.latitude,
+          longitude: s.longitude,
+          order: s.order,
+          scheduledTime: s.scheduledTime || s.estimatedArrivalTime,
+        }));
+
+        const etaResults = calculateStopETAs(
+          { lat: latestGps.latitude, lng: latestGps.longitude },
+          stopsForETA,
+          stopsWithCheckins,
+          effectiveSpeed
+        );
+
+        // Find the ETA for student's stop
+        const studentStopETA = etaResults.find((r) => r.id === studentStop._id.toString());
+        if (studentStopETA) {
+          etaMinutes = studentStopETA.etaMinutes;
+          etaTime = studentStopETA.etaTime;
+          distanceKm = studentStopETA.distanceKm;
+
+          // Calculate delay status
+          const scheduledTime = studentStop.scheduledTime || studentStop.estimatedArrivalTime;
+          if (etaMinutes !== null && scheduledTime) {
+            delayStatus = getDelayStatus(etaMinutes, scheduledTime);
+          }
+        }
+      } else {
+        // Student's stop is completed
+        etaMinutes = 0;
       }
     }
+
+    // Calculate ETAs for all stops for the map
+    let stopsWithETAs = sortedStops.map((stop) => {
+      const isCompleted = stopsWithCheckins.has(stop._id.toString());
+      const isStudentStop = stop._id.toString() === studentStopId?.toString();
+
+      // Default values
+      let stopEtaMinutes: number | null = null;
+      let stopEtaTime: string | null = null;
+
+      if (!isCompleted && latestGps) {
+        const stopsForETA: StopForETA[] = sortedStops.map((s) => ({
+          id: s._id.toString(),
+          name: s.name,
+          address: s.address,
+          latitude: s.latitude,
+          longitude: s.longitude,
+          order: s.order,
+          scheduledTime: s.scheduledTime || s.estimatedArrivalTime,
+        }));
+
+        const etaResults = calculateStopETAs(
+          { lat: latestGps.latitude, lng: latestGps.longitude },
+          stopsForETA,
+          stopsWithCheckins,
+          effectiveSpeed
+        );
+
+        const stopEtaResult = etaResults.find((r) => r.id === stop._id.toString());
+        if (stopEtaResult) {
+          stopEtaMinutes = stopEtaResult.etaMinutes;
+          stopEtaTime = stopEtaResult.etaTime;
+        }
+      }
+
+      return {
+        id: stop._id,
+        name: stop.name,
+        address: stop.address,
+        lat: stop.latitude,
+        lng: stop.longitude,
+        order: stop.order,
+        scheduledTime: stop.scheduledTime || stop.estimatedArrivalTime,
+        completed: isCompleted,
+        isStudentStop,
+        etaMinutes: stopEtaMinutes,
+        etaTime: stopEtaTime,
+      };
+    });
 
     return {
       trip: {
@@ -743,17 +948,7 @@ export const getActiveTripForStudent = query({
         estimatedDuration: route.estimatedDuration,
         estimatedDistance: route.estimatedDistance,
       },
-      stops: sortedStops.map((stop) => ({
-        id: stop._id,
-        name: stop.name,
-        address: stop.address,
-        lat: stop.latitude,
-        lng: stop.longitude,
-        order: stop.order,
-        scheduledTime: stop.scheduledTime || stop.estimatedArrivalTime,
-        completed: stopsWithCheckins.has(stop._id.toString()),
-        isStudentStop: stop._id.toString() === studentStopId?.toString(),
-      })),
+      stops: stopsWithETAs,
       studentStop: studentStop ? {
         id: studentStop._id,
         name: studentStop.name,
@@ -762,6 +957,10 @@ export const getActiveTripForStudent = query({
         lng: studentStop.longitude,
         scheduledTime: studentStop.scheduledTime || studentStop.estimatedArrivalTime,
         order: studentStop.order,
+        etaMinutes,
+        etaTime,
+        distanceKm,
+        delayStatus,
       } : null,
       currentLocation: latestGps ? {
         latitude: latestGps.latitude,
@@ -788,6 +987,10 @@ export const getActiveTripForStudent = query({
       } : null,
       progress,
       etaMinutes,
+      etaTime,
+      distanceKm,
+      delayStatus,
+      currentSpeed: latestGps?.speed ?? null,
     };
   },
 });
@@ -1857,5 +2060,95 @@ export const getTripHistoryForStudent = query({
     });
 
     return tripHistory;
+  },
+});
+
+/**
+ * Get trips for a crew member for a specific month
+ * Used in the calendar view
+ */
+export const getTripsForCrewByMonth = query({
+  args: {
+    userId: v.id("users"),
+    year: v.number(),
+    month: v.number(), // 1-12
+  },
+  handler: async (ctx, args) => {
+    await verifyUser(ctx, args.userId);
+
+    // Get driver profile
+    const driver = await ctx.db
+      .query("drivers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    // Get monitor profile
+    const monitor = await ctx.db
+      .query("monitors")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (!driver && !monitor) {
+      return [];
+    }
+
+    // Calculate date range for the month
+    const startDate = `${args.year}-${String(args.month).padStart(2, '0')}-01`;
+    const lastDay = new Date(args.year, args.month, 0).getDate();
+    const endDate = `${args.year}-${String(args.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    // Get all trips in the date range
+    const allTrips = await ctx.db
+      .query("trips")
+      .withIndex("by_date")
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("scheduledDate"), startDate),
+          q.lte(q.field("scheduledDate"), endDate)
+        )
+      )
+      .collect();
+
+    // Filter trips where user is driver or monitor
+    const userTrips: Array<{
+      _id: string;
+      scheduledDate: string;
+      status: string;
+      routeName: string;
+      routeType: "pickup" | "dropoff";
+      startTime?: string;
+      endTime?: string;
+    }> = [];
+
+    for (const trip of allTrips) {
+      const route = await ctx.db.get(trip.routeId);
+      if (!route) continue;
+
+      // Check if user is assigned to this route
+      const isDriverOnRoute = driver && route.driverId === driver._id;
+      const isMonitorOnRoute = monitor && route.monitorId === monitor._id;
+
+      if (isDriverOnRoute || isMonitorOnRoute) {
+        userTrips.push({
+          _id: trip._id,
+          scheduledDate: trip.scheduledDate,
+          status: trip.status,
+          routeName: route.name,
+          routeType: route.type,
+          startTime: trip.startTime ? new Date(trip.startTime).toISOString() : undefined,
+          endTime: trip.endTime ? new Date(trip.endTime).toISOString() : undefined,
+        });
+      }
+    }
+
+    // Sort by date and type
+    userTrips.sort((a, b) => {
+      if (a.scheduledDate !== b.scheduledDate) {
+        return a.scheduledDate.localeCompare(b.scheduledDate);
+      }
+      return a.routeType === "pickup" ? -1 : 1;
+    });
+
+    return userTrips;
   },
 });

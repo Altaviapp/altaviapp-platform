@@ -480,3 +480,165 @@ export const createRouteWithStops = mutation({
     };
   },
 });
+
+/**
+ * List all routes for a crew member (driver or monitor) with enriched data
+ * Used in the Crew app routes list page
+ */
+export const listRoutesForCrew = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await verifyUser(ctx, args.userId);
+
+    // Get driver profile
+    const driver = await ctx.db
+      .query("drivers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    // Get monitor profile
+    const monitor = await ctx.db
+      .query("monitors")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (!driver && !monitor) {
+      return [];
+    }
+
+    // Get routes where user is driver or monitor
+    const routeIds = new Set<string>();
+    const routes: Array<{
+      _id: Id<"routes">;
+      name: string;
+      type: "pickup" | "dropoff";
+      scheduledStartTime: string;
+      scheduledEndTime: string;
+      schoolArrivalTime?: string;
+      schoolDepartureTime?: string;
+      estimatedDuration?: number;
+      estimatedDistance?: number;
+      recurrence?: {
+        type: string;
+        daysOfWeek?: string[];
+        dayOfWeek?: string;
+        specificDate?: string;
+      };
+      vehicle: { licensePlate: string; brand: string; model: string } | null;
+      studentCount: number;
+      stopsCount: number;
+      isDriver: boolean;
+      isMonitor: boolean;
+    }> = [];
+
+    if (driver) {
+      const driverRoutes = await ctx.db
+        .query("routes")
+        .withIndex("by_driver", (q) => q.eq("driverId", driver._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+
+      for (const route of driverRoutes) {
+        if (routeIds.has(route._id)) continue;
+        routeIds.add(route._id);
+
+        // Get vehicle info
+        const vehicle = route.vehicleId ? await ctx.db.get(route.vehicleId) : null;
+
+        // Get student count
+        const studentRoutes = await ctx.db
+          .query("studentRoutes")
+          .withIndex("by_route", (q) => q.eq("routeId", route._id))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect();
+
+        // Get stops count
+        const stops = await ctx.db
+          .query("routeStops")
+          .withIndex("by_route", (q) => q.eq("routeId", route._id))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect();
+
+        routes.push({
+          _id: route._id,
+          name: route.name,
+          type: route.type,
+          scheduledStartTime: route.scheduledStartTime,
+          scheduledEndTime: route.scheduledEndTime,
+          schoolArrivalTime: route.schoolArrivalTime,
+          schoolDepartureTime: route.schoolDepartureTime,
+          estimatedDuration: route.estimatedDuration,
+          estimatedDistance: route.estimatedDistance,
+          recurrence: route.recurrence,
+          vehicle: vehicle
+            ? { licensePlate: vehicle.licensePlate, brand: vehicle.brand, model: vehicle.model }
+            : null,
+          studentCount: studentRoutes.length,
+          stopsCount: stops.length,
+          isDriver: true,
+          isMonitor: route.monitorId && monitor ? route.monitorId === monitor._id : false,
+        });
+      }
+    }
+
+    if (monitor) {
+      const monitorRoutes = await ctx.db
+        .query("routes")
+        .withIndex("by_monitor", (q) => q.eq("monitorId", monitor._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+
+      for (const route of monitorRoutes) {
+        if (routeIds.has(route._id)) continue;
+        routeIds.add(route._id);
+
+        // Get vehicle info
+        const vehicle = route.vehicleId ? await ctx.db.get(route.vehicleId) : null;
+
+        // Get student count
+        const studentRoutes = await ctx.db
+          .query("studentRoutes")
+          .withIndex("by_route", (q) => q.eq("routeId", route._id))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect();
+
+        // Get stops count
+        const stops = await ctx.db
+          .query("routeStops")
+          .withIndex("by_route", (q) => q.eq("routeId", route._id))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect();
+
+        routes.push({
+          _id: route._id,
+          name: route.name,
+          type: route.type,
+          scheduledStartTime: route.scheduledStartTime,
+          scheduledEndTime: route.scheduledEndTime,
+          schoolArrivalTime: route.schoolArrivalTime,
+          schoolDepartureTime: route.schoolDepartureTime,
+          estimatedDuration: route.estimatedDuration,
+          estimatedDistance: route.estimatedDistance,
+          recurrence: route.recurrence,
+          vehicle: vehicle
+            ? { licensePlate: vehicle.licensePlate, brand: vehicle.brand, model: vehicle.model }
+            : null,
+          studentCount: studentRoutes.length,
+          stopsCount: stops.length,
+          isDriver: false,
+          isMonitor: true,
+        });
+      }
+    }
+
+    // Sort by type (pickup first) then by name
+    routes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "pickup" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return routes;
+  },
+});

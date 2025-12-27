@@ -11,6 +11,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { verifyUser, verifyInstitutionAccess, verifyRole } from "./lib/simpleAuth";
+import type { Id } from "./_generated/dataModel";
 
 // ============================================
 // CONSTANTS
@@ -1132,5 +1133,166 @@ export const getTripStudentsWithNovedades = query({
     });
 
     return enriched;
+  },
+});
+
+/**
+ * Get novedades for all routes assigned to a driver/monitor for today
+ * Used in the dashboard to show a summary of today's novedades
+ */
+export const getNovedadesForDriverToday = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const today = new Date().toISOString().split("T")[0]!;
+    const currentDayOfWeek = new Date()
+      .toLocaleDateString("en-US", { weekday: "long" })
+      .toLowerCase() as
+      | "monday"
+      | "tuesday"
+      | "wednesday"
+      | "thursday"
+      | "friday"
+      | "saturday"
+      | "sunday";
+
+    // Get user to find their driver/monitor record
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return { novedades: [], summary: { total: 0, absences: 0, parentPickups: 0, stopChanges: 0, other: 0 } };
+    }
+
+    // Get driver record
+    const driver = await ctx.db
+      .query("drivers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    // Get monitor record
+    const monitor = await ctx.db
+      .query("monitors")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (!driver && !monitor) {
+      return { novedades: [], summary: { total: 0, absences: 0, parentPickups: 0, stopChanges: 0, other: 0 } };
+    }
+
+    // Get routes where user is driver or monitor
+    const routes: Array<{ _id: string; type: "pickup" | "dropoff"; name: string }> = [];
+
+    if (driver) {
+      const driverRoutes = await ctx.db
+        .query("routes")
+        .withIndex("by_driver", (q) => q.eq("driverId", driver._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+      for (const r of driverRoutes) {
+        routes.push({ _id: r._id, type: r.type, name: r.name });
+      }
+    }
+
+    if (monitor) {
+      const monitorRoutes = await ctx.db
+        .query("routes")
+        .withIndex("by_monitor", (q) => q.eq("monitorId", monitor._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+      // Avoid duplicates if user is both driver and monitor on same route
+      for (const r of monitorRoutes) {
+        if (!routes.some(existing => existing._id === r._id)) {
+          routes.push({ _id: r._id, type: r.type, name: r.name });
+        }
+      }
+    }
+
+    // Filter routes by recurrence for today
+    const todayRoutes: Array<{ _id: string; type: "pickup" | "dropoff"; name: string }> = [];
+    for (const route of routes) {
+      const fullRoute = await ctx.db.get(route._id as Id<"routes">);
+      if (!fullRoute?.recurrence) continue;
+
+      const rec = fullRoute.recurrence;
+      let isToday = false;
+
+      if (rec.type === "daily" && rec.daysOfWeek?.includes(currentDayOfWeek)) {
+        isToday = true;
+      } else if (rec.type === "weekly" && rec.dayOfWeek === currentDayOfWeek) {
+        isToday = true;
+      } else if (rec.type === "one_time" && rec.specificDate === today) {
+        isToday = true;
+      }
+
+      if (isToday) {
+        todayRoutes.push({ _id: route._id, type: fullRoute.type, name: fullRoute.name });
+      }
+    }
+
+    // Get all novedades for these routes
+    const allNovedades: Array<{
+      _id: string;
+      studentName: string;
+      type: string;
+      routeName: string;
+      reason: string;
+      affectedRouteType: string;
+    }> = [];
+
+    for (const route of todayRoutes) {
+      // Get students assigned to this route
+      const studentRoutes = await ctx.db
+        .query("studentRoutes")
+        .withIndex("by_route", (q) => q.eq("routeId", route._id as Id<"routes">))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+
+      for (const sr of studentRoutes) {
+        const novedades = await ctx.db
+          .query("novedades")
+          .withIndex("by_student_date", (q) =>
+            q.eq("studentId", sr.studentId).eq("date", today)
+          )
+          .filter((q) =>
+            q.and(
+              q.neq(q.field("status"), "cancelled"),
+              q.neq(q.field("status"), "expired"),
+              q.or(
+                q.eq(q.field("affectedRouteType"), "both"),
+                q.eq(q.field("affectedRouteType"), route.type)
+              )
+            )
+          )
+          .collect();
+
+        for (const novedad of novedades) {
+          // Avoid duplicates
+          if (!allNovedades.some(n => n._id === novedad._id.toString())) {
+            const student = await ctx.db.get(sr.studentId);
+            allNovedades.push({
+              _id: novedad._id.toString(),
+              studentName: student ? `${student.firstName} ${student.lastName}` : "Desconocido",
+              type: novedad.type,
+              routeName: route.name,
+              reason: novedad.reason || "",
+              affectedRouteType: novedad.affectedRouteType,
+            });
+          }
+        }
+      }
+    }
+
+    // Calculate summary
+    const summary = {
+      total: allNovedades.length,
+      absences: allNovedades.filter((n) => n.type === "absence").length,
+      parentPickups: allNovedades.filter((n) => n.type === "parent_pickup").length,
+      stopChanges: allNovedades.filter((n) => n.type === "stop_change").length,
+      other: allNovedades.filter((n) =>
+        !["absence", "parent_pickup", "stop_change"].includes(n.type)
+      ).length,
+    };
+
+    return { novedades: allNovedades, summary };
   },
 });

@@ -17,7 +17,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
 };
 
 export default function TripsPage() {
-  const { isDriver, isLoading: authLoading } = useConvexAuth();
+  const { isLoading: authLoading } = useConvexAuth();
 
   // Get routes for today (lazy trip creation)
   const { routes, isLoading: routesLoading, isEmpty } = useDriverRoutesToday();
@@ -120,9 +120,9 @@ export default function TripsPage() {
                 </div>
               </div>
 
-              {/* Route Actions */}
+              {/* Route Actions - Both roles can start trips */}
               <div className="p-3 bg-gray-50 flex items-center gap-2">
-                {route.canStart && isDriver && (
+                {route.canStart && (
                   <Link
                     href={`/routes/${route._id}/start`}
                     className="flex-1 py-2 px-4 rounded-lg bg-success text-white text-sm font-medium text-center flex items-center justify-center gap-2 hover:bg-success/90 transition-colors"
@@ -130,11 +130,6 @@ export default function TripsPage() {
                     <Play className="w-4 h-4" />
                     Iniciar Viaje
                   </Link>
-                )}
-                {route.canStart && !isDriver && (
-                  <span className="flex-1 py-2 px-4 text-sm text-gray-500 text-center">
-                    Programado para las {route.scheduledStart}
-                  </span>
                 )}
                 {route.status === 'in_progress' && route.tripId && (
                   <Link

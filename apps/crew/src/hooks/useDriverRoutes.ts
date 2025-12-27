@@ -141,3 +141,90 @@ export function useRouteWithStudents(routeId: Id<"routes"> | string | null) {
     isLoading: route === undefined,
   };
 }
+
+// ============================================
+// NOVEDADES FOR ALL DRIVER'S ROUTES TODAY
+// ============================================
+
+export interface NovedadSummary {
+  total: number;
+  absences: number;
+  parentPickups: number;
+  stopChanges: number;
+  other: number;
+}
+
+export interface NovedadForDashboard {
+  _id: string;
+  studentName: string;
+  type: string;
+  routeName: string;
+  reason: string;
+  affectedRouteType: string;
+}
+
+/**
+ * Get all novedades for driver's routes today
+ * Used in dashboard to show summary of today's exceptions
+ */
+export function useNovedadesForDriverToday() {
+  const { userId } = useConvexAuth();
+
+  const result = useQuery(
+    api.novedades.getNovedadesForDriverToday,
+    userId ? { userId } : "skip"
+  ) as { novedades: NovedadForDashboard[]; summary: NovedadSummary } | undefined;
+
+  return {
+    novedades: result?.novedades ?? [],
+    summary: result?.summary ?? { total: 0, absences: 0, parentPickups: 0, stopChanges: 0, other: 0 },
+    isLoading: result === undefined,
+    hasNovedades: (result?.novedades?.length ?? 0) > 0,
+  };
+}
+
+// ============================================
+// ALL ROUTES FOR CREW MEMBER
+// ============================================
+
+export interface CrewRoute {
+  _id: Id<"routes">;
+  name: string;
+  type: "pickup" | "dropoff";
+  scheduledStartTime: string;
+  scheduledEndTime: string;
+  schoolArrivalTime?: string;
+  schoolDepartureTime?: string;
+  estimatedDuration?: number;
+  estimatedDistance?: number;
+  recurrence?: {
+    type: string;
+    daysOfWeek?: string[];
+    dayOfWeek?: string;
+    specificDate?: string;
+  };
+  vehicle: { licensePlate: string; brand: string; model: string } | null;
+  studentCount: number;
+  stopsCount: number;
+  isDriver: boolean;
+  isMonitor: boolean;
+}
+
+/**
+ * Get all routes assigned to this crew member (driver or monitor)
+ * Used in the routes list page
+ */
+export function useCrewRoutes() {
+  const { userId } = useConvexAuth();
+
+  const routes = useQuery(
+    api.routes.listRoutesForCrew,
+    userId ? { userId } : "skip"
+  ) as CrewRoute[] | undefined;
+
+  return {
+    routes: routes ?? [],
+    isLoading: routes === undefined,
+    isEmpty: routes !== undefined && routes.length === 0,
+  };
+}

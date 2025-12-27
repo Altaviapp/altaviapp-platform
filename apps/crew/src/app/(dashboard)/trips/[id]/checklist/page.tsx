@@ -1,11 +1,11 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Wrench, Lightbulb, Shield, Sparkles, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
-import { useChecklistState, useConvexAuth } from '@/hooks';
+import { useChecklistState } from '@/hooks';
 import {
   ChecklistProgress,
   ChecklistCategory,
@@ -17,32 +17,13 @@ import {
 /**
  * Página de Checklist Pre-Viaje
  *
- * Solo accesible para conductores.
- * Los monitores son redirigidos al viaje activo directamente.
+ * Accesible para conductores y monitores.
+ * Ambos roles pueden realizar la inspección del vehículo.
  */
 export default function ChecklistPage() {
   const params = useParams();
   const router = useRouter();
   const tripId = (params?.id as string) || '';
-
-  // Use real auth with fallback for UI testing
-  const { isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor, isLoading: authLoading } = useConvexAuth();
-  const isDriver = isAuthenticated ? authIsDriver : true; // Default to driver for UI testing
-  const isMonitor = isAuthenticated ? authIsMonitor : false;
-  const canAccessChecklist = isDriver; // Only drivers can access checklist
-
-  // Redirect monitors away from checklist - they don't do vehicle inspection
-  useEffect(() => {
-    if (!authLoading && !canAccessChecklist) {
-      // Monitors go directly to active trip view
-      router.replace(`/trips/${tripId}/active`);
-    }
-  }, [authLoading, canAccessChecklist, tripId, router]);
-
-  // Don't render checklist for unauthorized users
-  if (authLoading || !canAccessChecklist) {
-    return null;
-  }
 
   const {
     checklistData,

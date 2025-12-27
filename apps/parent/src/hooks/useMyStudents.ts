@@ -81,7 +81,12 @@ export function useStudentTracking(studentId: Id<"students"> | null) {
     driver: tracking?.driver ?? null,
     school: tracking?.school ?? null,
     progress: tracking?.progress ?? 0,
+    // ETA data (distance-based real-time)
     etaMinutes: tracking?.etaMinutes ?? null,
+    etaTime: tracking?.etaTime ?? null,
+    distanceKm: tracking?.distanceKm ?? null,
+    delayStatus: tracking?.delayStatus ?? null,
+    currentSpeed: tracking?.currentSpeed ?? null,
   };
 }
 

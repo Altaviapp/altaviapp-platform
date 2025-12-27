@@ -63,7 +63,7 @@ const statusConfigs: Record<TripStatus, StatusConfig> = {
 
 export function ChildTripCard({ student }: ChildTripCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { tracking, hasActiveTrip, isLoading, progress, etaMinutes } = useStudentTracking(student._id);
+  const { tracking, hasActiveTrip, isLoading, progress, etaMinutes, etaTime, delayStatus } = useStudentTracking(student._id);
 
   // Determine status based on tracking data
   const getStatus = (): TripStatus => {
@@ -163,12 +163,29 @@ export function ChildTripCard({ student }: ChildTripCardProps) {
 
                 {/* ETA and driver */}
                 <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-1.5 text-gray-600">
-                    <Clock className="w-4 h-4 text-gray-400" />
+                  <div className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded-lg",
+                    !delayStatus || delayStatus.status === 'on_time'
+                      ? 'bg-green-50 text-green-700'
+                      : delayStatus.status === 'slight_delay'
+                        ? 'bg-yellow-50 text-yellow-700'
+                        : delayStatus.status === 'delayed'
+                          ? 'bg-orange-50 text-orange-700'
+                          : 'bg-red-50 text-red-700'
+                  )}>
+                    <Clock className="w-4 h-4" />
                     {etaMinutes !== null ? (
-                      <span>Llega en ~{etaMinutes} min</span>
+                      <span className="font-medium">
+                        ~{etaMinutes} min
+                        {etaTime && <span className="opacity-75 ml-1">({etaTime})</span>}
+                      </span>
                     ) : (
                       <span>Calculando...</span>
+                    )}
+                    {delayStatus?.isDelayed && (
+                      <span className="text-xs opacity-75">
+                        (+{delayStatus.delayMinutes} min)
+                      </span>
                     )}
                   </div>
                   {tracking.driver && (

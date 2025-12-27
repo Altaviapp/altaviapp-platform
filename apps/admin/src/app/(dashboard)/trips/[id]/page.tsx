@@ -93,7 +93,14 @@ export default function TripDetailPage() {
   const checkins = trip.checkins || [];
 
   // Calculate stats from real data
-  const stats = trip.stats || { totalStudents: 0, checkedIn: 0, stopsCompleted: 0 };
+  const stats = trip.stats || {
+    totalStudents: 0,
+    checkedIn: 0,
+    stopsCompleted: 0,
+    totalStops: 0,
+    currentSpeed: null as number | null,
+    avgSpeed: 25,
+  };
 
   // Handle map load - store reference for centering
   const handleMapLoad = useCallback((map: google.maps.Map) => {
@@ -221,7 +228,7 @@ export default function TripDetailPage() {
 
         <div className="space-y-6">
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-white rounded-lg shadow p-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -229,7 +236,7 @@ export default function TripDetailPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{stats.checkedIn}/{stats.totalStudents}</p>
-                  <p className="text-sm text-gray-500">Estudiantes Registrados</p>
+                  <p className="text-sm text-gray-500">Estudiantes</p>
                 </div>
               </div>
             </div>
@@ -240,8 +247,8 @@ export default function TripDetailPage() {
                   <MapPin className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.stopsCompleted}/{stops.length}</p>
-                  <p className="text-sm text-gray-500">Paradas Completadas</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.stopsCompleted}/{stats.totalStops || stops.length}</p>
+                  <p className="text-sm text-gray-500">Paradas</p>
                 </div>
               </div>
             </div>
@@ -260,17 +267,70 @@ export default function TripDetailPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-gray-400" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{checkins.length}</p>
-                  <p className="text-sm text-gray-500">Check-ins</p>
+            {/* Next Stop ETA - Only show for in_progress trips */}
+            {trip.status === 'in_progress' && trip.nextStop && (
+              <div className={cn(
+                'bg-white rounded-lg shadow p-4 col-span-2 lg:col-span-1',
+                trip.nextStop.delayStatus?.isDelayed ? 'border-2 border-orange-300' : 'border-2 border-green-300'
+              )}>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'w-12 h-12 rounded-lg flex items-center justify-center',
+                    trip.nextStop.delayStatus?.isDelayed ? 'bg-orange-100' : 'bg-green-100'
+                  )}>
+                    <Navigation className={cn(
+                      'w-6 h-6',
+                      trip.nextStop.delayStatus?.isDelayed ? 'text-orange-600' : 'text-green-600'
+                    )} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-2xl font-bold text-gray-900">
+                      ~{trip.nextStop.etaMinutes} min
+                    </p>
+                    <p className="text-sm text-gray-500 truncate">
+                      Próxima: {trip.nextStop.name}
+                    </p>
+                    {trip.nextStop.etaTime && (
+                      <p className="text-xs text-gray-400">
+                        Llegada: {trip.nextStop.etaTime}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Speed indicator for in_progress trips */}
+            {trip.status === 'in_progress' && stats.currentSpeed !== undefined && stats.currentSpeed !== null && (
+              <div className="bg-white rounded-lg shadow p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center">
+                    <Bus className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {Math.round(stats.currentSpeed || stats.avgSpeed || 0)} km/h
+                    </p>
+                    <p className="text-sm text-gray-500">Velocidad</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Check-ins count - show when not in_progress or no nextStop */}
+            {(trip.status !== 'in_progress' || !trip.nextStop) && (
+              <div className="bg-white rounded-lg shadow p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900">{checkins.length}</p>
+                    <p className="text-sm text-gray-500">Check-ins</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Tab Navigation */}
@@ -384,44 +444,112 @@ export default function TripDetailPage() {
                       </div>
                     ) : (
                       <div className="divide-y divide-gray-100">
-                        {stops.map((stop) => (
-                          <button
-                            key={stop._id}
-                            onClick={() => handleStopClick(stop)}
-                            className={cn(
-                              'w-full text-left p-4 hover:bg-gray-50 transition-colors flex items-start gap-3',
-                              selectedStopId === stop._id && 'bg-primary/5 border-l-4 border-l-primary'
-                            )}
-                          >
-                            {/* Order Number */}
-                            <div className={cn(
-                              'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0',
-                              selectedStopId === stop._id
-                                ? 'bg-primary text-white'
-                                : 'bg-gray-200 text-gray-700'
-                            )}>
-                              {stop.order}
-                            </div>
+                        {stops.map((stop) => {
+                          // Type assertion for stop with ETA fields
+                          const stopWithETA = stop as typeof stop & {
+                            etaMinutes?: number | null;
+                            etaTime?: string | null;
+                            isCompleted?: boolean;
+                            isNext?: boolean;
+                            delayStatus?: { isDelayed: boolean; delayMinutes: number; status: string };
+                          };
 
-                            {/* Stop Info */}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-gray-900">{stop.name}</p>
-                              <p className="text-sm text-gray-500 truncate">{stop.address}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Clock className="w-3 h-3 text-gray-400" />
-                                <span className="text-xs text-gray-500">
-                                  {stop.scheduledTime || '--:--'}
-                                </span>
+                          return (
+                            <button
+                              key={stop._id}
+                              onClick={() => handleStopClick(stop)}
+                              className={cn(
+                                'w-full text-left p-4 hover:bg-gray-50 transition-colors flex items-start gap-3',
+                                selectedStopId === stop._id && 'bg-primary/5 border-l-4 border-l-primary',
+                                stopWithETA.isNext && trip.status === 'in_progress' && 'bg-blue-50/50',
+                                stopWithETA.isCompleted && 'bg-green-50/30'
+                              )}
+                            >
+                              {/* Order Number / Status Icon */}
+                              <div className={cn(
+                                'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0',
+                                stopWithETA.isCompleted
+                                  ? 'bg-green-500 text-white'
+                                  : stopWithETA.isNext && trip.status === 'in_progress'
+                                    ? 'bg-blue-500 text-white animate-pulse'
+                                    : selectedStopId === stop._id
+                                      ? 'bg-primary text-white'
+                                      : 'bg-gray-200 text-gray-700'
+                              )}>
+                                {stopWithETA.isCompleted ? (
+                                  <CheckCircle className="w-4 h-4" />
+                                ) : (
+                                  stop.order
+                                )}
                               </div>
-                            </div>
 
-                            {/* Arrow */}
-                            <ChevronRight className={cn(
-                              'w-5 h-5 flex-shrink-0 transition-colors',
-                              selectedStopId === stop._id ? 'text-primary' : 'text-gray-300'
-                            )} />
-                          </button>
-                        ))}
+                              {/* Stop Info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className={cn(
+                                    'font-medium',
+                                    stopWithETA.isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'
+                                  )}>
+                                    {stop.name}
+                                  </p>
+                                  {stopWithETA.isNext && trip.status === 'in_progress' && (
+                                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                                      Siguiente
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-500 truncate">{stop.address}</p>
+
+                                {/* ETA Information */}
+                                <div className="flex items-center gap-3 mt-1.5">
+                                  {/* Scheduled Time */}
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-gray-400" />
+                                    <span className="text-xs text-gray-500">
+                                      {stop.scheduledTime || stop.estimatedArrivalTime || '--:--'}
+                                    </span>
+                                  </div>
+
+                                  {/* Dynamic ETA - Only show for in_progress trips and non-completed stops */}
+                                  {trip.status === 'in_progress' && !stopWithETA.isCompleted && stopWithETA.etaMinutes !== null && stopWithETA.etaMinutes !== undefined && (
+                                    <>
+                                      <span className="text-gray-300">→</span>
+                                      <div className={cn(
+                                        'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium',
+                                        !stopWithETA.delayStatus || stopWithETA.delayStatus.status === 'on_time'
+                                          ? 'bg-green-100 text-green-700'
+                                          : stopWithETA.delayStatus.status === 'slight_delay'
+                                            ? 'bg-yellow-100 text-yellow-700'
+                                            : stopWithETA.delayStatus.status === 'delayed'
+                                              ? 'bg-orange-100 text-orange-700'
+                                              : 'bg-red-100 text-red-700'
+                                      )}>
+                                        <Navigation className="w-3 h-3" />
+                                        <span>~{stopWithETA.etaMinutes} min</span>
+                                        {stopWithETA.etaTime && (
+                                          <span className="opacity-75">({stopWithETA.etaTime})</span>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {/* Completed indicator */}
+                                  {stopWithETA.isCompleted && (
+                                    <span className="text-xs text-green-600 font-medium">
+                                      ✓ Completada
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Arrow */}
+                              <ChevronRight className={cn(
+                                'w-5 h-5 flex-shrink-0 transition-colors',
+                                selectedStopId === stop._id ? 'text-primary' : 'text-gray-300'
+                              )} />
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

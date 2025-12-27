@@ -50,9 +50,15 @@ export {
   useDriverRoutesToday,
   useNovedadesForRoute,
   useRouteWithStudents,
+  useNovedadesForDriverToday,
+  useCrewRoutes,
 } from './useDriverRoutes';
-export type { RouteForToday, NovedadForRoute } from './useDriverRoutes';
+export type { RouteForToday, NovedadForRoute, NovedadSummary, NovedadForDashboard, CrewRoute } from './useDriverRoutes';
 
 // Incidents hooks (for reporting safety issues)
 export { useIncidentMutations } from './useIncidents';
 export type { IncidentType, IncidentSeverity, ReportIncidentInput } from './useIncidents';
+
+// Calendar hooks (for calendar view)
+export { useCalendarTrips } from './useCalendarTrips';
+export type { CalendarTrip } from './useCalendarTrips';

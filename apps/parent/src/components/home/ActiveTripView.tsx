@@ -34,6 +34,8 @@ interface ActiveTripViewProps {
       scheduledTime?: string;
       completed?: boolean;
       order: number;
+      etaMinutes?: number | null;
+      etaTime?: string | null;
     }>;
     studentStop?: {
       id: Id<"routeStops">;
@@ -41,6 +43,14 @@ interface ActiveTripViewProps {
       lat: number;
       lng: number;
       scheduledTime?: string;
+      etaMinutes?: number | null;
+      etaTime?: string | null;
+      distanceKm?: number | null;
+      delayStatus?: {
+        isDelayed: boolean;
+        delayMinutes: number;
+        status: string;
+      } | null;
     } | null;
     vehicle?: {
       id: Id<"vehicles">;
@@ -59,6 +69,13 @@ interface ActiveTripViewProps {
       longitude?: number;
     } | null;
     etaMinutes?: number | null;
+    etaTime?: string | null;
+    delayStatus?: {
+      isDelayed: boolean;
+      delayMinutes: number;
+      status: string;
+    } | null;
+    currentSpeed?: number | null;
   };
   studentId: Id<"students">;
   studentName: string;
@@ -122,25 +139,78 @@ export function ActiveTripView({ tracking, studentId, studentName }: ActiveTripV
       <div className="p-4 space-y-4">
         {/* Student's stop info */}
         {tracking.studentStop && (
-          <div className="bg-accent/10 rounded-lg p-3">
+          <div className={`rounded-lg p-3 ${
+            !tracking.delayStatus || tracking.delayStatus.status === 'on_time'
+              ? 'bg-green-50 border border-green-200'
+              : tracking.delayStatus.status === 'slight_delay'
+                ? 'bg-yellow-50 border border-yellow-200'
+                : tracking.delayStatus.status === 'delayed'
+                  ? 'bg-orange-50 border border-orange-200'
+                  : 'bg-red-50 border border-red-200'
+          }`}>
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-                <MapPin className="w-4 h-4 text-primary" />
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                !tracking.delayStatus || tracking.delayStatus.status === 'on_time'
+                  ? 'bg-green-500'
+                  : tracking.delayStatus.status === 'slight_delay'
+                    ? 'bg-yellow-500'
+                    : tracking.delayStatus.status === 'delayed'
+                      ? 'bg-orange-500'
+                      : 'bg-red-500'
+              }`}>
+                <MapPin className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">
                   Tu parada: {tracking.studentStop.name}
                 </p>
+
+                {/* Enhanced ETA display */}
                 {tracking.etaMinutes !== null && tracking.etaMinutes !== undefined && (
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    <Clock className="w-3.5 h-3.5 inline mr-1" />
-                    Llegada estimada: ~{tracking.etaMinutes} min
-                  </p>
+                  <div className="mt-1.5 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm font-semibold text-gray-900">
+                        ~{tracking.etaMinutes} min
+                      </span>
+                      {tracking.etaTime && (
+                        <span className="text-sm text-gray-500">
+                          (llegada {tracking.etaTime})
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Delay indicator */}
+                    {tracking.delayStatus?.isDelayed && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                        <span className="text-orange-700">
+                          Retraso de +{tracking.delayStatus.delayMinutes} min vs horario programado
+                        </span>
+                      </div>
+                    )}
+
+                    {/* On time indicator */}
+                    {!tracking.delayStatus?.isDelayed && (
+                      <p className="text-xs text-green-700">
+                        ✓ A tiempo
+                      </p>
+                    )}
+                  </div>
                 )}
+
+                {/* Scheduled time fallback */}
                 {tracking.studentStop.scheduledTime && !tracking.etaMinutes && (
-                  <p className="text-sm text-gray-600 mt-0.5">
+                  <p className="text-sm text-gray-600 mt-1">
                     <Clock className="w-3.5 h-3.5 inline mr-1" />
                     Hora programada: {tracking.studentStop.scheduledTime}
+                  </p>
+                )}
+
+                {/* Speed indicator */}
+                {tracking.currentSpeed !== null && tracking.currentSpeed !== undefined && tracking.currentSpeed > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Velocidad actual: {Math.round(tracking.currentSpeed)} km/h
                   </p>
                 )}
               </div>

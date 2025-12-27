@@ -9,6 +9,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { ActiveTripFAB } from '@/components/trip/ActiveTripFAB';
 import { useConvexAuth } from '@/hooks';
 
 export default function DashboardLayout({
@@ -78,6 +79,9 @@ export default function DashboardLayout({
 
         {/* Mobile Navigation */}
         <MobileNav />
+
+        {/* Active Trip FAB */}
+        <ActiveTripFAB />
       </div>
     </div>
   );

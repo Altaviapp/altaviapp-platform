@@ -24,7 +24,6 @@ interface RouteForTodayDisplay {
 interface RouteCardProps {
   route: RouteForTodayDisplay;
   variant?: 'primary' | 'secondary';
-  isDriver?: boolean;
 }
 
 const statusConfig = {
@@ -34,7 +33,7 @@ const statusConfig = {
   cancelled: { label: 'CANCELADO', color: 'bg-error/10 text-error' },
 };
 
-export function RouteCard({ route, variant = 'secondary', isDriver = true }: RouteCardProps) {
+export function RouteCard({ route, variant = 'secondary' }: RouteCardProps) {
   const isPickup = route.type === 'pickup';
   const Icon = isPickup ? Sunrise : Sunset;
   const typeBadge = isPickup ? 'RUTA DE RECOGIDA' : 'RUTA DE ENTREGA';
@@ -113,8 +112,8 @@ export function RouteCard({ route, variant = 'secondary', isDriver = true }: Rou
         )}
       </div>
 
-      {/* Action Button */}
-      {route.canStart && isDriver && (
+      {/* Action Button - Both roles can start trips */}
+      {route.canStart && (
         // Route can be started - go to preview page
         <Link
           href={`/routes/${route._id}/start`}

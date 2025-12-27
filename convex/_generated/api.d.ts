@@ -22,6 +22,7 @@ import type * as institutions from "../institutions.js";
 import type * as invitations from "../invitations.js";
 import type * as lib_authUtils from "../lib/authUtils.js";
 import type * as lib_emailTemplates from "../lib/emailTemplates.js";
+import type * as lib_eta from "../lib/eta.js";
 import type * as lib_simpleAuth from "../lib/simpleAuth.js";
 import type * as lib_tokenUtils from "../lib/tokenUtils.js";
 import type * as monitors from "../monitors.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   invitations: typeof invitations;
   "lib/authUtils": typeof lib_authUtils;
   "lib/emailTemplates": typeof lib_emailTemplates;
+  "lib/eta": typeof lib_eta;
   "lib/simpleAuth": typeof lib_simpleAuth;
   "lib/tokenUtils": typeof lib_tokenUtils;
   monitors: typeof monitors;

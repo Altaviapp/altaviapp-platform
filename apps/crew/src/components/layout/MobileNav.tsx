@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Truck, QrCode, History, User, Map, Users } from 'lucide-react';
+import { Home, Truck, QrCode, User, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConvexAuth } from '@/hooks';
 import type { UserRole } from '@/types';
@@ -14,17 +14,13 @@ interface NavItem {
   roles?: ('driver' | 'monitor' | 'admin')[]; // If undefined, show for all roles
 }
 
-// Bottom nav shows important items for all crew members
-// Both drivers and monitors have access to core functionality:
-// - Check-in: Both can scan QR and register students
-// - Mapa: Both can see route and vehicle location
-// - Historial: Both can see trip history
-// Driver-specific: Vehicle management (shown in dashboard)
+// Bottom nav shows 5 most important items for all crew members
+// Both drivers and monitors have identical access to all features
 const allNavItems: NavItem[] = [
   { icon: Home, label: 'Inicio', href: '/dashboard' },
   { icon: Truck, label: 'Viajes', href: '/trips' },
-  { icon: QrCode, label: 'Check-in', href: '/checkin' }, // Both driver and monitor
-  { icon: Map, label: 'Mapa', href: '/map' }, // Both driver and monitor
+  { icon: Calendar, label: 'Calendario', href: '/calendar' },
+  { icon: QrCode, label: 'Check-in', href: '/checkin' },
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 

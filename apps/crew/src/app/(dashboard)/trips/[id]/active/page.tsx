@@ -51,19 +51,11 @@ export default function ActiveTripPage() {
   const { getPosition } = useCurrentPosition();
 
   // Use real auth with fallback for UI testing
-  const { isAuthenticated, isDriver: authIsDriver, isMonitor: authIsMonitor } = useConvexAuth();
-  const isDriver = isAuthenticated ? authIsDriver : true;
-  const isMonitor = isAuthenticated ? authIsMonitor : false;
-  const canControlTrip = isDriver;
+  const { isAuthenticated } = useConvexAuth();
 
-  const getCanPerformCheckin = (tripMonitorId: string | null) => {
-    if (isMonitor) return true;
-    if (isDriver && !tripMonitorId) return true;
-    return false;
-  };
-
-  const tripMonitorId = null;
-  const canCheckin = getCanPerformCheckin(tripMonitorId);
+  // Both roles (driver and monitor) have full access to trip controls
+  const canControlTrip = true;
+  const canCheckin = true;
 
   // Trip is active if status is in_progress
   const isActive = convexTrip?.status === 'in_progress';
@@ -97,7 +89,6 @@ export default function ActiveTripPage() {
 
   // Derived state
   const isLoading = tripLoading;
-  const currentStopIndex = 0; // TODO: Track from backend
   const studentsOnBoard: string[] = [];
   const totalStudents = 3;
 
@@ -132,9 +123,9 @@ export default function ActiveTripPage() {
     return () => clearInterval(interval);
   }, [isActive, tripStartTime]);
 
-  // Start GPS tracking when trip is active (for drivers only)
+  // Start GPS tracking when trip is active
   useEffect(() => {
-    if (isActive && isDriver && tripId && !gpsIsTracking) {
+    if (isActive && tripId && !gpsIsTracking) {
       if (gpsPermission === 'prompt' || gpsPermission === 'unknown') {
         requestGPSPermission().then((granted) => {
           if (granted) {
@@ -145,7 +136,7 @@ export default function ActiveTripPage() {
         startGPSTracking(tripId as any);
       }
     }
-  }, [isActive, isDriver, tripId, gpsIsTracking, gpsPermission, requestGPSPermission, startGPSTracking]);
+  }, [isActive, tripId, gpsIsTracking, gpsPermission, requestGPSPermission, startGPSTracking]);
 
   // Cleanup GPS tracking on unmount
   useEffect(() => {
@@ -197,10 +188,37 @@ export default function ActiveTripPage() {
     );
   }
 
-  // Get next stop from trip data
-  const nextStop = tripStops[currentStopIndex] ?? null;
+  // Get next stop from trip data - use the one from backend with ETA
+  const backendNextStop = convexTrip?.nextStop ?? null;
+
+  // Get stops with ETA data
+  const stopsWithETA = tripStops as Array<typeof tripStops[0] & {
+    etaMinutes?: number | null;
+    etaTime?: string | null;
+    isCompleted?: boolean;
+    isNext?: boolean;
+  }>;
+
+  // Find next stop (prefer backend nextStop, fallback to first non-completed)
+  const nextStop = backendNextStop
+    ? {
+        ...tripStops.find((s) => s._id.toString() === backendNextStop.id?.toString()) ?? tripStops[0],
+        etaMinutes: backendNextStop.etaMinutes,
+        etaTime: backendNextStop.etaTime,
+        distanceKm: backendNextStop.distanceKm,
+      }
+    : stopsWithETA.find((s) => s.isNext) ?? tripStops[0] ?? null;
+
+  // Calculate current stop index
+  const completedStops = stopsWithETA.filter((s) => s.isCompleted).length;
+  const currentStopIndex = completedStops;
   const totalStops = tripStops.length;
-  const currentSpeed = gpsPosition?.speed ? Math.round(gpsPosition.speed * 3.6) : 0;
+
+  // Get speed from GPS or trip stats
+  const tripStats = convexTrip?.stats as { currentSpeed?: number | null; avgSpeed?: number } | undefined;
+  const currentSpeed = gpsPosition?.speed
+    ? Math.round(gpsPosition.speed * 3.6)
+    : Math.round(tripStats?.currentSpeed ?? tripStats?.avgSpeed ?? 0);
 
   // Navigate to next stop in Google Maps
   const handleNavigate = () => {
@@ -367,10 +385,10 @@ export default function ActiveTripPage() {
         </div>
       </div>
 
-      {/* Next Stop Card - Compact */}
+      {/* Next Stop Card - Compact with ETA */}
       {nextStop && (
         <div className="bg-white border-t border-gray-200 px-4 py-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold">{currentStopIndex + 1}</span>
@@ -378,7 +396,28 @@ export default function ActiveTripPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Siguiente Parada</p>
                 <p className="font-semibold text-gray-900 truncate">{nextStop.name}</p>
-                <p className="text-xs text-gray-600 truncate">{nextStop.address}</p>
+                <div className="flex items-center gap-2 text-xs">
+                  {/* Dynamic ETA */}
+                  {'etaMinutes' in nextStop && nextStop.etaMinutes !== null && nextStop.etaMinutes !== undefined ? (
+                    <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                      ~{nextStop.etaMinutes} min
+                      {'etaTime' in nextStop && nextStop.etaTime && (
+                        <span className="opacity-75 ml-1">({nextStop.etaTime})</span>
+                      )}
+                    </span>
+                  ) : nextStop.estimatedArrivalTime ? (
+                    <span className="text-gray-500">
+                      <Clock className="w-3 h-3 inline mr-1" />
+                      {nextStop.estimatedArrivalTime}
+                    </span>
+                  ) : null}
+                  {'distanceKm' in nextStop && nextStop.distanceKm && (
+                    <span className="text-gray-500">
+                      <MapPin className="w-3 h-3 inline mr-0.5" />
+                      {nextStop.distanceKm.toFixed(1)} km
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <button
@@ -386,10 +425,9 @@ export default function ActiveTripPage() {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors"
             >
               <Navigation className="w-4 h-4" />
-              Navegar
+              IR
             </button>
           </div>
-
         </div>
       )}
 
@@ -451,30 +489,15 @@ export default function ActiveTripPage() {
         </div>
       </div>
 
-      {/* Finish Trip Button */}
-      {canControlTrip && (
-        <div className="px-4 py-4 bg-white border-t border-gray-200 safe-area-pb">
-          <button
-            onClick={handleFinishTrip}
-            className="w-full py-4 bg-success hover:bg-success/90 text-white rounded-xl text-lg font-bold transition-colors shadow-lg"
-          >
-            FINALIZAR VIAJE
-          </button>
-        </div>
-      )}
-
-      {/* Monitor: Primary Check-in Button */}
-      {isMonitor && !canControlTrip && (
-        <div className="px-4 py-4 bg-white border-t border-gray-200 safe-area-pb">
-          <button
-            onClick={handleCheckIn}
-            className="w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl text-lg font-bold transition-colors shadow-lg flex items-center justify-center gap-2"
-          >
-            <QrCode className="w-6 h-6" />
-            REGISTRAR ESTUDIANTE
-          </button>
-        </div>
-      )}
+      {/* Finish Trip Button - Both driver and monitor can finish */}
+      <div className="px-4 py-4 bg-white border-t border-gray-200 safe-area-pb">
+        <button
+          onClick={handleFinishTrip}
+          className="w-full py-4 bg-success hover:bg-success/90 text-white rounded-xl text-lg font-bold transition-colors shadow-lg"
+        >
+          FINALIZAR VIAJE
+        </button>
+      </div>
 
       {/* Relay Mode Modal */}
       <RelayModeModal

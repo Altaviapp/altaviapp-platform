@@ -77,8 +77,8 @@ export default function DashboardLayout({
           {children}
         </main>
 
-        {/* Mobile Navigation */}
-        <MobileNav />
+        {/* Mobile Navigation - hidden when sidebar is open */}
+        <MobileNav hidden={sidebarOpen} />
 
         {/* Active Trip FAB */}
         <ActiveTripFAB />

@@ -159,7 +159,7 @@ export function Sidebar({ open = true, onClose }: SidebarProps) {
         </nav>
 
         {/* Footer Actions */}
-        <div className="px-3 py-4 border-t border-primary-foreground/10 space-y-1">
+        <div className="px-3 py-4 border-t border-primary-foreground/10 space-y-1 safe-area-pb">
           <Link
             href="/settings"
             onClick={onClose}

@@ -31,8 +31,15 @@ const mockUser: { name: string; email: string; role: UserRole } = {
   role: 'driver',
 };
 
-export function MobileNav() {
+interface MobileNavProps {
+  hidden?: boolean;
+}
+
+export function MobileNav({ hidden = false }: MobileNavProps) {
   const pathname = usePathname();
+
+  // Hide when sidebar is open to avoid overlapping navigation
+  if (hidden) return null;
 
   // Use real auth with fallback to mock for UI testing
   const { user: authUser, isAuthenticated } = useConvexAuth();

@@ -1,17 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Bus, MapPin, Users, Clock, AlertTriangle, CheckCircle, Phone,
-  MessageSquare, RefreshCw, X, Send, Loader2
+  MessageSquare, RefreshCw, X, Send, Loader2, CalendarX, FileWarning,
+  Navigation, ChevronRight
 } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection } from '@/components/shared';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { GoogleMapsProvider, InteractiveMap } from '@altaviapp/maps';
 import type { MarkerInfo } from '@altaviapp/maps';
-import { useTrip, useTripMutations } from '@/hooks';
+import { useTrip, useTripMutations, useIncidents, useNovedades } from '@/hooks';
+
+// Tab types
+type TabType = 'seguimiento' | 'novedades' | 'incidentes';
 
 const statusConfig: Record<string, { label: string; status: 'active' | 'inactive' | 'warning' | 'error' }> = {
   scheduled: { label: 'Programado', status: 'warning' },
@@ -28,8 +32,10 @@ export default function TripDetailPage() {
   const params = useParams();
   const tripId = params.id as string;
 
+  const [activeTab, setActiveTab] = useState<TabType>('seguimiento');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
   const [newIncident, setNewIncident] = useState({
     type: 'other' as 'accident' | 'breakdown' | 'behavior' | 'emergency' | 'other',
     severity: 'low' as 'low' | 'medium' | 'high' | 'critical',
@@ -37,10 +43,25 @@ export default function TripDetailPage() {
     description: '',
   });
 
+  // Map reference for centering on stops
+  const mapRef = useRef<google.maps.Map | null>(null);
+
   // Real data from Convex
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { trip, isLoading } = useTrip(tripId as any);
   const { cancelTrip, completeTrip } = useTripMutations();
+
+  // Incidents for this trip
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { incidents, isLoading: incidentsLoading } = useIncidents({
+    tripId: tripId as any,
+  });
+
+  // Novedades for this trip's date
+  const { novedades, isLoading: novedadesLoading } = useNovedades({
+    fromDate: trip?.scheduledDate,
+    toDate: trip?.scheduledDate,
+  });
 
   if (isLoading) {
     return (
@@ -73,6 +94,34 @@ export default function TripDetailPage() {
 
   // Calculate stats from real data
   const stats = trip.stats || { totalStudents: 0, checkedIn: 0, stopsCompleted: 0 };
+
+  // Handle map load - store reference for centering
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
+  // Handle stop click - center map on that stop
+  const handleStopClick = useCallback((stop: { _id: string; latitude: number; longitude: number }) => {
+    setSelectedStopId(stop._id);
+    if (mapRef.current) {
+      mapRef.current.panTo({ lat: stop.latitude, lng: stop.longitude });
+      mapRef.current.setZoom(16);
+    }
+  }, []);
+
+  // Filter novedades to only show those for students in this trip
+  const tripNovedades = useMemo(() => {
+    if (!trip || !novedades) return [];
+    // For now show all novedades for the date - could filter by student IDs if needed
+    return novedades;
+  }, [trip, novedades]);
+
+  // Tab configuration
+  const tabs = [
+    { id: 'seguimiento' as const, label: 'Seguimiento', icon: Navigation },
+    { id: 'novedades' as const, label: 'Novedades', icon: CalendarX, count: tripNovedades.length },
+    { id: 'incidentes' as const, label: 'Incidentes', icon: AlertTriangle, count: incidents.length },
+  ];
 
   // Prepare map markers
   const mapMarkers: MarkerInfo[] = [
@@ -224,109 +273,337 @@ export default function TripDetailPage() {
             </div>
           </div>
 
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Map & Progress */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Live Map */}
-              <div id="map" className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Seguimiento en Vivo</h3>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setAutoRefresh(!autoRefresh)}
-                      className={cn(
-                        'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors',
-                        autoRefresh ? 'bg-success/10 text-success' : 'bg-gray-100 text-gray-600'
-                      )}
-                    >
-                      <RefreshCw className={cn('w-4 h-4', autoRefresh && 'animate-spin')} />
-                      {autoRefresh ? 'Auto' : 'Pausado'}
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        'w-2 h-2 rounded-full',
-                        trip.status === 'in_progress' ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
-                      )} />
-                      <span className="text-sm text-gray-500">
-                        {trip.status === 'in_progress' ? 'En vivo' : 'Inactivo'}
-                      </span>
+          {/* Tab Navigation */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-1 inline-flex gap-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                    activeTab === tab.id
+                      ? 'bg-primary text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <span className={cn(
+                      'px-1.5 py-0.5 rounded-full text-xs font-bold',
+                      activeTab === tab.id
+                        ? 'bg-white/20 text-white'
+                        : 'bg-gray-200 text-gray-700'
+                    )}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'seguimiento' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Map Section - Takes 2 columns */}
+              <div className="lg:col-span-2">
+                <div id="map" className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full">
+                  <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">Seguimiento en Vivo</h3>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setAutoRefresh(!autoRefresh)}
+                        className={cn(
+                          'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors',
+                          autoRefresh ? 'bg-success/10 text-success' : 'bg-gray-100 text-gray-600'
+                        )}
+                      >
+                        <RefreshCw className={cn('w-4 h-4', autoRefresh && 'animate-spin')} />
+                        {autoRefresh ? 'Auto' : 'Pausado'}
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          'w-2 h-2 rounded-full',
+                          trip.status === 'in_progress' ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                        )} />
+                        <span className="text-sm text-gray-500">
+                          {trip.status === 'in_progress' ? 'En vivo' : 'Inactivo'}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <InteractiveMap
-                  center={mapCenter}
-                  zoom={14}
-                  markers={mapMarkers}
-                  polyline={routePolyline}
-                  style={{ height: '400px' }}
-                />
-                {/* Map Legend */}
-                <div className="p-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-4 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-                    <span className="text-gray-600">Vehículo</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-primary"></span>
-                    <span className="text-gray-600">Paradas</span>
+                  <InteractiveMap
+                    center={mapCenter}
+                    zoom={14}
+                    markers={mapMarkers}
+                    polyline={routePolyline}
+                    style={{ height: '500px' }}
+                    onMapLoad={handleMapLoad}
+                  />
+                  {/* Map Legend */}
+                  <div className="p-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-4 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                      <span className="text-gray-600">Vehículo</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-primary"></span>
+                      <span className="text-gray-600">Paradas</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Trip Progress */}
-              <DetailSection title="Paradas de la Ruta">
-                {/* Progress Bar */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-gray-600">Progreso General</span>
-                    <span className="font-medium">{stops.length > 0 ? Math.round((stats.stopsCompleted / stops.length) * 100) : 0}%</span>
+              {/* Stops List - Side panel */}
+              <div className="lg:col-span-1">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
+                  <div className="p-4 border-b border-gray-200">
+                    <h3 className="font-semibold text-gray-900">Paradas</h3>
+                    <p className="text-sm text-gray-500">{stats.stopsCompleted}/{stops.length} completadas</p>
                   </div>
-                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all bg-success'
-                      )}
-                      style={{ width: `${stops.length > 0 ? (stats.stopsCompleted / stops.length) * 100 : 0}%` }}
-                    />
+
+                  {/* Progress Bar */}
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all bg-success"
+                        style={{ width: `${stops.length > 0 ? (stats.stopsCompleted / stops.length) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stops List - Scrollable */}
+                  <div className="flex-1 overflow-y-auto max-h-[450px]">
+                    {stops.length === 0 ? (
+                      <div className="p-8 text-center text-gray-500">
+                        <MapPin className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+                        No hay paradas configuradas
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {stops.map((stop) => (
+                          <button
+                            key={stop._id}
+                            onClick={() => handleStopClick(stop)}
+                            className={cn(
+                              'w-full text-left p-4 hover:bg-gray-50 transition-colors flex items-start gap-3',
+                              selectedStopId === stop._id && 'bg-primary/5 border-l-4 border-l-primary'
+                            )}
+                          >
+                            {/* Order Number */}
+                            <div className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0',
+                              selectedStopId === stop._id
+                                ? 'bg-primary text-white'
+                                : 'bg-gray-200 text-gray-700'
+                            )}>
+                              {stop.order}
+                            </div>
+
+                            {/* Stop Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900">{stop.name}</p>
+                              <p className="text-sm text-gray-500 truncate">{stop.address}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Clock className="w-3 h-3 text-gray-400" />
+                                <span className="text-xs text-gray-500">
+                                  {stop.scheduledTime || '--:--'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Arrow */}
+                            <ChevronRight className={cn(
+                              'w-5 h-5 flex-shrink-0 transition-colors',
+                              selectedStopId === stop._id ? 'text-primary' : 'text-gray-300'
+                            )} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
 
-                {/* Stops List */}
-                <div className="space-y-3">
-                  {stops.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      No hay paradas configuradas
+          {/* Novedades Tab */}
+          {activeTab === 'novedades' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-semibold text-gray-900">Novedades del Viaje</h3>
+                <p className="text-sm text-gray-500">Cambios y excepciones reportados para este viaje</p>
+              </div>
+
+              {novedadesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  <span className="ml-2 text-gray-500">Cargando novedades...</span>
+                </div>
+              ) : tripNovedades.length === 0 ? (
+                <div className="p-12 text-center">
+                  <CalendarX className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-500 font-medium">Sin novedades</p>
+                  <p className="text-sm text-gray-400">No hay cambios reportados para este viaje</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {tripNovedades.map((novedad) => (
+                    <div key={novedad._id} className="p-4 hover:bg-gray-50">
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                          novedad.type === 'absence' ? 'bg-red-100' :
+                          novedad.type === 'stop_change' ? 'bg-blue-100' :
+                          novedad.type === 'parent_pickup' ? 'bg-orange-100' :
+                          novedad.type === 'early_pickup' ? 'bg-yellow-100' :
+                          'bg-gray-100'
+                        )}>
+                          <CalendarX className={cn(
+                            'w-5 h-5',
+                            novedad.type === 'absence' ? 'text-red-600' :
+                            novedad.type === 'stop_change' ? 'text-blue-600' :
+                            novedad.type === 'parent_pickup' ? 'text-orange-600' :
+                            novedad.type === 'early_pickup' ? 'text-yellow-600' :
+                            'text-gray-600'
+                          )} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">
+                              {novedad.studentName || 'Estudiante'}
+                            </p>
+                            <span className={cn(
+                              'px-2 py-0.5 rounded-full text-xs font-medium',
+                              novedad.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                              novedad.status === 'approved' ? 'bg-green-100 text-green-700' :
+                              novedad.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-700'
+                            )}>
+                              {novedad.status === 'pending' ? 'Pendiente' :
+                               novedad.status === 'approved' ? 'Aprobada' :
+                               novedad.status === 'rejected' ? 'Rechazada' :
+                               novedad.status}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {novedad.typeLabel}
+                          </p>
+                          {novedad.reason && (
+                            <p className="text-sm text-gray-500 mt-1">{novedad.reason}</p>
+                          )}
+                        </div>
+                        <div className="text-right text-xs text-gray-400">
+                          {novedad.createdAt && new Date(novedad.createdAt).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    stops.map((stop) => (
-                        <div
-                          key={stop._id}
-                          className="flex items-center gap-4 p-3 rounded-lg border border-gray-200 bg-gray-50"
-                        >
-                          {/* Order Number */}
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 bg-primary">
-                            {stop.order}
-                          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-                          {/* Stop Info */}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900">{stop.name}</p>
-                            <p className="text-sm text-gray-500 truncate">{stop.address}</p>
-                          </div>
+          {/* Incidentes Tab */}
+          {activeTab === 'incidentes' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Incidentes del Viaje</h3>
+                  <p className="text-sm text-gray-500">Reportes de incidentes durante este viaje</p>
+                </div>
+                <button
+                  onClick={() => setShowIncidentModal(true)}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-error text-white rounded-lg hover:bg-error/90 transition-colors text-sm"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  Reportar
+                </button>
+              </div>
 
-                          {/* Scheduled Time */}
-                          <div className="text-right text-sm">
-                            <p className="text-gray-600">{stop.scheduledTime || '--:--'}</p>
-                            <p className="text-gray-400 text-xs">programado</p>
+              {incidentsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  <span className="ml-2 text-gray-500">Cargando incidentes...</span>
+                </div>
+              ) : incidents.length === 0 ? (
+                <div className="p-12 text-center">
+                  <FileWarning className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-500 font-medium">Sin incidentes</p>
+                  <p className="text-sm text-gray-400">No se han reportado incidentes en este viaje</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {incidents.map((incident) => (
+                    <div key={incident._id} className="p-4 hover:bg-gray-50">
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                          incident.severity === 'critical' ? 'bg-red-100' :
+                          incident.severity === 'high' ? 'bg-orange-100' :
+                          incident.severity === 'medium' ? 'bg-yellow-100' :
+                          'bg-gray-100'
+                        )}>
+                          <AlertTriangle className={cn(
+                            'w-5 h-5',
+                            incident.severity === 'critical' ? 'text-red-600' :
+                            incident.severity === 'high' ? 'text-orange-600' :
+                            incident.severity === 'medium' ? 'text-yellow-600' :
+                            'text-gray-600'
+                          )} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">{incident.title}</p>
+                            <span className={cn(
+                              'px-2 py-0.5 rounded-full text-xs font-medium',
+                              incident.status === 'open' ? 'bg-red-100 text-red-700' :
+                              incident.status === 'investigating' ? 'bg-yellow-100 text-yellow-700' :
+                              incident.status === 'resolved' ? 'bg-green-100 text-green-700' :
+                              'bg-gray-100 text-gray-700'
+                            )}>
+                              {incident.status === 'open' ? 'Abierto' :
+                               incident.status === 'investigating' ? 'Investigando' :
+                               incident.status === 'resolved' ? 'Resuelto' :
+                               incident.status}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">{incident.description}</p>
+                          <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                            <span>
+                              Tipo: {incident.type === 'accident' ? 'Accidente' :
+                                     incident.type === 'breakdown' ? 'Avería' :
+                                     incident.type === 'behavior' ? 'Comportamiento' :
+                                     incident.type === 'emergency' ? 'Emergencia' :
+                                     'Otro'}
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Severidad: {incident.severity === 'critical' ? 'Crítica' :
+                                          incident.severity === 'high' ? 'Alta' :
+                                          incident.severity === 'medium' ? 'Media' :
+                                          'Baja'}
+                            </span>
                           </div>
                         </div>
-                    ))
-                  )}
+                        <div className="text-right text-xs text-gray-400">
+                          {incident.createdAt && new Date(incident.createdAt).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </DetailSection>
+              )}
+            </div>
+          )}
 
-              {/* Check-ins List */}
+          {/* Check-ins and Trip Info Section - Always visible */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Check-ins List */}
+            <div className="lg:col-span-2">
               <div className="bg-white rounded-xl shadow-sm border border-gray-100">
                 <div className="p-4 border-b border-gray-200">
                   <h3 className="font-semibold text-gray-900">Registros de Estudiantes</h3>

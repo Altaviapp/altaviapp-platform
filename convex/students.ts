@@ -1156,6 +1156,233 @@ export const importStudentsBulk = mutation({
 });
 
 /**
+ * Check parent email status for manual student creation
+ *
+ * Returns information about whether the email:
+ * - Has an existing user account
+ * - Has existing students in this institution (household)
+ * - Has a pending invitation
+ */
+export const checkParentEmailStatus = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    if (!args.email || !isValidEmail(args.email)) {
+      return {
+        valid: false,
+        error: "Email inválido",
+      };
+    }
+
+    const email = args.email.toLowerCase();
+
+    // Check if user already exists
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .first();
+
+    // Check for pending invitation
+    const pendingInvitation = await ctx.db
+      .query("invitations")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .first();
+
+    // Check for existing students with this parent email in this institution
+    const existingStudents = await ctx.db
+      .query("students")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("parentEmail"), email),
+          q.eq(q.field("isActive"), true)
+        )
+      )
+      .collect();
+
+    const hasExistingHousehold = existingStudents.length > 0;
+    const householdStudents = existingStudents.map((s) => ({
+      id: s._id,
+      firstName: s.firstName,
+      lastName: s.lastName,
+      grade: s.grade,
+    }));
+
+    // Get parent name from first existing student if available
+    const existingParentName = existingStudents[0]?.parentName;
+    const existingParentPhone = existingStudents[0]?.parentPhone;
+
+    return {
+      valid: true,
+      email,
+      userExists: !!existingUser,
+      invitationPending: !!pendingInvitation,
+      needsInvitation: !existingUser && !pendingInvitation,
+      hasExistingHousehold,
+      householdStudents,
+      existingParentName,
+      existingParentPhone,
+      householdSize: existingStudents.length,
+    };
+  },
+});
+
+/**
+ * Create student with optional invitation
+ *
+ * Enhanced version of createStudent that:
+ * - Can send invitation to parent if they don't have an account
+ * - Links student to existing household if one exists
+ */
+export const createStudentWithInvitation = mutation({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    firstName: v.string(),
+    lastName: v.string(),
+    grade: v.string(),
+    dateOfBirth: v.number(),
+    address: v.string(),
+    homeLatitude: v.optional(v.number()),
+    homeLongitude: v.optional(v.number()),
+    parentPhone: v.string(),
+    parentEmail: v.string(),
+    parentName: v.string(),
+    emergencyContact: v.string(),
+    sendInvitation: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const now = Date.now();
+    const email = args.parentEmail.toLowerCase();
+
+    // Create student first
+    const studentId = await ctx.db.insert("students", {
+      institutionId: args.institutionId,
+      firstName: args.firstName,
+      lastName: args.lastName,
+      grade: args.grade,
+      dateOfBirth: args.dateOfBirth,
+      address: args.address,
+      homeLatitude: args.homeLatitude,
+      homeLongitude: args.homeLongitude,
+      parentPhone: args.parentPhone,
+      parentEmail: email,
+      parentName: args.parentName,
+      emergencyContact: args.emergencyContact,
+      qrCode: "", // Placeholder, will update
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Generate QR code with actual student ID
+    const qrCode = generateQRCode(studentId, args.institutionId);
+    await ctx.db.patch(studentId, { qrCode });
+
+    let invitationSent = false;
+    let invitationCode: string | undefined;
+
+    // Handle invitation if requested
+    if (args.sendInvitation) {
+      // Check if user already exists
+      const existingUser = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", email))
+        .first();
+
+      if (existingUser) {
+        // User exists, link student to user
+        const student = await ctx.db.get(studentId);
+        if (student) {
+          const currentGuardians = student.guardianUserIds || [];
+          if (!currentGuardians.includes(existingUser._id)) {
+            await ctx.db.patch(studentId, {
+              guardianUserIds: [...currentGuardians, existingUser._id],
+            });
+          }
+        }
+      } else {
+        // Check for pending invitation
+        const existingInvitation = await ctx.db
+          .query("invitations")
+          .withIndex("by_email", (q) => q.eq("email", email))
+          .filter((q) => q.eq(q.field("status"), "pending"))
+          .first();
+
+        if (!existingInvitation) {
+          // Get institution for email
+          const institution = await ctx.db.get(args.institutionId);
+          if (!institution) {
+            throw new Error("Institución no encontrada");
+          }
+
+          // Generate invitation code
+          invitationCode = generateInvitationCode();
+          let attempts = 0;
+          while (attempts < 10) {
+            const existingCode = await ctx.db
+              .query("invitations")
+              .withIndex("by_code", (q) => q.eq("invitationCode", invitationCode!))
+              .first();
+
+            if (!existingCode) break;
+            invitationCode = generateInvitationCode();
+            attempts++;
+          }
+
+          if (attempts < 10) {
+            // Create invitation
+            const inviteFirstName = args.parentName.split(" ")[0] || "Usuario";
+
+            await ctx.db.insert("invitations", {
+              institutionId: args.institutionId,
+              role: "parent",
+              email,
+              firstName: inviteFirstName,
+              invitationCode,
+              codeExpiresAt: getTokenExpiration(168), // 7 days
+              createdBy: args.userId,
+              status: "pending",
+              createdAt: now,
+              updatedAt: now,
+            });
+
+            // Schedule invitation email
+            await ctx.scheduler.runAfter(0, api.email.sendInvitationEmail, {
+              to: email,
+              firstName: inviteFirstName,
+              invitationCode,
+              role: "parent",
+              institutionName: institution.name,
+            });
+
+            invitationSent = true;
+          }
+        }
+      }
+    }
+
+    return {
+      success: true,
+      studentId,
+      qrCode,
+      invitationSent,
+      invitationCode,
+    };
+  },
+});
+
+/**
  * Invite secondary guardian for a student
  *
  * Allows primary parent to invite a second guardian (spouse, grandparent, etc.)

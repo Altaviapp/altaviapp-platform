@@ -32,7 +32,6 @@ import type * as notifications from "../notifications.js";
 import type * as novedadTypes from "../novedadTypes.js";
 import type * as novedades from "../novedades.js";
 import type * as reports from "../reports.js";
-import type * as routeChangeRequests from "../routeChangeRequests.js";
 import type * as routeStops from "../routeStops.js";
 import type * as routes from "../routes.js";
 import type * as seed_clearData from "../seed/clearData.js";
@@ -76,7 +75,6 @@ declare const fullApi: ApiFromModules<{
   novedadTypes: typeof novedadTypes;
   novedades: typeof novedades;
   reports: typeof reports;
-  routeChangeRequests: typeof routeChangeRequests;
   routeStops: typeof routeStops;
   routes: typeof routes;
   "seed/clearData": typeof seed_clearData;

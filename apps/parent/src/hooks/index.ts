@@ -41,8 +41,6 @@ export {
   usePendingNovedadesCount,
   useNovedad,
   useNovedadesMutations,
-  useMyRouteChangeRequests,
-  useRouteChangeRequestMutations,
   useNovedadTypes,
   useEvidenceUpload,
 } from "./useNovedades";

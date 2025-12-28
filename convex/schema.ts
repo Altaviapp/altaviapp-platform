@@ -722,64 +722,6 @@ export default defineSchema({
     .index("by_route", ["routeId"])
     .index("by_start_date", ["institutionId", "startDate"]),
 
-  // Route Change Requests - DEPRECATED
-  // Esta tabla está siendo migrada a novedades con durationType: "permanent" | "recurring"
-  // Mantener solo para backwards compatibility durante migración
-  // TODO: Eliminar después de migrar todos los registros existentes
-  routeChangeRequests: defineTable({
-    institutionId: v.id("institutions"),
-    studentId: v.id("students"),
-    createdBy: v.id("users"),            // Padre que solicita
-
-    // Tipo de cambio solicitado
-    requestType: v.union(
-      v.literal("schedule_change"),      // Cambio de días (ej: solo Lun-Jue)
-      v.literal("stop_change"),          // Cambio permanente de parada
-      v.literal("route_change"),         // Cambio de ruta completa
-      v.literal("service_suspension")    // Suspensión temporal del servicio
-    ),
-
-    // Detalles del cambio - rutas
-    currentRouteId: v.optional(v.id("routes")),
-    newRouteId: v.optional(v.id("routes")),
-
-    // Detalles del cambio - paradas
-    currentStopId: v.optional(v.id("routeStops")),
-    newStopId: v.optional(v.id("routeStops")),
-
-    // Para cambio de días (schedule_change)
-    newSchedule: v.optional(v.object({
-      daysOfWeek: v.array(v.number()),   // 0-6 (Dom=0, Lun=1, ..., Sab=6)
-      affectedRouteTypes: v.array(v.union(v.literal("pickup"), v.literal("dropoff"))),
-    })),
-
-    // Fechas de vigencia
-    effectiveFrom: v.string(),           // YYYY-MM-DD
-    effectiveUntil: v.optional(v.string()), // YYYY-MM-DD (null = indefinido)
-
-    // Razón de la solicitud
-    reason: v.string(),
-
-    // Workflow de aprobación
-    status: v.union(
-      v.literal("pending"),              // Esperando revisión
-      v.literal("approved"),             // Aprobado por coordinación
-      v.literal("rejected")              // Rechazado
-    ),
-
-    // Revisión
-    reviewedBy: v.optional(v.id("users")),
-    reviewedAt: v.optional(v.number()),
-    reviewNotes: v.optional(v.string()),
-
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_institution", ["institutionId"])
-    .index("by_student", ["studentId"])
-    .index("by_status", ["status"])
-    .index("by_institution_status", ["institutionId", "status"]),
-
   // ============================================
   // GPS EXTERNAL DEVICES SYSTEM
   // ============================================

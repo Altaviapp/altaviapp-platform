@@ -72,15 +72,7 @@ export const _deleteAllData = internalMutation({
     counts.novedades = novedades.length;
     console.log(`🧹 Deleted ${novedades.length} novedades`);
 
-    // 8. Delete routeChangeRequests (references students, users)
-    const routeChangeRequests = await ctx.db.query("routeChangeRequests").collect();
-    for (const req of routeChangeRequests) {
-      await ctx.db.delete(req._id);
-    }
-    counts.routeChangeRequests = routeChangeRequests.length;
-    console.log(`🧹 Deleted ${routeChangeRequests.length} routeChangeRequests`);
-
-    // 9. Delete incidents (references trips, users)
+    // 8. Delete incidents (references trips, users)
     const incidents = await ctx.db.query("incidents").collect();
     for (const incident of incidents) {
       await ctx.db.delete(incident._id);

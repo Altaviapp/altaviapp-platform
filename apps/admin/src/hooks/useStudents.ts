@@ -49,6 +49,7 @@ export function useStudentMutations() {
   const { userId, institutionId } = useConvexAuth();
 
   const createStudent = useMutation(api.students.createStudent);
+  const createStudentWithInvitation = useMutation(api.students.createStudentWithInvitation);
   const updateStudent = useMutation(api.students.updateStudent);
   const deactivateStudent = useMutation(api.students.deactivateStudent);
   const regenerateQRCode = useMutation(api.students.regenerateQRCode);
@@ -69,6 +70,24 @@ export function useStudentMutations() {
     }) => {
       if (!userId || !institutionId) throw new Error("Not authenticated");
       return createStudent({ userId, institutionId, ...data });
+    },
+
+    createStudentWithInvitation: async (data: {
+      firstName: string;
+      lastName: string;
+      grade: string;
+      dateOfBirth: number;
+      address: string;
+      homeLatitude?: number;
+      homeLongitude?: number;
+      parentPhone: string;
+      parentEmail: string;
+      parentName: string;
+      emergencyContact: string;
+      sendInvitation: boolean;
+    }) => {
+      if (!userId || !institutionId) throw new Error("Not authenticated");
+      return createStudentWithInvitation({ userId, institutionId, ...data });
     },
 
     updateStudent: async (
@@ -206,5 +225,52 @@ export function useStudentImportMutations() {
       if (!userId) throw new Error("Not authenticated");
       return inviteSecondaryGuardian({ userId, studentId, email, name });
     },
+  };
+}
+
+// ============================================
+// PARENT EMAIL CHECK HOOK
+// ============================================
+
+export type ParentEmailStatus = {
+  valid: boolean;
+  error?: string;
+  email?: string;
+  userExists?: boolean;
+  invitationPending?: boolean;
+  needsInvitation?: boolean;
+  hasExistingHousehold?: boolean;
+  householdStudents?: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    grade: string;
+  }>;
+  existingParentName?: string;
+  existingParentPhone?: string;
+  householdSize?: number;
+};
+
+/**
+ * Hook to check parent email status for manual student creation
+ * Returns information about existing households, users, and pending invitations
+ */
+export function useParentEmailCheck(email: string) {
+  const { userId, institutionId } = useConvexAuth();
+
+  // Only query if email is valid format
+  const isValidEmailFormat = email && email.includes("@") && email.includes(".");
+
+  const status = useQuery(
+    api.students.checkParentEmailStatus,
+    userId && institutionId && isValidEmailFormat
+      ? { userId, institutionId, email }
+      : "skip"
+  );
+
+  return {
+    status: status as ParentEmailStatus | undefined,
+    isLoading: status === undefined && isValidEmailFormat,
+    isChecking: status === undefined && isValidEmailFormat && !!email,
   };
 }

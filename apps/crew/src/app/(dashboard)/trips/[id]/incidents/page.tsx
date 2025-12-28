@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, AlertTriangle, Car, Stethoscope, User, MapPin, Clock, Camera, Send, CheckCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Car, Stethoscope, User, MapPin, Clock, Camera, Send, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIncidentMutations, useTripStudents, useCurrentPosition, useConvexAuth } from '@/hooks';
 import type { IncidentType, IncidentSeverity } from '@/hooks';
+import { LoadingState, Card, CardContent, Button, Switch } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 // Map frontend incident types to backend types
 const incidentTypeMap: Record<string, IncidentType> = {
@@ -132,8 +134,12 @@ export default function IncidentsPage() {
   // Loading state
   if (authLoading || studentsLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Reportar Incidente"
+          backHref={`/trips/${tripId}/active`}
+        />
+        <LoadingState message="Cargando..." />
       </div>
     );
   }

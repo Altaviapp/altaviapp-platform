@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Bell, Check, MapPin, Bus, AlertTriangle, CheckCircle, Clock, Calendar, Settings, ChevronDown, Loader2, Info, AlertCircle } from 'lucide-react';
+import { Bell, Check, MapPin, Bus, AlertTriangle, CheckCircle, Clock, Calendar, Settings, ChevronDown, Info, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useNotifications, useUnreadCount, useNotificationMutations, useMyStudents } from '@/hooks';
+import { LoadingState, EmptyState, Card, Badge, Button } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 const filters = [
   { value: 'all', label: 'Todas' },
@@ -137,42 +139,36 @@ export default function NotificationsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-500">Cargando notificaciones...</p>
-        </div>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Notificaciones"
+          subtitle="Centro de notificaciones"
+        />
+        <LoadingState message="Cargando notificaciones..." />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20">
       {/* Header with Settings */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Notificaciones</h2>
-          {unreadCount > 0 && (
-            <p className="text-sm text-gray-500">{unreadCount} sin leer</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllAsRead}
-              className="px-3 py-1.5 text-sm text-primary hover:bg-primary/10 rounded-lg transition-colors"
-            >
-              Marcar todas
-            </button>
-          )}
-          <Link
-            href="/settings"
-            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
-          >
-            <Settings className="w-5 h-5 text-gray-600" />
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Notificaciones"
+        badge={unreadCount > 0 ? <Badge variant="info">{unreadCount} sin leer</Badge> : undefined}
+        actions={[
+          ...(unreadCount > 0 ? [{
+            label: 'Marcar todas',
+            onClick: handleMarkAllAsRead,
+            variant: 'secondary' as const,
+          }] : []),
+          {
+            label: '',
+            icon: Settings,
+            href: '/settings',
+            variant: 'secondary' as const,
+          },
+        ]}
+      />
 
       {/* Filters */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
@@ -227,15 +223,13 @@ export default function NotificationsPage() {
 
       {/* Empty State */}
       {isEmpty && (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-          <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Sin notificaciones</h3>
-          <p className="text-gray-500">
-            {selectedFilter === 'unread'
-              ? 'No tienes notificaciones sin leer.'
-              : 'No tienes notificaciones aún.'}
-          </p>
-        </div>
+        <EmptyState
+          icon={Bell}
+          title="Sin notificaciones"
+          description={selectedFilter === 'unread'
+            ? 'No tienes notificaciones sin leer.'
+            : 'No tienes notificaciones aún.'}
+        />
       )}
 
       {/* Notifications List */}

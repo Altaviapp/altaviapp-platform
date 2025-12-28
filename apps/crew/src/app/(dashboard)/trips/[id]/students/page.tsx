@@ -1,19 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   User,
   Search,
   CheckCircle,
   Clock,
   X,
-  Phone,
   QrCode,
   AlertTriangle,
-  MessageCircle,
   UserMinus,
   Car,
   MapPin,
@@ -30,6 +27,8 @@ import {
   useNovedadesMutations,
   useConvexAuth,
 } from '@/hooks';
+import { LoadingState, Button } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 // Status config for tripStudent status (from backend)
 const tripStudentStatusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
@@ -164,28 +163,29 @@ export default function TripStudentsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-500">Cargando estudiantes...</p>
-        </div>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Lista de Estudiantes"
+          subtitle={mockTripInfo.route}
+          backHref={`/trips/${tripId}/active`}
+        />
+        <LoadingState message="Cargando estudiantes..." />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link href={`/trips/${tripId}/active`} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-lg font-semibold text-gray-900">Lista de Estudiantes</h1>
-          <p className="text-sm text-gray-500">{mockTripInfo.route}</p>
-        </div>
-        {/* Novedades Bell */}
-        {stats.novedades > 0 && (
+      <PageHeader
+        title="Lista de Estudiantes"
+        subtitle={mockTripInfo.route}
+        backHref={`/trips/${tripId}/active`}
+      />
+
+      {/* Novedades Button */}
+      {stats.novedades > 0 && (
+        <div className="flex justify-end -mt-2">
           <button
             onClick={() => setShowNovedadesPanel(!showNovedadesPanel)}
             className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -195,8 +195,8 @@ export default function TripStudentsPage() {
               {stats.novedades}
             </span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Novedades Panel (collapsible) */}
       {showNovedadesPanel && novedades.length > 0 && (

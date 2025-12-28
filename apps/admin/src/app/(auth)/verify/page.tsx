@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Shield, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useMutation } from 'convex/react';
@@ -8,7 +8,7 @@ import { api } from '../../../../../../convex/_generated/api';
 
 type VerifyState = 'loading' | 'success' | 'error';
 
-export default function VerifyPage() {
+function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [state, setState] = useState<VerifyState>('loading');
@@ -110,5 +110,33 @@ export default function VerifyPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function VerifyLoading() {
+  return (
+    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+      <div className="flex justify-center mb-6">
+        <div className="w-16 h-16 bg-accent rounded-xl flex items-center justify-center">
+          <Shield className="w-9 h-9 text-primary" />
+        </div>
+      </div>
+      <div className="text-center">
+        <div className="flex justify-center mb-4">
+          <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          Cargando...
+        </h1>
+      </div>
+    </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<VerifyLoading />}>
+      <VerifyContent />
+    </Suspense>
   );
 }

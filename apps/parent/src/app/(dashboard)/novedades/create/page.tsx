@@ -2,20 +2,19 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import {
-  ArrowLeft,
   UserMinus,
   Car,
   MapPin,
   Clock,
   AlertCircle,
-  Loader2,
   Check,
 } from 'lucide-react';
 import { useMyStudents, useNovedadesMutations } from '@/hooks';
 import type { NovedadType, AffectedRouteType } from '@/hooks';
 import { cn } from '@/lib/utils';
+import { LoadingState, Card, CardContent, Button, Input, Textarea } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 // Novedad type options
 const novedadTypes = [
@@ -158,185 +157,168 @@ function CreateNovedadForm() {
 
   if (studentsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-500">Cargando...</p>
-        </div>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Nueva Novedad"
+          subtitle="Reporta una ausencia o cambio para tu hijo"
+          backHref="/novedades"
+        />
+        <LoadingState message="Cargando..." />
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link
-          href="/novedades"
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Nueva Novedad</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Reporta una ausencia o cambio para tu hijo
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4 pb-20">
+      <PageHeader
+        title="Nueva Novedad"
+        subtitle="Reporta una ausencia o cambio para tu hijo"
+        backHref="/novedades"
+      />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {/* Student Selection */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Selecciona el estudiante *
-          </label>
-          <div className="space-y-2">
-            {students.map((student) => (
-              <button
-                key={student._id}
-                type="button"
-                onClick={() => setSelectedStudent(student._id)}
-                className={cn(
-                  'w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors text-left',
-                  selectedStudent === student._id
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 hover:border-gray-300'
-                )}
-              >
-                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-semibold">
-                  {student.firstName[0]}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">
-                    {student.firstName} {student.lastName}
-                  </p>
-                  <p className="text-sm text-gray-500">{student.grade || 'Sin grado'}</p>
-                </div>
-                {selectedStudent === student._id && (
-                  <Check className="w-5 h-5 text-primary" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Novedad Type Selection */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Tipo de novedad *
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            {novedadTypes.map((type) => {
-              const Icon = type.icon;
-              return (
+        <Card>
+          <CardContent>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Selecciona el estudiante <span className="text-red-500">*</span>
+            </label>
+            <div className="space-y-2">
+              {students.map((student) => (
                 <button
-                  key={type.value}
+                  key={student._id}
                   type="button"
-                  onClick={() => {
-                    setSelectedType(type.value);
-                    // Reset date if switching to/from stop_change
-                    setDate('');
-                  }}
+                  onClick={() => setSelectedStudent(student._id)}
                   className={cn(
-                    'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors',
-                    selectedType === type.value
+                    'w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors text-left',
+                    selectedStudent === student._id
                       ? 'border-primary bg-primary/5'
                       : 'border-gray-200 hover:border-gray-300'
                   )}
                 >
-                  <div className={cn('p-2 rounded-lg', type.bg)}>
-                    <Icon className={cn('w-5 h-5', type.color)} />
+                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-semibold">
+                    {student.firstName[0]}
                   </div>
-                  <span className="text-sm font-medium text-gray-900">{type.label}</span>
-                  <span className="text-xs text-gray-500 text-center">{type.description}</span>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">
+                      {student.firstName} {student.lastName}
+                    </p>
+                    <p className="text-sm text-gray-500">{student.grade || 'Sin grado'}</p>
+                  </div>
+                  {selectedStudent === student._id && (
+                    <Check className="w-5 h-5 text-primary" />
+                  )}
                 </button>
-              );
-            })}
-          </div>
-        </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Novedad Type Selection */}
+        <Card>
+          <CardContent>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Tipo de novedad <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {novedadTypes.map((type) => {
+                const Icon = type.icon;
+                return (
+                  <button
+                    key={type.value}
+                    type="button"
+                    onClick={() => {
+                      setSelectedType(type.value);
+                      // Reset date if switching to/from stop_change
+                      setDate('');
+                    }}
+                    className={cn(
+                      'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors',
+                      selectedType === type.value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                    )}
+                  >
+                    <div className={cn('p-2 rounded-lg', type.bg)}>
+                      <Icon className={cn('w-5 h-5', type.color)} />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{type.label}</span>
+                    <span className="text-xs text-gray-500 text-center">{type.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Date and Route Type */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Fecha *
-            </label>
-            <input
+        <Card>
+          <CardContent className="space-y-4">
+            <Input
               type="date"
+              label="Fecha"
               value={date}
               onChange={(e) => setDate(e.target.value)}
               min={selectedType === 'stop_change' ? minDateForStopChange : minDate}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary"
               required
+              hint={selectedType === 'stop_change' ? 'Los cambios de parada requieren mínimo 48 horas de anticipación' : undefined}
             />
-            {selectedType === 'stop_change' && (
-              <p className="text-xs text-amber-600 mt-1">
-                Los cambios de parada requieren minimo 48 horas de anticipacion
-              </p>
-            )}
-          </div>
 
-          {/* Time input for early_pickup/late_arrival */}
-          {(selectedType === 'early_pickup' || selectedType === 'late_arrival') && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hora *
-              </label>
-              <input
+            {/* Time input for early_pickup/late_arrival */}
+            {(selectedType === 'early_pickup' || selectedType === 'late_arrival') && (
+              <Input
                 type="time"
+                label="Hora"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 required
               />
-            </div>
-          )}
+            )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Aplica a
-            </label>
-            <div className="space-y-2">
-              {routeTypes.map((rt) => (
-                <label
-                  key={rt.value}
-                  className={cn(
-                    'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
-                    selectedRouteType === rt.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-gray-200 hover:border-gray-300'
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="routeType"
-                    value={rt.value}
-                    checked={selectedRouteType === rt.value}
-                    onChange={() => setSelectedRouteType(rt.value)}
-                    className="text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm text-gray-900">{rt.label}</span>
-                </label>
-              ))}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Aplica a
+              </label>
+              <div className="space-y-2">
+                {routeTypes.map((rt) => (
+                  <label
+                    key={rt.value}
+                    className={cn(
+                      'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors min-h-[44px]',
+                      selectedRouteType === rt.value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="routeType"
+                      value={rt.value}
+                      checked={selectedRouteType === rt.value}
+                      onChange={() => setSelectedRouteType(rt.value)}
+                      className="text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm text-gray-900">{rt.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Reason */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Motivo *
-          </label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Describe brevemente el motivo de la novedad..."
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
-            required
-          />
-        </div>
+        <Card>
+          <CardContent>
+            <Textarea
+              label="Motivo"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Describe brevemente el motivo de la novedad..."
+              rows={3}
+              required
+            />
+          </CardContent>
+        </Card>
 
         {/* Error Message */}
         {error && (
@@ -348,26 +330,23 @@ function CreateNovedadForm() {
 
         {/* Actions */}
         <div className="flex gap-3">
-          <Link
-            href="/novedades"
-            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-center font-medium"
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-1"
+            onClick={() => router.push('/novedades')}
           >
             Cancelar
-          </Link>
-          <button
+          </Button>
+          <Button
             type="submit"
-            disabled={isSubmitting || !isReady}
-            className="flex-1 px-4 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            variant="primary"
+            className="flex-1"
+            isLoading={isSubmitting}
+            disabled={!isReady}
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Enviando...
-              </>
-            ) : (
-              'Crear Novedad'
-            )}
-          </button>
+            Crear Novedad
+          </Button>
         </div>
       </form>
     </div>
@@ -377,11 +356,13 @@ function CreateNovedadForm() {
 export default function CreateNovedadPage() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-500">Cargando...</p>
-        </div>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Nueva Novedad"
+          subtitle="Reporta una ausencia o cambio para tu hijo"
+          backHref="/novedades"
+        />
+        <LoadingState message="Cargando..." />
       </div>
     }>
       <CreateNovedadForm />

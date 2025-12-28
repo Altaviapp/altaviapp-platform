@@ -3,8 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
-  Loader2,
   Camera,
   Trash2,
   Save,
@@ -13,9 +11,10 @@ import {
   CheckCircle,
   Upload,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useStudentWithPhoto, useStudentMutations } from '@/hooks';
 import type { Id } from '../../../../../../../../convex/_generated/dataModel';
+import { LoadingState, Card, CardContent, Button, Input } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -142,42 +141,42 @@ export default function StudentEditPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-500">Cargando información...</p>
-        </div>
+      <div className="space-y-4 pb-24">
+        <PageHeader
+          title="Editar Información"
+          subtitle="Cargando..."
+          backHref={`/hijos/${studentId}`}
+        />
+        <LoadingState message="Cargando información..." />
       </div>
     );
   }
 
   if (!student) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh]">
-        <AlertCircle className="w-12 h-12 text-error mb-4" />
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">Estudiante no encontrado</h2>
-        <button
-          onClick={() => router.back()}
-          className="text-primary hover:underline"
-        >
-          Volver
-        </button>
+      <div className="space-y-4 pb-24">
+        <PageHeader
+          title="Editar Información"
+          backHref="/hijos"
+        />
+        <div className="flex flex-col items-center justify-center min-h-[50vh]">
+          <AlertCircle className="w-12 h-12 text-error mb-4" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Estudiante no encontrado</h2>
+          <Button variant="secondary" onClick={() => router.back()}>
+            Volver
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4 pb-24">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-4">
-        <button
-          onClick={() => router.back()}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
-        <h1 className="text-xl font-semibold text-gray-900">Editar Información</h1>
-      </div>
+      <PageHeader
+        title="Editar Información"
+        subtitle={`${student.firstName} ${student.lastName}`}
+        backHref={`/hijos/${studentId}`}
+      />
 
       {/* Status Messages */}
       {error && (
@@ -195,11 +194,12 @@ export default function StudentEditPage() {
       )}
 
       {/* Photo Section */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Camera className="w-5 h-5 text-primary" />
-          Foto de Perfil
-        </h3>
+      <Card>
+        <CardContent>
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Camera className="w-5 h-5 text-primary" />
+            Foto de Perfil
+          </h3>
 
         <div className="flex flex-col items-center gap-4">
           {/* Photo Preview */}
@@ -237,49 +237,35 @@ export default function StudentEditPage() {
           {/* Actions */}
           <div className="flex items-center gap-2">
             {selectedFile ? (
-              <button
+              <Button
                 onClick={handlePhotoUpload}
-                disabled={isUploadingPhoto}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium',
-                  'bg-primary text-white hover:bg-primary/90 transition-colors',
-                  isUploadingPhoto && 'opacity-50 cursor-not-allowed'
-                )}
+                isLoading={isUploadingPhoto}
+                leftIcon={Upload}
+                size="sm"
               >
-                {isUploadingPhoto ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Upload className="w-4 h-4" />
-                )}
                 Subir Foto
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                leftIcon={Camera}
+                size="sm"
               >
-                <Camera className="w-4 h-4" />
                 {photoPreview ? 'Cambiar' : 'Agregar'} Foto
-              </button>
+              </Button>
             )}
 
             {student.photoUrl && (
-              <button
+              <Button
+                variant="danger"
                 onClick={handlePhotoDelete}
-                disabled={isDeletingPhoto}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium',
-                  'bg-error/10 text-error hover:bg-error/20 transition-colors',
-                  isDeletingPhoto && 'opacity-50 cursor-not-allowed'
-                )}
+                isLoading={isDeletingPhoto}
+                leftIcon={Trash2}
+                size="sm"
               >
-                {isDeletingPhoto ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Trash2 className="w-4 h-4" />
-                )}
                 Eliminar
-              </button>
+              </Button>
             )}
           </div>
 
@@ -287,11 +273,13 @@ export default function StudentEditPage() {
             Máximo 5MB. Formatos: JPG, PNG, WebP
           </p>
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Student Info (Read Only) */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h3 className="font-semibold text-gray-900 mb-4">Información del Estudiante</h3>
+      <Card>
+        <CardContent>
+          <h3 className="font-semibold text-gray-900 mb-4">Información del Estudiante</h3>
         <p className="text-sm text-gray-500 mb-4">
           Esta información solo puede ser modificada por la institución
         </p>
@@ -306,79 +294,54 @@ export default function StudentEditPage() {
             <p className="text-sm font-medium text-gray-900">{student.grade}</p>
           </div>
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Editable Fields */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h3 className="font-semibold text-gray-900 mb-4">Información Editable</h3>
+      <Card>
+        <CardContent>
+          <h3 className="font-semibold text-gray-900 mb-4">Información Editable</h3>
 
-        <div className="space-y-4">
-          {/* Address */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Dirección del Hogar
-            </label>
-            <input
+          <div className="space-y-4">
+            <Input
+              label="Dirección del Hogar"
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Ingrese la dirección completa"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
-          </div>
 
-          {/* Parent Phone */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Teléfono del Padre/Madre
-            </label>
-            <input
+            <Input
+              label="Teléfono del Padre/Madre"
               type="tel"
               value={parentPhone}
               onChange={(e) => setParentPhone(e.target.value)}
               placeholder="+593XXXXXXXXX"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              hint="Formato: +593XXXXXXXXX"
             />
-            <p className="text-xs text-gray-500 mt-1">Formato: +593XXXXXXXXX</p>
-          </div>
 
-          {/* Emergency Contact Secondary */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Contacto de Emergencia Secundario
-            </label>
-            <input
+            <Input
+              label="Contacto de Emergencia Secundario"
               type="text"
               value={emergencyContactSecondary}
               onChange={(e) => setEmergencyContactSecondary(e.target.value)}
               placeholder="Nombre y teléfono del contacto"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              hint="Ejemplo: María García - +593999123456"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Ejemplo: María García - +593999123456
-            </p>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Save Button (Fixed at bottom) */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 lg:relative lg:border-0 lg:bg-transparent lg:p-0">
-        <button
+        <Button
           onClick={handleSave}
-          disabled={isSaving}
-          className={cn(
-            'w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium',
-            'bg-primary text-white hover:bg-primary/90 transition-colors',
-            isSaving && 'opacity-50 cursor-not-allowed'
-          )}
+          isLoading={isSaving}
+          leftIcon={Save}
+          className="w-full"
         >
-          {isSaving ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Save className="w-5 h-5" />
-          )}
           Guardar Cambios
-        </button>
+        </Button>
       </div>
     </div>
   );

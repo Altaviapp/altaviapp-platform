@@ -23,7 +23,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouteWithStudents, useNovedadesForRoute, useTripOperations } from '@/hooks';
-import { LoadingState } from '@/components/shared/LoadingState';
+import { LoadingState, Card, CardContent, Button } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 const novedadTypeConfig = {
   absence: {
@@ -141,7 +142,12 @@ export default function RouteStartPage() {
 
   // Loading state
   if (routeLoading) {
-    return <LoadingState variant="page" />;
+    return (
+      <div className="space-y-4 pb-20">
+        <PageHeader title="Iniciar Viaje" backHref="/routes" />
+        <LoadingState message="Cargando ruta..." />
+      </div>
+    );
   }
 
   if (!route) {

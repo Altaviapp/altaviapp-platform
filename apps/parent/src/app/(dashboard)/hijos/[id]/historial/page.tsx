@@ -2,23 +2,21 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
-  ArrowLeft,
   Clock,
   Bus,
   Calendar,
   CheckCircle,
   XCircle,
-  Loader2,
   AlertCircle,
   User,
   MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudent, useTripHistory } from '@/hooks';
-import { LoadingState } from '@/components/shared/LoadingState';
 import type { Id } from '../../../../../../../../convex/_generated/dataModel';
+import { LoadingState, EmptyState, Card, CardContent, Button } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 type PeriodFilter = 7 | 30 | 90;
 
@@ -71,87 +69,76 @@ export default function StudentHistorialPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="w-10 h-10 bg-gray-100 rounded-lg" />
-          <div className="animate-pulse">
-            <div className="h-5 bg-gray-200 rounded w-32 mb-1" />
-            <div className="h-4 bg-gray-100 rounded w-24" />
-          </div>
-        </div>
-        <LoadingState variant="list" />
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Historial de Viajes"
+          subtitle="Cargando..."
+          backHref={`/hijos/${studentId}`}
+        />
+        <LoadingState message="Cargando historial..." />
       </div>
     );
   }
 
   if (!student) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh]">
-        <AlertCircle className="w-12 h-12 text-error mb-4" />
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">Estudiante no encontrado</h2>
-        <button
-          onClick={() => router.back()}
-          className="text-primary hover:underline"
-        >
-          Volver
-        </button>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Historial de Viajes"
+          backHref="/hijos"
+        />
+        <div className="flex flex-col items-center justify-center min-h-[50vh]">
+          <AlertCircle className="w-12 h-12 text-error mb-4" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Estudiante no encontrado</h2>
+          <button
+            onClick={() => router.back()}
+            className="text-primary hover:underline"
+          >
+            Volver
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-4">
-        <button
-          onClick={() => router.back()}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Historial de Viajes</h1>
-          <p className="text-sm text-gray-500">
-            {student.firstName} {student.lastName}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4 pb-20">
+      <PageHeader
+        title="Historial de Viajes"
+        subtitle={`${student.firstName} ${student.lastName}`}
+        backHref={`/hijos/${studentId}`}
+      />
 
       {/* Period Filter */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-gray-400" />
-          <span className="text-sm text-gray-600 mr-2">Período:</span>
-          <div className="flex gap-2">
-            {([7, 30, 90] as PeriodFilter[]).map((days) => (
-              <button
-                key={days}
-                onClick={() => setPeriodDays(days)}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  periodDays === days
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                )}
-              >
-                {days === 7 ? 'Última semana' : days === 30 ? 'Último mes' : '3 meses'}
-              </button>
-            ))}
+      <Card>
+        <CardContent>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-600 mr-2">Período:</span>
+            <div className="flex gap-2">
+              {([7, 30, 90] as PeriodFilter[]).map((days) => (
+                <Button
+                  key={days}
+                  type="button"
+                  variant={periodDays === days ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => setPeriodDays(days)}
+                >
+                  {days === 7 ? '7 días' : days === 30 ? '30 días' : '3 meses'}
+                </Button>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Trips List */}
       {isEmpty ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Bus className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="font-semibold text-gray-900 mb-1">Sin viajes en este período</h3>
-          <p className="text-sm text-gray-500">
-            No se encontraron viajes en los últimos {periodDays} días
-          </p>
-        </div>
+        <EmptyState
+          icon={Bus}
+          title="Sin viajes en este período"
+          description={`No se encontraron viajes en los últimos ${periodDays} días`}
+        />
       ) : (
         <div className="space-y-4">
           {sortedDates.map((dateKey) => (

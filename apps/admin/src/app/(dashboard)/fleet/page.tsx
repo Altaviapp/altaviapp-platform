@@ -2,311 +2,342 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Bus, Users, UserCheck, Plus, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Bus, Users, UserCheck, Plus } from 'lucide-react';
+import { Badge } from '@/components/core';
+import { PageHeader, SearchFilter, DataTable, type Column } from '@/components/shared';
+import { FleetTabs, type FleetTabId } from '@/components/modules/fleet';
+import { VEHICLE_STATUS_CONFIG } from '@/lib/constants';
 import { useVehicles, useDrivers, useMonitors } from '@/hooks';
 
-const statusConfig = {
-  active: { label: 'Activo', color: 'bg-success text-white' },
-  maintenance: { label: 'Mantenimiento', color: 'bg-warning text-white' },
-  out_of_service: { label: 'Fuera de servicio', color: 'bg-gray-400 text-white' },
-  inactive: { label: 'Inactivo', color: 'bg-gray-400 text-white' },
-  on_route: { label: 'En ruta', color: 'bg-success text-white' },
-  available: { label: 'Disponible', color: 'bg-info text-white' },
-};
-
+/**
+ * Fleet Management Page
+ *
+ * Manages vehicles, drivers, monitors, and GPS devices.
+ * Uses tabbed interface with search and filtering.
+ *
+ * PRD Reference: Fleet Management Module
+ */
 export default function FleetPage() {
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState('vehicles');
+  const [activeTab, setActiveTab] = useState<FleetTabId>('vehicles');
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   // Real data from Convex
   const { vehicles, isLoading: vehiclesLoading } = useVehicles();
   const { drivers, isLoading: driversLoading } = useDrivers();
   const { monitors, isLoading: monitorsLoading } = useMonitors();
 
-  const tabs = [
-    { id: 'vehicles', label: 'Vehículos', icon: Bus, count: vehicles.length },
-    { id: 'drivers', label: 'Conductores', icon: UserCheck, count: drivers.length },
-    { id: 'monitors', label: 'Monitores', icon: Users, count: monitors.length },
-  ];
-
-  // Filter data based on search
+  // Filter data based on search and status
   const filteredVehicles = useMemo(() => {
-    if (!searchQuery) return vehicles;
-    const query = searchQuery.toLowerCase();
-    return vehicles.filter(v =>
-      v.licensePlate?.toLowerCase().includes(query) ||
-      v.brand?.toLowerCase().includes(query) ||
-      v.model?.toLowerCase().includes(query)
-    );
-  }, [vehicles, searchQuery]);
+    let result = vehicles;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (v) =>
+          v.licensePlate?.toLowerCase().includes(query) ||
+          v.brand?.toLowerCase().includes(query) ||
+          v.model?.toLowerCase().includes(query)
+      );
+    }
+    if (statusFilter) {
+      result = result.filter((v) => v.status === statusFilter);
+    }
+    return result;
+  }, [vehicles, searchQuery, statusFilter]);
 
   const filteredDrivers = useMemo(() => {
     if (!searchQuery) return drivers;
     const query = searchQuery.toLowerCase();
-    return drivers.filter(d =>
-      d.user?.name?.toLowerCase().includes(query) ||
-      d.phone?.toLowerCase().includes(query)
+    return drivers.filter(
+      (d) =>
+        d.user?.name?.toLowerCase().includes(query) ||
+        d.phone?.toLowerCase().includes(query)
     );
   }, [drivers, searchQuery]);
 
   const filteredMonitors = useMemo(() => {
     if (!searchQuery) return monitors;
     const query = searchQuery.toLowerCase();
-    return monitors.filter(m =>
-      m.user?.name?.toLowerCase().includes(query) ||
-      m.phone?.toLowerCase().includes(query)
+    return monitors.filter(
+      (m) =>
+        m.user?.name?.toLowerCase().includes(query) ||
+        m.phone?.toLowerCase().includes(query)
     );
   }, [monitors, searchQuery]);
 
-  const isLoading = activeTab === 'vehicles' ? vehiclesLoading : activeTab === 'drivers' ? driversLoading : monitorsLoading;
+  // Get current loading state
+  const isLoading =
+    activeTab === 'vehicles'
+      ? vehiclesLoading
+      : activeTab === 'drivers'
+        ? driversLoading
+        : monitorsLoading;
+
+  // Define table columns for each tab
+  const vehicleColumns: Column<(typeof vehicles)[0]>[] = [
+    {
+      key: 'licensePlate',
+      header: 'Placa',
+      render: (v) => <span className="font-medium text-gray-900">{v.licensePlate}</span>,
+    },
+    {
+      key: 'model',
+      header: 'Modelo',
+      render: (v) => (
+        <div>
+          <p className="text-gray-900">
+            {v.brand} {v.model}
+          </p>
+          <p className="text-sm text-gray-500">{v.year}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'capacity',
+      header: 'Capacidad',
+      render: (v) => <span className="text-gray-600">{v.capacity} pasajeros</span>,
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      render: (v) => {
+        const config = VEHICLE_STATUS_CONFIG[v.status as keyof typeof VEHICLE_STATUS_CONFIG];
+        const variant =
+          v.status === 'active'
+            ? 'success'
+            : v.status === 'maintenance'
+              ? 'warning'
+              : 'danger';
+        return <Badge variant={variant}>{config?.label || v.status}</Badge>;
+      },
+    },
+  ];
+
+  const driverColumns: Column<(typeof drivers)[0]>[] = [
+    {
+      key: 'name',
+      header: 'Nombre',
+      render: (d) => (
+        <span className="font-medium text-gray-900">{d.user?.name || 'Sin nombre'}</span>
+      ),
+    },
+    {
+      key: 'phone',
+      header: 'Teléfono',
+      render: (d) => <span className="text-gray-600">{d.phone || '-'}</span>,
+    },
+    {
+      key: 'license',
+      header: 'Licencia',
+      render: (d) => (
+        <span className="text-gray-600">
+          {d.licenseNumber ? `${d.licenseType || ''} ${d.licenseNumber}` : '-'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      render: (d) => {
+        const isActive = d.isActive !== false;
+        return (
+          <Badge variant={isActive ? 'success' : 'default'}>
+            {isActive ? 'Activo' : 'Inactivo'}
+          </Badge>
+        );
+      },
+    },
+  ];
+
+  const monitorColumns: Column<(typeof monitors)[0]>[] = [
+    {
+      key: 'name',
+      header: 'Nombre',
+      render: (m) => (
+        <span className="font-medium text-gray-900">{m.user?.name || 'Sin nombre'}</span>
+      ),
+    },
+    {
+      key: 'phone',
+      header: 'Teléfono',
+      render: (m) => <span className="text-gray-600">{m.phone || '-'}</span>,
+    },
+    {
+      key: 'certifications',
+      header: 'Certificaciones',
+      render: (m) => (
+        <div className="flex gap-1 flex-wrap">
+          {m.firstAidCertified && (
+            <Badge variant="success" size="sm">
+              Primeros auxilios
+            </Badge>
+          )}
+          {m.childCareCertified && (
+            <Badge variant="info" size="sm">
+              Cuidado infantil
+            </Badge>
+          )}
+          {!m.firstAidCertified && !m.childCareCertified && (
+            <span className="text-gray-500">-</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Estado',
+      render: (m) => {
+        const isActive = m.isActive !== false;
+        return (
+          <Badge variant={isActive ? 'success' : 'default'}>
+            {isActive ? 'Activo' : 'Inactivo'}
+          </Badge>
+        );
+      },
+    },
+  ];
+
+  // Get current action button config
+  const getActionConfig = () => {
+    switch (activeTab) {
+      case 'vehicles':
+        return { href: '/fleet/vehicles/new', label: 'Nuevo Vehículo' };
+      case 'drivers':
+        return { href: '/fleet/drivers/new', label: 'Nuevo Conductor' };
+      case 'monitors':
+        return { href: '/fleet/monitors/new', label: 'Nuevo Monitor' };
+      default:
+        return { href: '/fleet/gps-devices', label: 'Configurar GPS' };
+    }
+  };
+
+  const actionConfig = getActionConfig();
+
+  // Get empty state config
+  const getEmptyStateConfig = () => {
+    switch (activeTab) {
+      case 'vehicles':
+        return {
+          icon: Bus,
+          title: 'No hay vehículos',
+          description: 'Agrega vehículos para comenzar',
+          action: { label: 'Nuevo Vehículo', href: '/fleet/vehicles/new' },
+        };
+      case 'drivers':
+        return {
+          icon: UserCheck,
+          title: 'No hay conductores',
+          description: 'Invita conductores para comenzar',
+          action: { label: 'Invitar Conductor', href: '/settings/invitations/new' },
+        };
+      case 'monitors':
+        return {
+          icon: Users,
+          title: 'No hay monitores',
+          description: 'Invita monitores para comenzar',
+          action: { label: 'Invitar Monitor', href: '/settings/invitations/new' },
+        };
+      default:
+        return {
+          title: 'Sin datos',
+          description: 'No hay datos disponibles',
+        };
+    }
+  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Flota</h1>
-          <p className="text-gray-500">Administra vehículos, conductores y monitores</p>
-        </div>
-        <Link
-          href={activeTab === 'vehicles' ? '/fleet/vehicles/new' : activeTab === 'drivers' ? '/fleet/drivers/new' : '/fleet/monitors/new'}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          {activeTab === 'vehicles' ? 'Nuevo Vehículo' : activeTab === 'drivers' ? 'Nuevo Conductor' : 'Nuevo Monitor'}
-        </Link>
-      </div>
+      <PageHeader
+        title="Gestión de Flota"
+        subtitle="Administra vehículos, conductores y monitores"
+        actions={[
+          {
+            label: actionConfig.label,
+            href: actionConfig.href,
+            icon: Plus,
+            variant: 'primary',
+          },
+        ]}
+      />
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'flex items-center gap-2 px-4 py-3 border-b-2 transition-colors',
-                activeTab === tab.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              )}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="font-medium">{tab.label}</span>
-              <span className={cn(
-                'px-2 py-0.5 text-xs rounded-full',
-                activeTab === tab.id ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-600'
-              )}>
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <FleetTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        vehicleCount={vehicles.length}
+        driverCount={drivers.length}
+        monitorCount={monitors.length}
+      />
 
       {/* Search & Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder={`Buscar ${activeTab === 'vehicles' ? 'vehículos' : activeTab === 'drivers' ? 'conductores' : 'monitores'}...`}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
-        </div>
-        <select className="px-4 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
-          <option value="">Todos los estados</option>
-          <option value="active">Activo</option>
-          <option value="maintenance">Mantenimiento</option>
-          <option value="inactive">Inactivo</option>
-        </select>
-      </div>
+      <SearchFilter
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder={`Buscar ${activeTab === 'vehicles' ? 'vehículos' : activeTab === 'drivers' ? 'conductores' : 'monitores'}...`}
+        filters={
+          activeTab === 'vehicles'
+            ? [
+                {
+                  key: 'status',
+                  label: 'Todos los estados',
+                  value: statusFilter,
+                  options: [
+                    { value: 'active', label: 'Activo' },
+                    { value: 'maintenance', label: 'Mantenimiento' },
+                    { value: 'out_of_service', label: 'Fuera de servicio' },
+                  ],
+                },
+              ]
+            : []
+        }
+        onFilterChange={(key, value) => {
+          if (key === 'status') setStatusFilter(value);
+        }}
+      />
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="bg-white rounded-lg shadow p-12 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="ml-3 text-gray-500">Cargando datos...</span>
-        </div>
+      {/* Tables */}
+      {activeTab === 'vehicles' && (
+        <DataTable
+          columns={vehicleColumns}
+          data={filteredVehicles}
+          isLoading={isLoading}
+          keyExtractor={(v) => v._id}
+          rowHref={(v) => `/fleet/vehicles/${v._id}`}
+          emptyState={getEmptyStateConfig()}
+        />
       )}
 
-      {/* Vehicles Table */}
-      {!isLoading && activeTab === 'vehicles' && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {filteredVehicles.length === 0 ? (
-            <div className="text-center py-12">
-              <Bus className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay vehículos</h3>
-              <p className="text-gray-500 mb-4">Agrega vehículos para comenzar</p>
-              <Link href="/fleet/vehicles/new" className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg">
-                <Plus className="w-5 h-5" /> Nuevo Vehículo
-              </Link>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Placa</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Modelo</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Capacidad</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {filteredVehicles.map((vehicle) => {
-                      const status = statusConfig[vehicle.status as keyof typeof statusConfig] || statusConfig.inactive;
-                      return (
-                        <tr
-                          key={vehicle._id}
-                          onClick={() => router.push(`/fleet/vehicles/${vehicle._id}`)}
-                          className="hover:bg-gray-50 cursor-pointer"
-                        >
-                          <td className="px-4 py-3">
-                            <span className="font-medium text-gray-900">{vehicle.licensePlate}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div>
-                              <p className="text-gray-900">{vehicle.brand} {vehicle.model}</p>
-                              <p className="text-sm text-gray-500">{vehicle.year}</p>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">{vehicle.capacity} pasajeros</td>
-                          <td className="px-4 py-3">
-                            <span className={cn('px-2 py-1 text-xs rounded-full', status.color)}>
-                              {status.label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <p className="text-sm text-gray-500">Mostrando {filteredVehicles.length} de {vehicles.length}</p>
-                <div className="flex gap-2">
-                  <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled>
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled>
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+      {activeTab === 'drivers' && (
+        <DataTable
+          columns={driverColumns}
+          data={filteredDrivers}
+          isLoading={isLoading}
+          keyExtractor={(d) => d._id}
+          rowHref={(d) => `/fleet/drivers/${d._id}`}
+          emptyState={getEmptyStateConfig()}
+        />
       )}
 
-      {/* Drivers Table */}
-      {!isLoading && activeTab === 'drivers' && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {filteredDrivers.length === 0 ? (
-            <div className="text-center py-12">
-              <UserCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay conductores</h3>
-              <p className="text-gray-500 mb-4">Agrega conductores para comenzar</p>
-              <Link href="/fleet/drivers/new" className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg">
-                <Plus className="w-5 h-5" /> Nuevo Conductor
-              </Link>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nombre</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teléfono</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Licencia</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredDrivers.map((driver) => {
-                    const isActive = driver.isActive !== false;
-                    return (
-                      <tr
-                        key={driver._id}
-                        onClick={() => router.push(`/fleet/drivers/${driver._id}`)}
-                        className="hover:bg-gray-50 cursor-pointer"
-                      >
-                        <td className="px-4 py-3 font-medium text-gray-900">{driver.user?.name || 'Sin nombre'}</td>
-                        <td className="px-4 py-3 text-gray-600">{driver.phone || '-'}</td>
-                        <td className="px-4 py-3 text-gray-600">{driver.licenseNumber || '-'}</td>
-                        <td className="px-4 py-3">
-                          <span className={cn('px-2 py-1 text-xs rounded-full', isActive ? 'bg-success text-white' : 'bg-gray-400 text-white')}>
-                            {isActive ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+      {activeTab === 'monitors' && (
+        <DataTable
+          columns={monitorColumns}
+          data={filteredMonitors}
+          isLoading={isLoading}
+          keyExtractor={(m) => m._id}
+          rowHref={(m) => `/fleet/monitors/${m._id}`}
+          emptyState={getEmptyStateConfig()}
+        />
       )}
 
-      {/* Monitors Table */}
-      {!isLoading && activeTab === 'monitors' && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {filteredMonitors.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay monitores</h3>
-              <p className="text-gray-500 mb-4">Agrega monitores para comenzar</p>
-              <Link href="/fleet/monitors/new" className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg">
-                <Plus className="w-5 h-5" /> Nuevo Monitor
-              </Link>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Nombre</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Teléfono</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Certificaciones</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredMonitors.map((monitor) => {
-                    const isActive = monitor.isActive !== false;
-                    return (
-                      <tr
-                        key={monitor._id}
-                        onClick={() => router.push(`/fleet/monitors/${monitor._id}`)}
-                        className="hover:bg-gray-50 cursor-pointer"
-                      >
-                        <td className="px-4 py-3 font-medium text-gray-900">{monitor.user?.name || 'Sin nombre'}</td>
-                        <td className="px-4 py-3 text-gray-600">{monitor.phone || '-'}</td>
-                        <td className="px-4 py-3 text-gray-600">
-                          {monitor.firstAidCertified && <span className="text-success text-sm">Primeros auxilios</span>}
-                          {monitor.childCareCertified && <span className="text-info text-sm ml-2">Cuidado infantil</span>}
-                          {!monitor.firstAidCertified && !monitor.childCareCertified && '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={cn('px-2 py-1 text-xs rounded-full', isActive ? 'bg-success text-white' : 'bg-gray-400 text-white')}>
-                            {isActive ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+      {activeTab === 'gps-devices' && (
+        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+          <p className="text-gray-500">
+            Configuración de dispositivos GPS disponible en{' '}
+            <Link href="/fleet/gps-devices" className="text-primary hover:underline">
+              /fleet/gps-devices
+            </Link>
+          </p>
         </div>
       )}
     </div>

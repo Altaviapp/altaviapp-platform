@@ -1,9 +1,10 @@
 'use client';
 
-import { Calendar, Bus } from 'lucide-react';
+import { Bus } from 'lucide-react';
 import { useWeeklySchedule } from '@/hooks';
 import { DayScheduleCard } from '@/components/calendar';
-import { LoadingState } from '@/components/shared/LoadingState';
+import { LoadingState, EmptyState } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 export default function CalendarioPage() {
   const { weekdaySchedule, isLoading, hasSchedule } = useWeeklySchedule();
@@ -27,47 +28,29 @@ export default function CalendarioPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        {/* Header skeleton */}
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-48 mb-2" />
-          <div className="h-4 bg-gray-100 rounded w-64" />
-        </div>
-
-        {/* Cards skeleton */}
-        <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <LoadingState key={i} variant="card" />
-          ))}
-        </div>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Calendario Semanal"
+          subtitle="Viajes programados de tus hijos para esta semana"
+        />
+        <LoadingState message="Cargando calendario..." />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Calendar className="w-6 h-6 text-primary" />
-          Calendario Semanal
-        </h1>
-        <p className="text-gray-500 mt-1">
-          Viajes programados de tus hijos para esta semana
-        </p>
-      </div>
+    <div className="space-y-4 pb-20">
+      <PageHeader
+        title="Calendario Semanal"
+        subtitle="Viajes programados de tus hijos para esta semana"
+      />
 
-      {/* Weekly schedule */}
       {!hasSchedule ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Bus className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="font-semibold text-gray-900 mb-1">Sin rutas asignadas</h3>
-          <p className="text-sm text-gray-500">
-            Tus hijos no tienen rutas asignadas todavía. Contacta a tu institución para más información.
-          </p>
-        </div>
+        <EmptyState
+          icon={Bus}
+          title="Sin rutas asignadas"
+          description="Tus hijos no tienen rutas asignadas todavía. Contacta a tu institución para más información."
+        />
       ) : (
         <div className="space-y-4">
           {weekdaySchedule.map((day) => (

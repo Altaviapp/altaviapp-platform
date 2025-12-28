@@ -504,7 +504,7 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 
 *Grados*:
 - [x] Grados personalizados por institución
-- [x] Presets: Prekinder a 3ro Bachillerato
+- [x] Presets: Prekinder a 12vo
 - [x] Usados en formularios de estudiantes
 
 **Componentes clave**:
@@ -567,10 +567,3 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - [x] Formato hora: 24h
 
 ---
-
-## Referencias
-
-- **Wireframes**: [docs/design/ADMIN_WIREFRAMES.md](../design/ADMIN_WIREFRAMES.md)
-- **API**: [docs/api/API_ENDPOINTS.md](../api/API_ENDPOINTS.md)
-- **Schema**: [docs/database/DATABASE_SCHEMA.md](../database/DATABASE_SCHEMA.md)
-- **Tech Spec**: [Technical-Specification.md](../../Technical-Specification.md)

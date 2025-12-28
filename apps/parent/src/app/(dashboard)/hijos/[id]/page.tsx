@@ -5,12 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   GraduationCap,
-  ArrowLeft,
   Loader2,
   MapPin,
   Phone,
   Mail,
-  Calendar,
   Edit,
   QrCode,
   Download,
@@ -30,6 +28,8 @@ import { useStudentWithPhoto, useStudentMutations } from '@/hooks';
 import { NovedadContextButton } from '@/components/home/NovedadContextButton';
 import type { Id } from '../../../../../../../convex/_generated/dataModel';
 import QRCode from 'qrcode';
+import { LoadingState, Card, CardContent, Button, Input, Badge } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 export default function StudentDetailPage() {
   const params = useParams();
@@ -171,50 +171,51 @@ export default function StudentDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-gray-500">Cargando información...</p>
-        </div>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Detalle del Estudiante"
+          subtitle="Cargando..."
+          backHref="/hijos"
+        />
+        <LoadingState message="Cargando información..." />
       </div>
     );
   }
 
   if (!student) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh]">
-        <AlertCircle className="w-12 h-12 text-error mb-4" />
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">Estudiante no encontrado</h2>
-        <p className="text-gray-500 mb-4">No se pudo cargar la información del estudiante.</p>
-        <button
-          onClick={() => router.back()}
-          className="text-primary hover:underline"
-        >
-          Volver
-        </button>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Detalle del Estudiante"
+          backHref="/hijos"
+        />
+        <div className="flex flex-col items-center justify-center min-h-[50vh]">
+          <AlertCircle className="w-12 h-12 text-error mb-4" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Estudiante no encontrado</h2>
+          <p className="text-gray-500 mb-4">No se pudo cargar la información del estudiante.</p>
+          <Button variant="secondary" onClick={() => router.back()}>
+            Volver
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-4">
-        <button
-          onClick={() => router.back()}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
-        <h1 className="text-xl font-semibold text-gray-900">Detalle del Estudiante</h1>
-      </div>
+    <div className="space-y-4 pb-20">
+      <PageHeader
+        title="Detalle del Estudiante"
+        subtitle={`${student.firstName} ${student.lastName}`}
+        backHref="/hijos"
+      />
 
       {/* Student Info Card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-start gap-4 mb-4">
-          {/* Avatar/Photo */}
-          <div className="relative">
-            {student.photoUrl ? (
+      <Card>
+        <CardContent>
+          <div className="flex items-start gap-4 mb-4">
+            {/* Avatar/Photo */}
+            <div className="relative">
+              {student.photoUrl ? (
               <img
                 src={student.photoUrl}
                 alt={`${student.firstName} ${student.lastName}`}
@@ -240,14 +241,9 @@ export default function StudentDetailPage() {
             </h2>
             <p className="text-sm text-gray-600">{student.grade}</p>
             <div className="flex items-center gap-2 mt-2">
-              <span className={cn(
-                'text-xs px-2 py-1 rounded-full',
-                student.isActive
-                  ? 'bg-success/10 text-success'
-                  : 'bg-gray-100 text-gray-500'
-              )}>
+              <Badge variant={student.isActive ? 'success' : 'default'}>
                 {student.isActive ? 'Activo' : 'Inactivo'}
-              </span>
+              </Badge>
             </div>
           </div>
 
@@ -274,7 +270,8 @@ export default function StudentDetailPage() {
             </div>
           </div>
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3">
@@ -310,145 +307,153 @@ export default function StudentDetailPage() {
       </div>
 
       {/* Address Card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-gray-900">Dirección</h3>
+      <Card>
+        <CardContent>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-gray-900">Dirección</h3>
+            </div>
+            <Link
+              href={`/hijos/${student._id}/location`}
+              className="text-sm text-primary hover:underline"
+            >
+              Editar ubicación
+            </Link>
           </div>
-          <Link
-            href={`/hijos/${student._id}/location`}
-            className="text-sm text-primary hover:underline"
-          >
-            Editar ubicación
-          </Link>
-        </div>
-        <p className="text-sm text-gray-700">{student.address}</p>
-        {student.homeLatitude && student.homeLongitude ? (
-          <p className="text-xs text-success mt-2 flex items-center gap-1">
-            <span className="w-2 h-2 bg-success rounded-full" />
-            Ubicación GPS configurada
-          </p>
-        ) : (
-          <p className="text-xs text-warning mt-2 flex items-center gap-1">
-            <span className="w-2 h-2 bg-warning rounded-full" />
-            Ubicación GPS pendiente
-          </p>
-        )}
-      </div>
+          <p className="text-sm text-gray-700">{student.address}</p>
+          {student.homeLatitude && student.homeLongitude ? (
+            <p className="text-xs text-success mt-2 flex items-center gap-1">
+              <span className="w-2 h-2 bg-success rounded-full" />
+              Ubicación GPS configurada
+            </p>
+          ) : (
+            <p className="text-xs text-warning mt-2 flex items-center gap-1">
+              <span className="w-2 h-2 bg-warning rounded-full" />
+              Ubicación GPS pendiente
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Contact Info Card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center gap-2 mb-4">
-          <User className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-gray-900">Información de Contacto</h3>
-        </div>
+      <Card>
+        <CardContent>
+          <div className="flex items-center gap-2 mb-4">
+            <User className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold text-gray-900">Información de Contacto</h3>
+          </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <User className="w-5 h-5 text-gray-400" />
-            <div className="flex-1">
-              <p className="text-xs text-gray-500">Padre/Madre</p>
-              <p className="text-sm font-medium text-gray-900">{student.parentName}</p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <User className="w-5 h-5 text-gray-400" />
+              <div className="flex-1">
+                <p className="text-xs text-gray-500">Padre/Madre</p>
+                <p className="text-sm font-medium text-gray-900">{student.parentName}</p>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <Phone className="w-5 h-5 text-gray-400" />
-            <div className="flex-1">
-              <p className="text-xs text-gray-500">Teléfono</p>
-              <a href={`tel:${student.parentPhone}`} className="text-sm font-medium text-primary hover:underline">
-                {student.parentPhone}
-              </a>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Phone className="w-5 h-5 text-gray-400" />
+              <div className="flex-1">
+                <p className="text-xs text-gray-500">Teléfono</p>
+                <a href={`tel:${student.parentPhone}`} className="text-sm font-medium text-primary hover:underline">
+                  {student.parentPhone}
+                </a>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <Mail className="w-5 h-5 text-gray-400" />
-            <div className="flex-1">
-              <p className="text-xs text-gray-500">Email</p>
-              <a href={`mailto:${student.parentEmail}`} className="text-sm font-medium text-primary hover:underline">
-                {student.parentEmail}
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Emergency Contacts Card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Phone className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-gray-900">Contactos de Emergencia</h3>
-          </div>
-          <Link
-            href={`/hijos/${student._id}/edit`}
-            className="text-sm text-primary hover:underline"
-          >
-            Editar
-          </Link>
-        </div>
-
-        <div className="space-y-3">
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500">Contacto Principal</p>
-            <p className="text-sm font-medium text-gray-900">{student.emergencyContact}</p>
-          </div>
-
-          {student.emergencyContactSecondary ? (
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-500">Contacto Secundario</p>
-              <p className="text-sm font-medium text-gray-900">{student.emergencyContactSecondary}</p>
-            </div>
-          ) : (
-            <div className="p-3 bg-warning/10 rounded-lg">
-              <p className="text-xs text-warning">Sin contacto secundario configurado</p>
-              <Link
-                href={`/hijos/${student._id}/edit`}
-                className="text-xs text-primary hover:underline"
-              >
-                Agregar contacto
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Secondary Guardian Card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-gray-900">Segundo Tutor</h3>
-          </div>
-        </div>
-
-        {student.secondaryParentEmail ? (
-          <div className="p-3 bg-success/10 rounded-lg">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-success" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">{student.secondaryParentEmail}</p>
-                <p className="text-xs text-success">Segundo tutor configurado</p>
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <Mail className="w-5 h-5 text-gray-400" />
+              <div className="flex-1">
+                <p className="text-xs text-gray-500">Email</p>
+                <a href={`mailto:${student.parentEmail}`} className="text-sm font-medium text-primary hover:underline">
+                  {student.parentEmail}
+                </a>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-gray-600">
-              Agrega un segundo tutor (cónyuge, abuelo, etc.) para que también pueda ver la información y recibir notificaciones.
-            </p>
-            <button
-              onClick={() => setShowGuardianModal(true)}
-              className="w-full flex items-center justify-center gap-2 p-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+        </CardContent>
+      </Card>
+
+      {/* Emergency Contacts Card */}
+      <Card>
+        <CardContent>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Phone className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-gray-900">Contactos de Emergencia</h3>
+            </div>
+            <Link
+              href={`/hijos/${student._id}/edit`}
+              className="text-sm text-primary hover:underline"
             >
-              <UserPlus className="w-5 h-5" />
-              Invitar Segundo Tutor
-            </button>
+              Editar
+            </Link>
           </div>
-        )}
-      </div>
+
+          <div className="space-y-3">
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <p className="text-xs text-gray-500">Contacto Principal</p>
+              <p className="text-sm font-medium text-gray-900">{student.emergencyContact}</p>
+            </div>
+
+            {student.emergencyContactSecondary ? (
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500">Contacto Secundario</p>
+                <p className="text-sm font-medium text-gray-900">{student.emergencyContactSecondary}</p>
+              </div>
+            ) : (
+              <div className="p-3 bg-warning/10 rounded-lg">
+                <p className="text-xs text-warning">Sin contacto secundario configurado</p>
+                <Link
+                  href={`/hijos/${student._id}/edit`}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Agregar contacto
+                </Link>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Secondary Guardian Card */}
+      <Card>
+        <CardContent>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-gray-900">Segundo Tutor</h3>
+            </div>
+          </div>
+
+          {student.secondaryParentEmail ? (
+            <div className="p-3 bg-success/10 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-success" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{student.secondaryParentEmail}</p>
+                  <p className="text-xs text-success">Segundo tutor configurado</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                Agrega un segundo tutor (cónyuge, abuelo, etc.) para que también pueda ver la información y recibir notificaciones.
+              </p>
+              <Button
+                onClick={() => setShowGuardianModal(true)}
+                leftIcon={UserPlus}
+                className="w-full"
+              >
+                Invitar Segundo Tutor
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Guardian Invitation Modal */}
       {showGuardianModal && (
@@ -474,30 +479,20 @@ export default function StudentDetailPage() {
             </p>
 
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre completo
-                </label>
-                <input
-                  type="text"
-                  value={guardianName}
-                  onChange={(e) => setGuardianName(e.target.value)}
-                  placeholder="Ej: María García"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={guardianEmail}
-                  onChange={(e) => setGuardianEmail(e.target.value)}
-                  placeholder="Ej: maria@email.com"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
+              <Input
+                label="Nombre completo"
+                type="text"
+                value={guardianName}
+                onChange={(e) => setGuardianName(e.target.value)}
+                placeholder="Ej: María García"
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={guardianEmail}
+                onChange={(e) => setGuardianEmail(e.target.value)}
+                placeholder="Ej: maria@email.com"
+              />
             </div>
 
             {inviteResult && (
@@ -517,103 +512,93 @@ export default function StudentDetailPage() {
             )}
 
             <div className="flex gap-3 pt-2">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => {
                   setShowGuardianModal(false);
                   setGuardianEmail('');
                   setGuardianName('');
                   setInviteResult(null);
                 }}
-                className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+                className="flex-1"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleInviteGuardian}
-                disabled={inviteLoading || !guardianEmail.trim() || !guardianName.trim()}
-                className={cn(
-                  'flex-1 px-4 py-2 rounded-lg text-white flex items-center justify-center gap-2',
-                  inviteLoading || !guardianEmail.trim() || !guardianName.trim()
-                    ? 'bg-gray-300 cursor-not-allowed'
-                    : 'bg-primary hover:bg-primary/90'
-                )}
+                disabled={!guardianEmail.trim() || !guardianName.trim()}
+                isLoading={inviteLoading}
+                leftIcon={Mail}
+                className="flex-1"
               >
-                {inviteLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Enviando...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="w-4 h-4" />
-                    Enviar Invitación
-                  </>
-                )}
-              </button>
+                Enviar Invitación
+              </Button>
             </div>
           </div>
         </div>
       )}
 
       {/* QR Code Card */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center gap-2 mb-4">
-          <QrCode className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-gray-900">Código QR del Estudiante</h3>
-        </div>
-
-        <p className="text-sm text-gray-600 mb-4">
-          Este código QR se usa para check-in/check-out en el bus
-        </p>
-
-        {/* QR Code Display */}
-        <div className="bg-gray-50 rounded-lg p-6 flex flex-col items-center justify-center mb-4">
-          {qrDataUrl ? (
-            <img src={qrDataUrl} alt="QR Code" className="w-48 h-48" />
-          ) : (
-            <button
-              onClick={generateQrCode}
-              disabled={qrLoading}
-              className="w-48 h-48 bg-white rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center hover:border-primary transition-colors"
-            >
-              {qrLoading ? (
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              ) : (
-                <>
-                  <QrCode className="w-12 h-12 text-gray-300 mb-2" />
-                  <span className="text-sm text-gray-500">Generar QR</span>
-                </>
-              )}
-            </button>
-          )}
-        </div>
-
-        {/* QR Actions */}
-        {qrDataUrl && (
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={downloadQrCode}
-              className="flex items-center justify-center gap-2 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
-            >
-              <Download className="w-5 h-5 text-gray-600" />
-              <span className="text-sm text-gray-600">Descargar</span>
-            </button>
-            <button
-              onClick={printQrCode}
-              className="flex items-center justify-center gap-2 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
-            >
-              <Printer className="w-5 h-5 text-gray-600" />
-              <span className="text-sm text-gray-600">Imprimir</span>
-            </button>
+      <Card>
+        <CardContent>
+          <div className="flex items-center gap-2 mb-4">
+            <QrCode className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold text-gray-900">Código QR del Estudiante</h3>
           </div>
-        )}
 
-        <div className="mt-4 p-3 bg-info/10 rounded-lg">
-          <p className="text-xs text-info">
-            <strong>Tip:</strong> Guarde el QR en su teléfono o imprímalo para que su hijo lo lleve en su mochila
+          <p className="text-sm text-gray-600 mb-4">
+            Este código QR se usa para check-in/check-out en el bus
           </p>
-        </div>
-      </div>
+
+          {/* QR Code Display */}
+          <div className="bg-gray-50 rounded-lg p-6 flex flex-col items-center justify-center mb-4">
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR Code" className="w-48 h-48" />
+            ) : (
+              <button
+                onClick={generateQrCode}
+                disabled={qrLoading}
+                className="w-48 h-48 bg-white rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center hover:border-primary transition-colors"
+              >
+                {qrLoading ? (
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                ) : (
+                  <>
+                    <QrCode className="w-12 h-12 text-gray-300 mb-2" />
+                    <span className="text-sm text-gray-500">Generar QR</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* QR Actions */}
+          {qrDataUrl && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                onClick={downloadQrCode}
+                leftIcon={Download}
+              >
+                Descargar
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={printQrCode}
+                leftIcon={Printer}
+              >
+                Imprimir
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-4 p-3 bg-info/10 rounded-lg">
+            <p className="text-xs text-info">
+              <strong>Tip:</strong> Guarde el QR en su teléfono o imprímalo para que su hijo lo lleve en su mochila
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Timestamps */}
       <div className="text-xs text-gray-400 text-center py-2">

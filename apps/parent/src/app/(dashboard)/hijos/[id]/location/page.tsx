@@ -3,12 +3,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { MapPin, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudent, useStudentLocationMutation } from '@/hooks';
 import { GoogleMapsProvider, LocationPicker } from '@altaviapp/maps';
 import type { LatLng } from '@altaviapp/maps';
 import type { Id } from '../../../../../../../../convex/_generated/dataModel';
+import { LoadingState, Card, CardContent, Button } from '@/components/core';
+import { PageHeader } from '@/components/shared';
 
 /**
  * Student Location Page
@@ -88,20 +90,30 @@ export default function StudentLocationPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <span className="ml-3 text-gray-500">Cargando...</span>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Ubicación del Hogar"
+          subtitle="Cargando..."
+          backHref={`/hijos/${studentId}`}
+        />
+        <LoadingState message="Cargando información..." />
       </div>
     );
   }
 
   if (!student) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Estudiante no encontrado</p>
-        <Link href="/inicio" className="text-primary hover:underline mt-2 inline-block">
-          Volver al inicio
-        </Link>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Ubicación del Hogar"
+          backHref="/inicio"
+        />
+        <div className="text-center py-12">
+          <p className="text-gray-500">Estudiante no encontrado</p>
+          <Link href="/inicio" className="text-primary hover:underline mt-2 inline-block">
+            Volver al inicio
+          </Link>
+        </div>
       </div>
     );
   }
@@ -111,20 +123,12 @@ export default function StudentLocationPage() {
 
   return (
     <GoogleMapsProvider>
-      <div className="space-y-4 pb-8">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-2">
-          <Link
-            href={`/hijos/${studentId}`}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </Link>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">Ubicación del Hogar</h1>
-            <p className="text-sm text-gray-500">{studentName}</p>
-          </div>
-        </div>
+      <div className="space-y-4 pb-20">
+        <PageHeader
+          title="Ubicación del Hogar"
+          subtitle={studentName}
+          backHref={`/hijos/${studentId}`}
+        />
 
         {/* Status Banner */}
         {!hasExistingLocation && (
@@ -165,58 +169,46 @@ export default function StudentLocationPage() {
         )}
 
         {/* Instructions */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <MapPin className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-gray-900">Seleccionar Ubicación</h3>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">
-            Busca la dirección de tu hogar o haz clic directamente en el mapa para seleccionar la ubicación exacta.
-            Puedes arrastrar el marcador para ajustar la posición.
-          </p>
+        <Card>
+          <CardContent>
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-gray-900">Seleccionar Ubicación</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Busca la dirección de tu hogar o haz clic directamente en el mapa para seleccionar la ubicación exacta.
+              Puedes arrastrar el marcador para ajustar la posición.
+            </p>
 
-          <LocationPicker
-            initialPosition={location.position}
-            initialAddress={location.address}
-            onLocationSelect={handleLocationSelect}
-            placeholder="Buscar dirección del hogar..."
-            mapHeight="400px"
-          />
-        </div>
+            <LocationPicker
+              initialPosition={location.position}
+              initialAddress={location.address}
+              onLocationSelect={handleLocationSelect}
+              placeholder="Buscar dirección del hogar..."
+              mapHeight="400px"
+            />
+          </CardContent>
+        </Card>
 
         {/* Save Button */}
         <div className="space-y-3">
-          <button
+          <Button
             onClick={handleSave}
-            disabled={isSaving || !location.position || saveStatus === 'success'}
-            className={cn(
-              'w-full py-3 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2',
-              location.position && saveStatus !== 'success'
-                ? 'bg-primary text-white hover:bg-primary-600'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            )}
+            disabled={!location.position || saveStatus === 'success'}
+            isLoading={isSaving}
+            leftIcon={saveStatus === 'success' ? CheckCircle : undefined}
+            className="w-full"
           >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Guardando...
-              </>
-            ) : saveStatus === 'success' ? (
-              <>
-                <CheckCircle className="w-4 h-4" />
-                Guardado
-              </>
-            ) : (
-              'Guardar Ubicación'
-            )}
-          </button>
+            {saveStatus === 'success' ? 'Guardado' : 'Guardar Ubicación'}
+          </Button>
 
-          <Link
-            href={`/hijos/${studentId}`}
-            className="block w-full py-3 text-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          <Button
+            variant="secondary"
+            onClick={() => router.push(`/hijos/${studentId}`)}
+            className="w-full"
           >
             Cancelar
-          </Link>
+          </Button>
         </div>
       </div>
     </GoogleMapsProvider>

@@ -2,11 +2,35 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Search, Eye, CheckCircle, Clock, ChevronLeft, ChevronRight, Car, Stethoscope, User, MapPin, AlertCircle, Plus, Loader2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  Eye,
+  CheckCircle,
+  Clock,
+  Car,
+  Stethoscope,
+  User,
+  MapPin,
+  AlertCircle,
+  Plus,
+} from 'lucide-react';
+import { Badge, Card, CardHeader, CardContent } from '@/components/core';
+import { PageHeader, SearchFilter, StatsGrid, type StatItem } from '@/components/shared';
+import { LoadingState, EmptyState } from '@/components/core/states';
+import { useIncidents, useIncidentMutations } from '@/hooks';
+import { formatTimeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useIncidents } from '@/hooks';
 
-const typeConfig: Record<string, { label: string; icon: typeof AlertTriangle; color: string }> = {
+/**
+ * Incidents Page
+ *
+ * Manages all reported incidents.
+ * Features: search, status filter, type icons, severity badges.
+ *
+ * PRD Reference: Incidents Module
+ */
+
+const TYPE_CONFIG: Record<string, { label: string; icon: typeof AlertTriangle; color: string }> = {
   accident: { label: 'Accidente', icon: Car, color: 'bg-error' },
   breakdown: { label: 'Avería', icon: AlertCircle, color: 'bg-warning' },
   behavior: { label: 'Comportamiento', icon: User, color: 'bg-purple-500' },
@@ -16,154 +40,131 @@ const typeConfig: Record<string, { label: string; icon: typeof AlertTriangle; co
   other: { label: 'Otro', icon: AlertCircle, color: 'bg-gray-500' },
 };
 
-const statusConfig: Record<string, { label: string; color: string }> = {
-  open: { label: 'Abierto', color: 'bg-warning text-white' },
-  investigating: { label: 'En Proceso', color: 'bg-info text-white' },
-  resolved: { label: 'Resuelto', color: 'bg-success text-white' },
-  closed: { label: 'Cerrado', color: 'bg-gray-400 text-white' },
+const STATUS_CONFIG: Record<string, { label: string; variant: 'warning' | 'info' | 'success' | 'default' }> = {
+  open: { label: 'Abierto', variant: 'warning' },
+  investigating: { label: 'En Proceso', variant: 'info' },
+  resolved: { label: 'Resuelto', variant: 'success' },
+  closed: { label: 'Cerrado', variant: 'default' },
 };
 
-const severityConfig: Record<string, { label: string; color: string }> = {
-  low: { label: 'Baja', color: 'bg-gray-100 text-gray-700' },
-  medium: { label: 'Media', color: 'bg-warning/20 text-warning' },
-  high: { label: 'Alta', color: 'bg-error/20 text-error' },
-  critical: { label: 'Crítica', color: 'bg-error text-white' },
+const SEVERITY_CONFIG: Record<string, { label: string; variant: 'default' | 'warning' | 'danger' }> = {
+  low: { label: 'Baja', variant: 'default' },
+  medium: { label: 'Media', variant: 'warning' },
+  high: { label: 'Alta', variant: 'danger' },
+  critical: { label: 'Crítica', variant: 'danger' },
 };
 
-function formatDate(timestamp: number): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
-
-  if (isToday) return 'Hoy';
-  if (isYesterday) return 'Ayer';
-  return date.toLocaleDateString('es-EC');
-}
-
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
-}
+const STATUS_FILTERS = [
+  { value: '', label: 'Todos' },
+  { value: 'open', label: 'Abiertos' },
+  { value: 'investigating', label: 'En Proceso' },
+  { value: 'resolved', label: 'Resueltos' },
+];
 
 export default function IncidentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('');
 
   // Real data from Convex
-  const { incidents, isLoading } = useIncidents();
+  const { incidents, isLoading, isEmpty } = useIncidents();
+  const { resolveIncident } = useIncidentMutations();
 
   // Filter incidents
   const filteredIncidents = useMemo(() => {
-    return incidents.filter(incident => {
-      const matchesSearch = !searchQuery ||
+    return incidents.filter((incident) => {
+      const matchesSearch =
+        !searchQuery ||
         incident.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        incident.type?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || incident.status === statusFilter;
+        incident.type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        incident.title?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesStatus = !statusFilter || incident.status === statusFilter;
+
       return matchesSearch && matchesStatus;
     });
   }, [incidents, searchQuery, statusFilter]);
 
-  // Calculate stats from real data
-  const stats = useMemo(() => ({
-    total: incidents.length,
-    open: incidents.filter(i => i.status === 'open').length,
-    inProgress: incidents.filter(i => i.status === 'investigating').length,
-    resolved: incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length,
-  }), [incidents]);
+  // Calculate stats
+  const stats: StatItem[] = useMemo(() => {
+    const total = incidents.length;
+    const open = incidents.filter((i) => i.status === 'open').length;
+    const investigating = incidents.filter((i) => i.status === 'investigating').length;
+    const resolved = incidents.filter((i) => i.status === 'resolved' || i.status === 'closed').length;
+
+    return [
+      { label: 'Total', value: total, icon: AlertTriangle, color: 'default' },
+      { label: 'Abiertos', value: open, icon: Clock, color: 'warning' },
+      { label: 'En Proceso', value: investigating, icon: AlertCircle, color: 'info' },
+      { label: 'Resueltos', value: resolved, icon: CheckCircle, color: 'success' },
+    ];
+  }, [incidents]);
+
+  const handleResolve = async (incidentId: string) => {
+    try {
+      await resolveIncident(incidentId as any);
+    } catch (error) {
+      console.error('Error resolving incident:', error);
+    }
+  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Incidentes</h1>
-          <p className="text-gray-500">Revisa y gestiona los incidentes reportados</p>
-        </div>
-        <Link
-          href="/incidents/new"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Reportar Incidente
-        </Link>
-      </div>
+      <PageHeader
+        title="Gestión de Incidentes"
+        subtitle="Revisa y gestiona los incidentes reportados"
+        actions={[
+          {
+            label: 'Reportar Incidente',
+            href: '/incidents/new',
+            icon: Plus,
+            variant: 'primary',
+          },
+        ]}
+      />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{isLoading ? '...' : stats.total}</p>
-              <p className="text-sm text-gray-500">Total</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg bg-warning flex items-center justify-center">
-              <Clock className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{isLoading ? '...' : stats.open}</p>
-              <p className="text-sm text-gray-500">Abiertos</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg bg-info flex items-center justify-center">
-              <AlertCircle className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{isLoading ? '...' : stats.inProgress}</p>
-              <p className="text-sm text-gray-500">En Proceso</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg bg-success flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{isLoading ? '...' : stats.resolved}</p>
-              <p className="text-sm text-gray-500">Resueltos</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <StatsGrid stats={stats} isLoading={isLoading} columns={4} />
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar incidentes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
-            {['all', 'open', 'investigating', 'resolved'].map((status) => (
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <SearchFilter
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Buscar incidentes..."
+            filters={[
+              {
+                key: 'status',
+                label: 'Todos los estados',
+                value: statusFilter,
+                options: [
+                  { value: 'open', label: 'Abiertos' },
+                  { value: 'investigating', label: 'En Proceso' },
+                  { value: 'resolved', label: 'Resueltos' },
+                ],
+              },
+            ]}
+            onFilterChange={(key, value) => {
+              if (key === 'status') setStatusFilter(value);
+            }}
+            className="flex-1"
+          />
+
+          {/* Quick Status Chips */}
+          <div className="flex gap-2 overflow-x-auto pb-2 lg:pb-0">
+            {STATUS_FILTERS.map((status) => (
               <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
+                key={status.value}
+                onClick={() => setStatusFilter(status.value)}
                 className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
-                  statusFilter === status
+                  'px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
+                  statusFilter === status.value
                     ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 )}
               >
-                {status === 'all' ? 'Todos' : statusConfig[status]?.label || status}
+                {status.label}
               </button>
             ))}
           </div>
@@ -171,47 +172,50 @@ export default function IncidentsPage() {
       </div>
 
       {/* Incidents List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        {isLoading ? (
-          <div className="p-12 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <span className="ml-3 text-gray-500">Cargando incidentes...</span>
-          </div>
-        ) : filteredIncidents.length === 0 ? (
-          <div className="p-12 text-center">
-            <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No hay incidentes</h3>
-            <p className="text-gray-500">
-              {searchQuery || statusFilter !== 'all'
-                ? 'No se encontraron incidentes con los filtros actuales'
-                : 'No se han reportado incidentes'}
-            </p>
-          </div>
-        ) : (
-          <>
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <LoadingState message="Cargando incidentes..." />
+          ) : filteredIncidents.length === 0 ? (
+            <EmptyState
+              icon={isEmpty ? AlertTriangle : CheckCircle}
+              title={isEmpty ? 'No hay incidentes' : 'Sin resultados'}
+              description={
+                isEmpty
+                  ? 'No se han reportado incidentes'
+                  : 'No se encontraron incidentes con los filtros actuales'
+              }
+              action={isEmpty ? { label: 'Reportar Incidente', href: '/incidents/new' } : undefined}
+            />
+          ) : (
             <div className="divide-y divide-gray-200">
               {filteredIncidents.map((incident) => {
-                const type = typeConfig[incident.type ?? 'other'] ?? typeConfig.other;
-                const status = statusConfig[incident.status ?? 'open'] ?? statusConfig.open;
-                const severity = severityConfig[incident.severity ?? 'low'] ?? severityConfig.low;
-                const TypeIcon = type?.icon ?? AlertCircle;
+                const typeInfo = TYPE_CONFIG[incident.type ?? 'other'] ?? TYPE_CONFIG.other!;
+                const statusInfo = STATUS_CONFIG[incident.status ?? 'open'] ?? STATUS_CONFIG.open!;
+                const severityInfo = SEVERITY_CONFIG[incident.severity ?? 'low'] ?? SEVERITY_CONFIG.low!;
+                const TypeIcon = typeInfo.icon;
 
                 return (
                   <div key={incident._id} className="p-4 hover:bg-gray-50">
                     <div className="flex flex-col lg:flex-row gap-4">
                       {/* Icon & Type */}
                       <div className="flex items-start gap-3">
-                        <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0', type?.color ?? 'bg-gray-500')}>
+                        <div
+                          className={cn(
+                            'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                            typeInfo!.color
+                          )}
+                        >
                           <TypeIcon className="w-5 h-5 text-white" />
                         </div>
                         <div className="flex-1 lg:w-64">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-medium text-gray-900">{type?.label ?? 'Otro'}</h3>
-                            <span className={cn('px-2 py-0.5 text-xs rounded-full', severity?.color ?? 'bg-gray-100 text-gray-700')}>
-                              {severity?.label ?? 'Desconocido'}
-                            </span>
+                            <h3 className="font-medium text-gray-900">{typeInfo!.label}</h3>
+                            <Badge variant={severityInfo!.variant}>{severityInfo!.label}</Badge>
                           </div>
-                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">{incident.description || 'Sin descripción'}</p>
+                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                            {incident.title || incident.description || 'Sin descripción'}
+                          </p>
                         </div>
                       </div>
 
@@ -220,15 +224,19 @@ export default function IncidentsPage() {
                         <div>
                           <p className="text-gray-500">Fecha/Hora</p>
                           <p className="font-medium text-gray-900">
-                            {formatDate(incident._creationTime)} - {formatTime(incident._creationTime)}
+                            {formatTimeAgo(incident._creationTime)}
                           </p>
                         </div>
                         <div>
                           <p className="text-gray-500">Estado</p>
-                          <span className={cn('inline-block px-2 py-0.5 text-xs rounded-full', status?.color ?? 'bg-gray-400 text-white')}>
-                            {status?.label ?? 'Desconocido'}
-                          </span>
+                          <Badge variant={statusInfo!.variant}>{statusInfo!.label}</Badge>
                         </div>
+                        {incident.location && (
+                          <div>
+                            <p className="text-gray-500">Ubicación</p>
+                            <p className="font-medium text-gray-900">{incident.location}</p>
+                          </div>
+                        )}
                       </div>
 
                       {/* Actions */}
@@ -241,7 +249,10 @@ export default function IncidentsPage() {
                           <span>Ver</span>
                         </Link>
                         {incident.status !== 'resolved' && incident.status !== 'closed' && (
-                          <button className="px-3 py-2 bg-success text-white rounded-lg hover:bg-success/90 transition-colors flex items-center gap-1">
+                          <button
+                            onClick={() => handleResolve(incident._id)}
+                            className="px-3 py-2 bg-success text-white rounded-lg hover:bg-success/90 transition-colors flex items-center gap-1"
+                          >
                             <CheckCircle className="w-4 h-4" />
                             <span>Resolver</span>
                           </button>
@@ -252,21 +263,9 @@ export default function IncidentsPage() {
                 );
               })}
             </div>
-            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-              <p className="text-sm text-gray-500">Mostrando {filteredIncidents.length} de {incidents.length} incidentes</p>
-              <div className="flex gap-2">
-                <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled>
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <span className="px-4 py-2 text-sm">Página 1 de 1</span>
-                <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50" disabled>
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

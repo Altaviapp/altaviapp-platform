@@ -35,6 +35,7 @@ export {
   useNovedadesForTrip,
   useNovedadesByDate,
   useNovedadesMutations,
+  useNovedadTypes,
 } from './useTripStudents';
 
 // Profile hooks (for drivers/monitors to manage their professional data)

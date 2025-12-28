@@ -68,15 +68,22 @@ La Crew App es la aplicación móvil PWA para conductores y monitores/auxiliares
 
 **Componentes clave**:
 - `RouteCard` - Tarjeta de ruta disponible (lazy trip creation)
-- `NovedadesCard` - Eventos especiales del día
+- `NovedadesCard` - Eventos especiales del día (**tipos dinámicos**)
 - `WeeklyStats` - Resumen semanal (viajes, estudiantes, duración)
 - `NotificationList` - Notificaciones recientes
 - `VehicleCard` - Información del vehículo asignado
+
+**Novedades del día**:
+- [x] **Tipos dinámicos** - Los tipos de novedad se cargan desde configuración admin
+- [x] Resumen por categoría: ausencias, recoge padre, cambio parada, otras
+- [x] Lista de novedades (top 3) con nombre del estudiante y ruta
+- [x] Soporte para tipos legacy y nuevos (typeCategorySnapshot)
 
 **Hooks**:
 - `useMyRoutes()` - Rutas asignadas al usuario
 - `useNovedadesForDriverToday()` - Novedades del día
 - `useMyTrips()` - Viajes del usuario
+- `useNovedadTypes()` - Tipos configurables desde backend
 
 ---
 
@@ -190,6 +197,11 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 #### 4.2 Inicio de Viaje (`/trips/[id]/start`)
 - [x] Confirmación antes de iniciar
 - [x] Verificación de checklist completado
+- [x] **Banner de novedades**:
+  - [x] Contador total de novedades para el viaje
+  - [x] Desglose por categoría (ausentes, recoge padre, cambio parada)
+  - [x] Tipos dinámicos con iconos y colores
+  - [x] Link a lista de estudiantes para ver detalles
 - [x] Botón de iniciar viaje
 - [x] Lazy trip creation (viaje creado al iniciar)
 
@@ -233,10 +245,17 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 - [x] ETA en minutos
 - [x] Link a navegación externa (Google Maps)
 
+*Indicador de novedades*:
+- [x] Banner compacto debajo del header si hay novedades
+- [x] Contador de novedades totales
+- [x] Badge de ausencias si aplica
+- [x] Link directo a lista de estudiantes
+
 *Acciones rápidas*:
-- [x] Check-in de estudiantes
+- [x] Check-in de estudiantes (abre `CheckinSheet` con QR scanner)
 - [x] Ver lista de estudiantes
 - [x] Reportar incidente
+- [x] Relevo de vehículo (abre `RelayModeModal`)
 - [x] Terminar viaje
 
 *ETA en tiempo real*:
@@ -252,11 +271,11 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
   - A bordo (azul)
   - Entregado (verde)
 - [x] Panel de novedades por estudiante:
-  - Ausencia
-  - Recoge padre
-  - Cambio de parada
-  - Salida temprana
-  - Llegada tarde
+  - **Tipos dinámicos** con iconos y colores configurables
+  - Soporte para tipos legacy y nuevos (typeCategorySnapshot)
+  - Ausencia, recoge padre, cambio de parada, salida temprana, llegada tarde
+  - Tipos personalizados creados por admin
+- [x] **Indicador de evidencia** (icono clip) si la novedad tiene adjuntos
 - [x] Modal de detalle de estudiante
 - [x] Botón de reconocer novedad
 - [x] Búsqueda/filtro de estudiantes
@@ -313,13 +332,73 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 - `ChecklistItem` - Ítem de checklist
 - `ChecklistProgress` - Barra de progreso
 - `QRScanner` - Escáner de código QR
+- `CheckinSheet` - Sheet de check-in con QR y selección manual
 
 **Hooks**:
 - `useTrip()` - Viaje individual
-- `useTripStudents()` - Estudiantes del viaje
+- `useTripStudents()` - Estudiantes del viaje con novedades
 - `useActiveTrip()` - Viaje activo actual
 - `useGPSTracking()` - Tracking GPS
-- `useCheckIn()` - Mutación de check-in
+- `useCheckinMutations()` - Mutaciones de check-in (recordCheckin, cancelCheckin)
+- `usePendingStudents()` - Estudiantes pendientes de check-in
+- `useStudentByQR()` - Buscar estudiante por código QR
+- `useNovedadesForTrip()` - Novedades que afectan el viaje
+- `useNovedadTypes()` - Tipos configurables desde backend
+
+**Flujo de novedades desde perspectiva del crew**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│             FLUJO DE NOVEDADES - PERSPECTIVA CREW               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  PARENT/ADMIN                        CREW                       │
+│  ────────────                        ────                       │
+│                                                                 │
+│  Novedad aprobada ────────────────►  Ve en Dashboard            │
+│       │                              (NovedadesCard)            │
+│       │                                   │                     │
+│       │                                   ▼                     │
+│       │                              Ve en /trips/[id]/start    │
+│       │                              (Banner de novedades)      │
+│       │                                   │                     │
+│       │                                   ▼                     │
+│       │                              Inicia viaje               │
+│       │                                   │                     │
+│       │                                   ▼                     │
+│       │                              Ve en /trips/[id]/active   │
+│       │                              (Indicador compacto)       │
+│       │                                   │                     │
+│       │                                   ▼                     │
+│       │                              Ve en /trips/[id]/students │
+│       │                              (Panel por estudiante)     │
+│       │                                   │                     │
+│       │                                   ▼                     │
+│       │                              Acusa recibo ──────────►   │
+│       │                              (acknowledge)   Status:    │
+│       │                                   │          acknowledged│
+│       │                                   ▼                     │
+│       │                              Viaje termina ─────────►   │
+│                                      (auto-apply)    Status:    │
+│                                                      applied    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+*Estados visibles para crew*:
+| Estado | Badge en UI | Acción del crew |
+|--------|-------------|-----------------|
+| `approved` | Pendiente (amarillo) | Debe acusar recibo |
+| `acknowledged` | Confirmada (azul) | Ya confirmó, se aplicará al viaje |
+| `applied` | Aplicada (gris) | Ya se aplicó a tripStudents |
+
+*Efectos de las categorías en la operación*:
+| Categoría | Efecto para crew |
+|-----------|------------------|
+| `absence` | Estudiante no aparece en lista de pendientes |
+| `pickup_change` | Estudiante marcado "recoge padre", no abordar |
+| `stop_change` | Estudiante aparece en parada diferente |
+| `time_change` | Solo informativo, horario diferente |
+| `other` | Solo informativo, revisar notas |
 
 ---
 
@@ -460,6 +539,28 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 - [x] Geolocalización
 - [x] Cámara (para QR)
 - [x] Notificaciones push
+
+### Notificaciones del Sistema de Novedades
+
+*Eventos recibidos por el crew*:
+| Evento | Tipo | Canal | Mensaje |
+|--------|------|-------|---------|
+| Nueva novedad para viaje | info | push + in-app | "Nueva novedad: {estudiante} - {tipo}" |
+| Novedad pendiente de acuse | reminder | push | "Tienes {N} novedades sin confirmar para hoy" |
+| Viaje con ausencias | warning | in-app | "Este viaje tiene {N} ausencias" |
+| Novedad cancelada | info | in-app | "La novedad de {estudiante} fue cancelada" |
+| Estudiante check-in exitoso | success | in-app | "{estudiante} abordó en {parada}" |
+| Incidente creado | info | in-app | "Incidente #{id} reportado" |
+
+*Notificaciones enviadas por el crew*:
+| Acción | Destinatario | Mensaje |
+|--------|--------------|---------|
+| Check-in de estudiante | Parent | "{estudiante} ha subido al bus" |
+| Check-out de estudiante | Parent | "{estudiante} ha sido entregado" |
+| Acusar recibo novedad | Parent | "El conductor confirmó la novedad de {estudiante}" |
+| Reportar incidente | Admin + Parent | "Se reportó un incidente: {tipo}" |
+| Viaje iniciado | Admin | "Viaje {ruta} ha iniciado" |
+| Viaje completado | Admin | "Viaje {ruta} completado: {N} estudiantes" |
 
 ---
 

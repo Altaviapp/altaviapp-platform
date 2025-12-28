@@ -124,3 +124,21 @@ export function useNovedadesMutations() {
     isReady: !!userId,
   };
 }
+
+// ============================================
+// NOVEDAD TYPES (Dynamic configuration)
+// ============================================
+
+export function useNovedadTypes(activeOnly: boolean = true) {
+  const { userId } = useConvexAuth();
+
+  const types = useQuery(
+    api.novedadTypes.list,
+    userId ? { userId, activeOnly } : "skip"
+  );
+
+  return {
+    types: types ?? [],
+    isLoading: types === undefined,
+  };
+}

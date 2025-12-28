@@ -14,13 +14,16 @@ import {
   Loader2,
   Sunrise,
   Sunset,
+  FileText,
+  UserMinus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition } from '@/hooks';
+import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip } from '@/hooks';
 import type { GeofenceAlert, GPSSourceType } from '@/hooks';
 import { RelayModeModal } from '@/components/trip/RelayModeModal';
+import { CheckinSheet } from '@/components/checkin';
 import { Id } from '../../../../../../../../convex/_generated/dataModel';
 
 // Dynamic import for RouteMap to avoid SSR issues with Leaflet
@@ -45,6 +48,9 @@ export default function ActiveTripPage() {
   const [gpsSourceType, setGpsSourceType] = useState<GPSSourceType>('mobile');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // Check-in sheet state
+  const [isCheckinOpen, setIsCheckinOpen] = useState(false);
+
   // Get real trip data from Convex
   const { trip: convexTrip, isLoading: tripLoading } = useTrip(tripId as Id<"trips"> | null);
   const { completeTrip } = useTripOperations();
@@ -52,6 +58,12 @@ export default function ActiveTripPage() {
 
   // Use real auth with fallback for UI testing
   const { isAuthenticated } = useConvexAuth();
+
+  // Get novedades for this trip
+  const { novedades, hasNovedades } = useNovedadesForTrip(isAuthenticated ? tripId : null);
+  const absentCount = novedades.filter((n: any) =>
+    n.type === 'absence' || n.typeCategorySnapshot === 'absence'
+  ).length;
 
   // Both roles (driver and monitor) have full access to trip controls
   const canControlTrip = true;
@@ -231,7 +243,7 @@ export default function ActiveTripPage() {
   // Quick action handlers
   const handleCheckIn = () => {
     if (canCheckin) {
-      router.push(`/trips/${tripId}/checkin`);
+      setIsCheckinOpen(true);
     } else {
       alert('No tienes permiso para realizar check-in en este viaje');
     }
@@ -337,6 +349,28 @@ export default function ActiveTripPage() {
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {gpsError.message}
         </div>
+      )}
+
+      {/* Novedades Indicator */}
+      {hasNovedades && (
+        <Link
+          href={`/trips/${tripId}/students`}
+          className="mx-4 mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2 text-sm">
+            <FileText className="w-4 h-4 text-amber-600" />
+            <span className="font-medium text-amber-800">
+              {novedades.length} {novedades.length === 1 ? 'novedad' : 'novedades'}
+            </span>
+            {absentCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                <UserMinus className="w-3 h-3" />
+                {absentCount} {absentCount === 1 ? 'ausente' : 'ausentes'}
+              </span>
+            )}
+          </div>
+          <span className="text-xs text-amber-600">Ver lista →</span>
+        </Link>
       )}
 
       {/* Prominent Map Section */}
@@ -506,6 +540,19 @@ export default function ActiveTripPage() {
         isOpen={isRelayModalOpen}
         onClose={() => setIsRelayModalOpen(false)}
         onRelayComplete={handleRelayComplete}
+      />
+
+      {/* Check-in Sheet */}
+      <CheckinSheet
+        tripId={tripId as Id<"trips">}
+        currentStop={nextStop ? {
+          id: nextStop._id as Id<"routeStops">,
+          name: nextStop.name ?? 'Parada',
+          order: currentStopIndex,
+        } : null}
+        routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
+        isOpen={isCheckinOpen}
+        onClose={() => setIsCheckinOpen(false)}
       />
     </div>
   );

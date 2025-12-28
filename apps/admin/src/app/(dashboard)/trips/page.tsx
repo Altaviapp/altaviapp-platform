@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Bus, MapPin, Clock, Eye, RefreshCw, AlertTriangle, CheckCircle, Play } from 'lucide-react';
+import { Bus, MapPin, Clock, Eye, RefreshCw, AlertTriangle, CheckCircle, Play, FileText } from 'lucide-react';
 import { Badge, Card, CardHeader, CardContent } from '@/components/core';
 import { PageHeader, StatsGrid, DataTable, type Column, type StatItem } from '@/components/shared';
 import { LoadingState, EmptyState } from '@/components/core/states';
-import { useTodaysTrips, useTrips, useTripMutations } from '@/hooks';
+import { useTodaysTrips, useTrips, useTripMutations, usePendingNovedades, useNovedades } from '@/hooks';
 import { cn } from '@/lib/utils';
 
 /**
@@ -25,6 +25,11 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warni
   cancelled: { label: 'Cancelado', variant: 'danger', icon: AlertTriangle },
 };
 
+// Helper to get effective date from novedad
+const getNovedadDate = (novedad: { startDate?: string; date?: string }): string => {
+  return novedad.startDate || novedad.date || '';
+};
+
 export default function TripsPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -32,6 +37,47 @@ export default function TripsPage() {
   const { trips: todaysTrips, isLoading } = useTodaysTrips();
   const { trips: scheduledTrips, isLoading: scheduledLoading } = useTrips({ status: 'scheduled' });
   const { startTrip } = useTripMutations();
+
+  // Get novedades for badge indicators
+  const { novedades: pendingNovedades } = usePendingNovedades();
+  const { novedades: approvedNovedades } = useNovedades({ status: 'approved' });
+
+  // Create a map of date -> novedades counts
+  const novedadesByDate = useMemo(() => {
+    const dateMap: Record<string, { pending: number; approved: number }> = {};
+
+    // Count pending novedades by date
+    pendingNovedades.forEach((n) => {
+      const date = getNovedadDate(n);
+      if (date) {
+        if (!dateMap[date]) {
+          dateMap[date] = { pending: 0, approved: 0 };
+        }
+        dateMap[date]!.pending++;
+      }
+    });
+
+    // Count approved novedades by date
+    approvedNovedades.forEach((n) => {
+      const date = getNovedadDate(n);
+      if (date) {
+        if (!dateMap[date]) {
+          dateMap[date] = { pending: 0, approved: 0 };
+        }
+        dateMap[date]!.approved++;
+      }
+    });
+
+    return dateMap;
+  }, [pendingNovedades, approvedNovedades]);
+
+  // Helper to get novedades count for a trip
+  const getNovedadesForTrip = (tripDate: string | undefined): { pending: number; approved: number; total: number } => {
+    if (!tripDate) return { pending: 0, approved: 0, total: 0 };
+    const counts = novedadesByDate[tripDate];
+    if (!counts) return { pending: 0, approved: 0, total: 0 };
+    return { ...counts, total: counts.pending + counts.approved };
+  };
 
   // Calculate stats
   const stats: StatItem[] = useMemo(() => {
@@ -89,6 +135,30 @@ export default function TripsPage() {
           <span>{trip.scheduledDate}</span>
         </div>
       ),
+    },
+    {
+      key: 'novedades',
+      header: 'Novedades',
+      render: (trip) => {
+        const novedades = getNovedadesForTrip(trip.scheduledDate);
+        if (novedades.total === 0) {
+          return <span className="text-gray-400 text-sm">—</span>;
+        }
+        return (
+          <Badge
+            variant={novedades.pending > 0 ? 'warning' : 'info'}
+            className="flex items-center gap-1"
+          >
+            <FileText className="w-3 h-3" />
+            {novedades.total}
+            {novedades.pending > 0 && (
+              <span className="text-xs opacity-80">
+                ({novedades.pending} pend.)
+              </span>
+            )}
+          </Badge>
+        );
+      },
     },
     {
       key: 'actions',
@@ -182,6 +252,24 @@ export default function TripsPage() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-medium text-gray-900">{trip.routeName || 'Sin ruta'}</h3>
                               <Badge variant={statusInfo!.variant}>{statusInfo!.label}</Badge>
+                              {(() => {
+                                const novedades = getNovedadesForTrip(trip.scheduledDate);
+                                if (novedades.total === 0) return null;
+                                return (
+                                  <Badge
+                                    variant={novedades.pending > 0 ? 'warning' : 'info'}
+                                    className="flex items-center gap-1"
+                                  >
+                                    <FileText className="w-3 h-3" />
+                                    {novedades.total} {novedades.total === 1 ? 'novedad' : 'novedades'}
+                                    {novedades.pending > 0 && (
+                                      <span className="text-xs opacity-80">
+                                        ({novedades.pending} pendiente{novedades.pending > 1 ? 's' : ''})
+                                      </span>
+                                    )}
+                                  </Badge>
+                                );
+                              })()}
                             </div>
                             <p className="text-sm text-gray-500 mt-1">
                               {trip.vehiclePlate || 'Sin vehículo'} •{' '}

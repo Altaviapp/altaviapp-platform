@@ -11,18 +11,40 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useConvexAuth } from "./useConvexAuth";
 
-// Types
+// Types - Legacy (still supported for backwards compatibility)
 export type NovedadType = "absence" | "parent_pickup" | "stop_change" | "early_pickup" | "late_arrival";
 export type AffectedRouteType = "pickup" | "dropoff" | "both";
 
+// Category types for dynamic novedad types
+export type NovedadCategory =
+  | "absence"
+  | "pickup_change"
+  | "stop_change"
+  | "time_change"
+  | "location_change"
+  | "schedule_change"
+  | "route_change"
+  | "service_suspension"
+  | "other";
+
+export type DurationType = "single_day" | "date_range" | "permanent" | "recurring";
+
 export interface CreateNovedadInput {
   studentId: Id<"students">;
-  type: NovedadType;
+  // Legacy fields (still supported for backwards compatibility)
+  type?: NovedadType;
+  date?: string; // YYYY-MM-DD (legacy)
+  // New dynamic type field
+  typeId?: Id<"novedadTypes">;
+  // Common fields
   affectedRouteType: AffectedRouteType;
-  date: string; // YYYY-MM-DD
   newStopId?: Id<"routeStops">;
-  time?: string; // HH:mm for early_pickup/late_arrival
+  time?: string; // HH:mm for time_change types
   reason: string;
+  // New date fields
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD (for date_range)
+  durationType?: DurationType;
 }
 
 // ============================================
@@ -175,6 +197,73 @@ export function useRouteChangeRequestMutations() {
   return {
     createRequest,
     cancelRequest,
+    isReady: !!userId,
+  };
+}
+
+// ============================================
+// NOVEDAD TYPES (Dynamic configuration)
+// ============================================
+
+export function useNovedadTypes(activeOnly: boolean = true) {
+  const { userId } = useConvexAuth();
+
+  const types = useQuery(
+    api.novedadTypes.list,
+    userId ? { userId, activeOnly } : "skip"
+  );
+
+  return {
+    types: types ?? [],
+    isLoading: types === undefined,
+  };
+}
+
+// ============================================
+// EVIDENCE UPLOAD
+// ============================================
+
+export function useEvidenceUpload() {
+  const { userId } = useConvexAuth();
+
+  const generateUploadUrl = useMutation(api.novedades.generateEvidenceUploadUrl);
+  const saveEvidence = useMutation(api.novedades.saveEvidenceFile);
+
+  const uploadEvidence = async (
+    novedadId: Id<"novedades">,
+    file: File
+  ): Promise<void> => {
+    if (!userId) throw new Error("No autenticado");
+
+    // Get upload URL for this novedad
+    const { uploadUrl } = await generateUploadUrl({ userId, novedadId });
+
+    // Upload file to Convex storage
+    const result = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+
+    if (!result.ok) {
+      throw new Error("Error al subir archivo");
+    }
+
+    const { storageId } = await result.json();
+
+    // Save evidence metadata
+    await saveEvidence({
+      userId,
+      novedadId,
+      storageId,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+    });
+  };
+
+  return {
+    uploadEvidence,
     isReady: !!userId,
   };
 }

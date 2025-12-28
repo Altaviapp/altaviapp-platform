@@ -15,7 +15,9 @@ interface NovedadSummary {
 
 interface NovedadForDashboard {
   _id: string;
-  type: string;
+  type?: string;
+  typeCategorySnapshot?: string;
+  typeLabel?: string; // Dynamic type name from backend
   studentName: string;
   routeName: string;
 }
@@ -25,6 +27,29 @@ interface NovedadesCardProps {
   summary: NovedadSummary;
   isLoading?: boolean;
 }
+
+// Helper to get display config for a novedad (legacy or dynamic)
+const getNovedadConfig = (novedad: NovedadForDashboard) => {
+  // First try legacy type
+  if (novedad.type && NOVEDAD_TYPE_CONFIG[novedad.type as keyof typeof NOVEDAD_TYPE_CONFIG]) {
+    return NOVEDAD_TYPE_CONFIG[novedad.type as keyof typeof NOVEDAD_TYPE_CONFIG];
+  }
+
+  // Fall back to category snapshot
+  const category = novedad.typeCategorySnapshot;
+  if (category === 'absence') {
+    return { label: novedad.typeLabel || 'Ausencia', color: 'bg-red-100 text-red-600' };
+  }
+  if (category === 'pickup_change') {
+    return { label: novedad.typeLabel || 'Recoge Padre', color: 'bg-blue-100 text-blue-600' };
+  }
+  if (category === 'stop_change') {
+    return { label: novedad.typeLabel || 'Cambio Parada', color: 'bg-purple-100 text-purple-600' };
+  }
+
+  // Default
+  return { label: novedad.typeLabel || 'Novedad', color: 'bg-gray-100 text-gray-600' };
+};
 
 export function NovedadesCard({ novedades, summary, isLoading }: NovedadesCardProps) {
   if (isLoading) {
@@ -96,8 +121,7 @@ export function NovedadesCard({ novedades, summary, isLoading }: NovedadesCardPr
       {/* List of novedades (max 3) */}
       <div className="space-y-2">
         {novedades.slice(0, 3).map((novedad) => {
-          const config = NOVEDAD_TYPE_CONFIG[novedad.type as keyof typeof NOVEDAD_TYPE_CONFIG];
-          if (!config) return null;
+          const config = getNovedadConfig(novedad);
 
           return (
             <div

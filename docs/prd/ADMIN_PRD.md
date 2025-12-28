@@ -279,9 +279,11 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
   - Nombre de ruta, placa de vehículo
   - Tipo de ruta (recogida/entrega)
   - Fecha programada
+  - **Badge de novedades** (cantidad de novedades pendientes/aprobadas para la fecha)
   - Acciones: ver, mapa
 - [x] Tabla de viajes programados:
   - Ruta, tipo, vehículo, fecha
+  - **Columna de novedades** con badge indicando cantidad
   - Botón de iniciar viaje
 
 *Detalle de viaje*:
@@ -378,14 +380,13 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 
 *Tab 1 - Novedades (cambios diarios)*:
 - [x] Lista de novedades pendientes de aprobacion
-- [x] Tipos de novedad:
-  - `absence` - Ausencia (no viaja hoy)
-  - `parent_pickup` - Recoge padre (efecto inmediato, sin aprobacion)
-  - `stop_change` - Cambio de parada temporal
-  - `early_pickup` - Salida temprana
-  - `late_arrival` - Llegada tarde
-- [x] Info mostrada: estudiante, grado, tipo, razon, solicitante, fecha afectada
+- [x] Tipos de novedad dinámicos (configurables en `/settings/novedades`):
+  - Tipos de sistema: absence, parent_pickup, stop_change, early_pickup, late_arrival, medical_leave
+  - Tipos personalizados creados por admin
+- [x] Info mostrada: estudiante, grado, tipo (dinámico), razon, solicitante, fecha afectada
+- [x] Ruta específica afectada (nombre de la ruta)
 - [x] Badge de estado (pendiente, aprobado, rechazado)
+- [x] Indicador de evidencia adjunta (icono clip)
 - [x] Click abre modal de revision
 
 *Tab 2 - Cambios Permanentes*:
@@ -406,10 +407,14 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 
 *Modal de revision*:
 - [x] Info del estudiante (avatar, nombre, grado)
-- [x] Tipo de novedad/solicitud
+- [x] Tipo de novedad/solicitud (dinámico, con icono y color)
 - [x] Fecha(s) afectada(s)
-- [x] Tipo de ruta afectada (ida, entrega, ambos)
+- [x] Ruta específica afectada (nombre y horario de la ruta)
 - [x] Razon del solicitante
+- [x] Visualización de evidencia adjunta:
+  - [x] Galería de imágenes (click para ampliar)
+  - [x] Descarga de archivos PDF
+  - [x] Preview de múltiples archivos
 - [x] Campo de notas de revision (opcional)
 - [x] Botones aprobar/rechazar con loading state
 
@@ -419,6 +424,52 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - [x] Estados novedad: pending → approved/rejected → acknowledged → applied
 - [x] Estados cambio permanente: pending → approved/rejected
 - [x] Notificaciones automaticas a padres y crew
+
+*Diagrama de flujo de status cross-app*:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    FLUJO DE STATUS NOVEDADES                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  PARENT                ADMIN                 CREW               │
+│  ──────                ─────                 ────               │
+│                                                                 │
+│  Crea novedad ──┐                                               │
+│  (pending)      │                                               │
+│       │         │                                               │
+│       ▼         │                                               │
+│  [parent_pickup]│──► acknowledged (auto) ─────────────────────► │
+│       │         │                                               │
+│  [otros tipos]  │──► pending ──────────► Revisa ────────────►   │
+│                 │         │                 │                   │
+│                 │         │                 ▼                   │
+│                 │         │            approved ─────────────►  │
+│                 │         │                │                    │
+│                 │         │                │                    │
+│                 │         │                ▼                    │
+│  ◄── notificado │         │         acknowledged ◄───────────── │
+│                 │         │                │      (acusar       │
+│                 │         │                │       recibo)      │
+│                 │         │                ▼                    │
+│                 │         │            applied ◄──────────────  │
+│                 │         │         (trip starts)               │
+│                 │         │                                     │
+│                 │         └──► rejected ──────────────────────► │
+│  ◄── notificado │              (con motivo)                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+*Estados y su significado*:
+| Estado | Descripción | Siguiente acción |
+|--------|-------------|------------------|
+| `pending` | Novedad creada, esperando revisión | Admin revisa |
+| `approved` | Admin aprobó la solicitud | Crew acusa recibo |
+| `rejected` | Admin rechazó la solicitud | Parent notificado |
+| `acknowledged` | Crew confirmó que vio la novedad | Se aplica al viaje |
+| `applied` | Novedad aplicada al tripStudent | Completado |
+| `cancelled` | Parent canceló la novedad | Terminado |
+| `expired` | Fecha pasó sin aplicar | Terminado |
 
 **Hooks** (`apps/admin/src/hooks/`):
 
@@ -544,6 +595,7 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 |------|--------|-------------|
 | `/settings` | ✅ | Página de configuración con tabs |
 | `/settings/grades` | ✅ | Configuración de grados |
+| `/settings/novedades` | ✅ | Configuración de tipos de novedad |
 | `/settings/users/new` | ✅ | Crear usuario |
 
 **Funcionalidades**:
@@ -582,6 +634,72 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - [x] Grados personalizados por institución
 - [x] Presets: Prekinder a 12vo
 - [x] Usados en formularios de estudiantes
+
+*Tipos de Novedad* (`/settings/novedades`):
+- [x] Lista de tipos de novedad configurables por institución
+- [x] Tipos de sistema predefinidos (no eliminables):
+  - `absence` - Ausencia (categoría: absence)
+  - `parent_pickup` - Recoge Padre (categoría: pickup_change)
+  - `stop_change_temp` - Cambio de Parada Temporal (categoría: stop_change)
+  - `early_pickup` - Salida Temprana (categoría: time_change)
+  - `late_arrival` - Llegada Tarde (categoría: time_change)
+  - `medical_leave` - Ausencia Médica (categoría: absence)
+  - `location_change` - Cambio de Domicilio (categoría: location_change)
+- [x] Crear tipos personalizados con:
+  - Código único, nombre, descripción
+  - Icono (selector de iconos Lucide)
+  - Color (selector de colores brand)
+  - Categoría de comportamiento (absence, pickup_change, stop_change, etc.)
+  - Tipo de duración (un día, rango, permanente, recurrente)
+  - Requiere aprobación (toggle)
+  - Afecta viajes (toggle)
+  - Afecta cálculo de ruta (toggle)
+  - Evidencia requerida/opcional
+  - Razón requerida
+- [x] Activar/desactivar tipos
+- [x] Reordenar tipos (drag-drop)
+- [x] Preview visual del tipo
+
+*Campos de configuración y su efecto*:
+| Campo | Tipo | Efecto en el sistema |
+|-------|------|---------------------|
+| `code` | string | Identificador único para queries y filtros |
+| `name` | string | Texto mostrado en UI (Parent, Admin, Crew) |
+| `description` | string | Texto de ayuda mostrado al padre al seleccionar |
+| `icon` | string | Nombre de icono Lucide (ej: "UserMinus", "Car") |
+| `color` | string | Color Tailwind para badges (ej: "red", "blue") |
+| `category` | enum | **Determina cómo se aplica al viaje** (ver tabla abajo) |
+| `durationType` | enum | Define qué fechas debe ingresar el padre |
+| `requiresApproval` | boolean | Si es `false`, se auto-aprueba al crear |
+| `affectsTrips` | boolean | Si es `true`, modifica `tripStudents.status` |
+| `affectsRouteCalculation` | boolean | Flag para recálculo de ruta on-demand |
+| `evidenceRequired` | boolean | Bloquea envío sin adjuntos |
+| `evidenceOptional` | boolean | Muestra uploader pero no es obligatorio |
+| `maxEvidenceFiles` | number | Límite de archivos (default: 5) |
+| `allowedFileTypes` | array | Tipos MIME permitidos |
+| `minAdvanceHours` | number | Mínimo de horas antes del viaje para crear |
+| `reasonRequired` | boolean | Obliga a ingresar motivo |
+
+*Categorías de comportamiento y su efecto en tripStudent*:
+| Categoría | Efecto en `tripStudent.status` | Descripción |
+|-----------|-------------------------------|-------------|
+| `absence` | → `'absent'` | Estudiante excluido del viaje |
+| `pickup_change` | → `'parent_pickup'` | Padre recoge, no usa bus |
+| `stop_change` | → `'stop_changed'` + nuevo `stopId` | Parada diferente |
+| `time_change` | Sin cambio de status | Solo informativo |
+| `location_change` | Actualiza ubicación + novedad | Cambio de domicilio permanente |
+| `schedule_change` | Sin cambio de status | Actualiza horario permanente |
+| `route_change` | Reasigna a nueva ruta | Cambio de ruta permanente |
+| `service_suspension` | → `'absent'` por rango | Suspensión temporal |
+| `other` | Sin cambio de status | Solo informativo |
+
+*Tipos de duración*:
+| Tipo | Campos requeridos | Uso |
+|------|-------------------|-----|
+| `single_day` | `startDate` | Novedades de un solo día |
+| `date_range` | `startDate`, `endDate` | Ausencias médicas, vacaciones |
+| `permanent` | `startDate` | Cambios hasta nuevo aviso |
+| `recurring` | `startDate`, `recurringDays[]` | Días específicos cada semana |
 
 **Componentes clave**:
 - `SettingsTabs` - Navegación de configuración
@@ -641,5 +759,23 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - [x] Timezones: America/Guayaquil, America/Bogota
 - [x] Formato fecha: DD/MM/YYYY
 - [x] Formato hora: 24h
+
+### Notificaciones del Sistema de Novedades
+
+*Eventos y destinatarios*:
+| Evento | Destinatario | Tipo | Canal | Mensaje |
+|--------|--------------|------|-------|---------|
+| Novedad creada | Admin | info | in-app | "Nueva novedad: {estudiante} - {tipo}" |
+| Novedad aprobada | Parent | success | push + in-app | "Tu novedad para {estudiante} ha sido aprobada" |
+| Novedad rechazada | Parent | warning | push + in-app | "Tu novedad fue rechazada: {motivo}" |
+| Novedad acusada | Parent | info | in-app | "El conductor confirmó la novedad de {estudiante}" |
+| Viaje con novedades | Crew | warning | push | "{N} novedades afectan este viaje" |
+| Novedad sin acusar | Crew | reminder | push | "Tienes novedades pendientes de confirmar" |
+| Viaje iniciado con ausencias | Admin | info | in-app | "Viaje {ruta} iniciado con {N} ausencias" |
+
+*Implementación*:
+- Backend: `convex/notifications.ts` - triggers en review(), acknowledge(), applyToTrip()
+- Canales: Convex real-time (in-app), Push notifications (pendiente), Email (pendiente)
+- Persistencia: Notificaciones guardadas en tabla `notifications`
 
 ---

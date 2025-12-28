@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -18,6 +18,9 @@ import {
   Bell,
   Check,
   Info,
+  Paperclip,
+  FileText,
+  Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -26,7 +29,12 @@ import {
   useNovedadesForTrip,
   useNovedadesMutations,
   useConvexAuth,
+  useCheckinMutations,
+  useCurrentPosition,
+  useTrip,
+  useNovedadTypes,
 } from '@/hooks';
+import type { Id } from '../../../../../../../../convex/_generated/dataModel';
 import { LoadingState, Button } from '@/components/core';
 import { PageHeader } from '@/components/shared';
 
@@ -45,13 +53,24 @@ const checkinStatusConfig: Record<string, { label: string; color: string; bg: st
   delivered: { label: 'Entregado', color: 'text-info', bg: 'bg-info/10', icon: CheckCircle },
 };
 
-// Novedad type labels
+// Novedad type labels (legacy fallback)
 const novedadTypeLabels: Record<string, string> = {
   absence: 'Ausencia',
   parent_pickup: 'Recoge padre',
   stop_change: 'Cambio de parada',
   early_pickup: 'Salida temprana',
   late_arrival: 'Llegada tarde',
+};
+
+// Icon mapping for dynamic types
+const ICON_MAP: Record<string, React.ElementType> = {
+  UserMinus,
+  Car,
+  MapPin,
+  Clock,
+  AlertTriangle,
+  FileText,
+  Calendar,
 };
 
 // Mock fallback data for UI testing
@@ -79,12 +98,57 @@ export default function TripStudentsPage() {
   const { summary, isLoading: summaryLoading } = useTripStudentsSummary(isAuthenticated ? tripId : null);
   const { novedades, pendingCount, isLoading: novedadesLoading } = useNovedadesForTrip(isAuthenticated ? tripId : null);
   const { acknowledgeNovedad, isReady: mutationsReady } = useNovedadesMutations();
+  const { recordCheckin } = useCheckinMutations();
+  const { getPosition } = useCurrentPosition();
+  const { trip } = useTrip(tripId as Id<"trips"> | null);
+  const { types: novedadTypes } = useNovedadTypes();
+
+  // Create types map for dynamic lookups
+  const typesMap = useMemo(() => {
+    const map: Record<string, { name: string; icon: string; color: string }> = {};
+    novedadTypes.forEach((t: any) => {
+      map[t._id] = { name: t.name, icon: t.icon, color: t.color };
+    });
+    return map;
+  }, [novedadTypes]);
+
+  // Get type label and icon for a novedad
+  const getNovedadTypeInfo = (novedad: any): { label: string; Icon: React.ElementType; colorClass: string } => {
+    // Check for dynamic type
+    if (novedad.typeId && typesMap[novedad.typeId]) {
+      const typeConfig = typesMap[novedad.typeId]!;
+      const Icon = ICON_MAP[typeConfig.icon] ?? FileText;
+      return {
+        label: typeConfig.name,
+        Icon,
+        colorClass: `text-${typeConfig.color}-600`,
+      };
+    }
+    // Legacy fallback
+    const legacyLabel = novedadTypeLabels[novedad.type] || 'Novedad';
+    let Icon: React.ElementType = FileText;
+    if (novedad.type === 'absence') Icon = UserMinus;
+    if (novedad.type === 'parent_pickup') Icon = Car;
+    if (novedad.type === 'stop_change') Icon = MapPin;
+    if (novedad.type === 'early_pickup' || novedad.type === 'late_arrival') Icon = Clock;
+    return {
+      label: legacyLabel,
+      Icon,
+      colorClass: novedad.type === 'absence' ? 'text-error' :
+                  novedad.type === 'parent_pickup' ? 'text-blue-600' :
+                  novedad.type === 'stop_change' ? 'text-purple-600' : 'text-gray-600',
+    };
+  };
 
   // UI State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showNovedadesPanel, setShowNovedadesPanel] = useState(false);
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
+  const [checkinLoading, setCheckinLoading] = useState(false);
+
+  // Get route type from trip
+  const routeType = trip?.route?.type ?? 'pickup';
 
   // Use real data if available, otherwise use mock for UI testing
   const isLoading = studentsLoading || summaryLoading;
@@ -141,6 +205,41 @@ export default function TripStudentsPage() {
       console.error('Error acknowledging novedad:', error);
     } finally {
       setAcknowledgingId(null);
+    }
+  };
+
+  // Handle student check-in
+  const handleCheckin = async (student: any, type: 'pickup' | 'dropoff') => {
+    if (!isAuthenticated) {
+      alert('Debes iniciar sesión para realizar check-in');
+      return;
+    }
+
+    setCheckinLoading(true);
+    try {
+      const position = await getPosition();
+      const latitude = position?.latitude ?? -0.1828;
+      const longitude = position?.longitude ?? -78.4847;
+
+      await recordCheckin({
+        tripId: tripId as Id<"trips">,
+        studentId: student.id as Id<"students">,
+        stopId: student.stopId as Id<"routeStops">,
+        checkinType: type,
+        qrScanned: false,
+        latitude,
+        longitude,
+        manualReason: 'Check-in manual desde lista de estudiantes',
+      });
+
+      // Close modal and show success
+      setSelectedStudent(null);
+      alert(`${student.name} - Check-in exitoso`);
+    } catch (error: any) {
+      console.error('Error during check-in:', error);
+      alert(`Error: ${error.message || 'No se pudo realizar el check-in'}`);
+    } finally {
+      setCheckinLoading(false);
     }
   };
 
@@ -211,49 +310,61 @@ export default function TripStudentsPage() {
             </button>
           </div>
           <div className="space-y-2">
-            {novedades.map((novedad: any) => (
-              <div
-                key={novedad._id}
-                className="bg-white rounded-lg p-3 flex items-center gap-3 border border-amber-100"
-              >
-                <div className={cn(
-                  'p-2 rounded-lg',
-                  novedad.status === 'acknowledged' ? 'bg-green-50' : 'bg-amber-100'
-                )}>
-                  {novedad.type === 'absence' && <UserMinus className="w-4 h-4 text-error" />}
-                  {novedad.type === 'parent_pickup' && <Car className="w-4 h-4 text-blue-600" />}
-                  {novedad.type === 'stop_change' && <MapPin className="w-4 h-4 text-purple-600" />}
+            {novedades.map((novedad: any) => {
+              const typeInfo = getNovedadTypeInfo(novedad);
+              const TypeIcon = typeInfo.Icon;
+              const hasAttachments = novedad.attachments && novedad.attachments.length > 0;
+
+              return (
+                <div
+                  key={novedad._id}
+                  className="bg-white rounded-lg p-3 flex items-center gap-3 border border-amber-100"
+                >
+                  <div className={cn(
+                    'p-2 rounded-lg',
+                    novedad.status === 'acknowledged' ? 'bg-green-50' : 'bg-amber-100'
+                  )}>
+                    <TypeIcon className={cn('w-4 h-4', typeInfo.colorClass)} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-gray-900 text-sm truncate">
+                        {novedad.studentName}
+                      </p>
+                      {hasAttachments && (
+                        <span className="flex items-center gap-0.5 text-xs text-gray-500">
+                          <Paperclip className="w-3 h-3" />
+                          {novedad.attachments.length}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {typeInfo.label} - {novedad.reason}
+                    </p>
+                  </div>
+                  {novedad.status === 'pending' && mutationsReady && (
+                    <button
+                      onClick={() => handleAcknowledge(novedad._id)}
+                      disabled={acknowledgingId === novedad._id}
+                      className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {acknowledgingId === novedad._id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Check className="w-3 h-3" />
+                      )}
+                      Acusar
+                    </button>
+                  )}
+                  {novedad.status === 'acknowledged' && (
+                    <span className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Recibida
+                    </span>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 text-sm truncate">
-                    {novedad.studentName}
-                  </p>
-                  <p className="text-xs text-gray-600">
-                    {novedadTypeLabels[novedad.type]} - {novedad.reason}
-                  </p>
-                </div>
-                {novedad.status === 'pending' && mutationsReady && (
-                  <button
-                    onClick={() => handleAcknowledge(novedad._id)}
-                    disabled={acknowledgingId === novedad._id}
-                    className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
-                  >
-                    {acknowledgingId === novedad._id ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <Check className="w-3 h-3" />
-                    )}
-                    Acusar
-                  </button>
-                )}
-                {novedad.status === 'acknowledged' && (
-                  <span className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" />
-                    Recibida
-                  </span>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -402,7 +513,7 @@ export default function TripStudentsPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3">
         <Link
-          href="/checkin"
+          href={`/trips/${tripId}/active`}
           className="bg-primary text-white rounded-xl p-4 flex items-center gap-3 hover:bg-primary/90 transition-colors"
         >
           <QrCode className="w-6 h-6" />
@@ -502,18 +613,43 @@ export default function TripStudentsPage() {
               {selectedStudent.status === 'scheduled' && (
                 <div className="flex gap-2">
                   {!selectedStudent.checkedIn && (
-                    <button className="flex-1 py-3 bg-success text-white rounded-lg font-medium">
-                      Registrar Check-in
+                    <button
+                      onClick={() => handleCheckin(selectedStudent, routeType === 'pickup' ? 'pickup' : 'dropoff')}
+                      disabled={checkinLoading}
+                      className="flex-1 py-3 bg-success text-white rounded-lg font-medium hover:bg-success/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {checkinLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle className="w-5 h-5" />
+                          {routeType === 'pickup' ? 'Registrar Subida' : 'Registrar Bajada'}
+                        </>
+                      )}
                     </button>
                   )}
                   {selectedStudent.checkedIn && (
-                    <button className="flex-1 py-3 bg-info text-white rounded-lg font-medium">
-                      Registrar Check-out
+                    <button
+                      onClick={() => handleCheckin(selectedStudent, 'dropoff')}
+                      disabled={checkinLoading}
+                      className="flex-1 py-3 bg-info text-white rounded-lg font-medium hover:bg-info/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {checkinLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle className="w-5 h-5" />
+                          Registrar Bajada
+                        </>
+                      )}
                     </button>
                   )}
-                  <button className="py-3 px-4 bg-warning/10 text-warning rounded-lg font-medium">
+                  <Link
+                    href={`/trips/${tripId}/incidents`}
+                    className="py-3 px-4 bg-warning/10 text-warning rounded-lg font-medium hover:bg-warning/20 transition-colors"
+                  >
                     <AlertTriangle className="w-5 h-5" />
-                  </button>
+                  </Link>
                 </div>
               )}
             </div>

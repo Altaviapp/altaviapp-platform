@@ -5,17 +5,17 @@ import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 
 /**
- * Profile page - Redirects to /students
+ * Profile page - Redirects to /hijos
  *
- * The profile page has been replaced by the students management page
+ * The profile page has been replaced by the children management page
  * which provides real data from Convex and allows editing.
  */
 export default function ProfilePage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect to the new students page
-    router.replace('/students');
+    // Redirect to the children page
+    router.replace('/hijos');
   }, [router]);
 
   return (

@@ -111,3 +111,20 @@ export {
   useInstitutionGrades,
   useInstitutionGradesMutation,
 } from "./useInstitution";
+
+// Novedad Types (Configurable)
+export {
+  useNovedadTypes,
+  useNovedadType,
+  useNovedadTypesByCategory,
+  useNovedadTypeMutations,
+  CATEGORY_LABELS,
+  DURATION_LABELS,
+  COLOR_OPTIONS,
+  ICON_OPTIONS,
+} from "./useNovedadTypes";
+export type {
+  NovedadTypeCategory,
+  NovedadTypeDuration,
+  NovedadTypeFormData,
+} from "./useNovedadTypes";

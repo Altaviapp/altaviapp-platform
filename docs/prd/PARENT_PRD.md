@@ -295,53 +295,139 @@ El Parent Portal es la aplicación web PWA para padres y tutores. Permite seguir
 **Rutas**:
 | Ruta | Estado | Descripción |
 |------|--------|-------------|
+| `/novedades` | ✅ | Lista de novedades creadas |
 | `/novedades/create` | ✅ | Crear novedad/excepción |
 
 **Funcionalidades**:
 
-*Tipos de novedad*:
-| Tipo | Nombre UI | Descripción | Requiere Aprobación |
-|------|-----------|-------------|:-------------------:|
-| absence | Ausencia | Hijo no viajará ese día | Sí |
-| parent_pickup | Recoge padre | Padre recogerá directamente | **No** |
-| stop_change | Cambio de parada | Diferente ubicación por un día | Sí |
-| early_pickup | Salida temprana | Hijo sale antes de lo normal | Sí |
-| late_arrival | Llegada tarde | Hijo llegará tarde a la parada | Sí |
+*Tipos de novedad (dinámicos)*:
+Los tipos de novedad son configurables por institución en Admin → Settings → Novedades.
+Tipos predefinidos del sistema:
+| Tipo | Nombre UI | Categoría | Requiere Aprobación |
+|------|-----------|-----------|:-------------------:|
+| absence | Ausencia | absence | Sí |
+| parent_pickup | Recoge padre | pickup_change | **No** |
+| stop_change | Cambio de parada | stop_change | Sí |
+| early_pickup | Salida temprana | time_change | Sí |
+| late_arrival | Llegada tarde | time_change | Sí |
+| medical_leave | Ausencia médica | absence | Sí |
+| location_change | Cambio de domicilio | location_change | Sí |
 
-*Formulario*:
+*Formulario de creación* (`/novedades/create`):
 - [x] Selector de hijo (si tiene múltiples)
-- [x] Tipo de novedad con iconos
-- [x] Selector de fecha (mínimo mañana)
-- [x] Selector de hora (para early_pickup, late_arrival)
-- [x] Tipo de ruta afectada:
-  - Solo ida (pickup)
-  - Solo entrega (dropoff)
-  - Ambos
-- [x] Campo de razón (requerido)
-- [x] Validación de formulario
-- [x] Estado de envío
+- [x] **Tipos de novedad dinámicos** - Cargados desde backend, con iconos y colores personalizados
+- [x] Selector de fecha según tipo de duración:
+  - Un día: selector de fecha individual
+  - Rango de fechas: fecha inicio y fin
+  - Permanente: solo fecha de inicio
+  - Recurrente: días de la semana
+- [x] Selector de hora (para tipos que afectan horario)
+- [x] Selector de ruta específica (rutas asignadas al estudiante)
+- [x] Selector de tipo de ruta afectada (recogida, entrega, ambos)
+- [x] Campo de razón (requerido según configuración del tipo)
+- [x] **Upload de evidencia**:
+  - [x] Selector de archivos múltiples
+  - [x] Preview de imágenes
+  - [x] Límite configurable por tipo (máx 5 archivos, 10MB cada uno)
+  - [x] Tipos permitidos: imágenes (jpg, png, webp), PDF
+  - [x] Indicador de progreso de upload
+- [x] Validación de formulario en tiempo real
+- [x] Estado de envío con loading
+
+*Lista de novedades* (`/novedades`):
+- [x] Lista de novedades creadas por el padre
+- [x] Agrupadas por estado:
+  - Pendientes de aprobación
+  - Próximas (aprobadas, fecha futura)
+  - Historial (pasadas/aplicadas)
+- [x] **Tipos dinámicos** - Muestra icono, color y nombre del tipo configurable
+- [x] Info por novedad:
+  - Tipo con icono y color
+  - Nombre del hijo
+  - Fecha(s) afectada(s)
+  - Razón (truncada)
+  - Badge de estado (pendiente, aprobada, rechazada, aplicada)
+  - **Indicador de evidencia** (icono clip + cantidad)
+- [x] Botón "Nueva Novedad"
+- [x] Estados vacíos informativos
 
 *Flujo de aprobación*:
-- [x] parent_pickup: efecto inmediato (no requiere aprobación)
-- [x] Otras novedades: pendiente → aprobado/rechazado → aplicado
-- [x] Notificación cuando se aprueba/rechaza
+- [x] parent_pickup: efecto inmediato (estado `acknowledged`)
+- [x] Otras novedades: pending → approved/rejected → acknowledged → applied
+- [x] Notificación push cuando se aprueba/rechaza
+
+*Diagrama de flujo de status*:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    FLUJO DE STATUS NOVEDADES                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  PARENT                ADMIN                 CREW               │
+│  ──────                ─────                 ────               │
+│                                                                 │
+│  Crea novedad ──┐                                               │
+│  (pending)      │                                               │
+│       │         │                                               │
+│       ▼         │                                               │
+│  [parent_pickup]│──► acknowledged (auto) ─────────────────────► │
+│       │         │                                               │
+│  [otros tipos]  │──► pending ──────────► Revisa ────────────►   │
+│                 │         │                 │                   │
+│                 │         │                 ▼                   │
+│                 │         │            approved ─────────────►  │
+│                 │         │                │                    │
+│                 │         │                │                    │
+│                 │         │                ▼                    │
+│  ◄── notificado │         │         acknowledged ◄───────────── │
+│                 │         │                │      (acusar       │
+│                 │         │                │       recibo)      │
+│                 │         │                ▼                    │
+│                 │         │            applied ◄──────────────  │
+│                 │         │         (trip starts)               │
+│                 │         │                                     │
+│                 │         └──► rejected ──────────────────────► │
+│  ◄── notificado │              (con motivo)                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+*Estados y visibilidad para padres*:
+| Estado | Badge en UI | Descripción |
+|--------|-------------|-------------|
+| `pending` | Pendiente (amarillo) | Esperando revisión del coordinador |
+| `approved` | Aprobada (verde) | Aprobada, esperando que el conductor confirme |
+| `rejected` | Rechazada (rojo) | Rechazada por el coordinador, ver motivo |
+| `acknowledged` | Confirmada (azul) | El conductor confirmó la novedad |
+| `applied` | Aplicada (gris) | Ya se aplicó al viaje |
+| `cancelled` | Cancelada (gris) | Cancelada por el padre |
+
+*Especificaciones de evidencia (upload)*:
+| Propiedad | Valor |
+|-----------|-------|
+| Tamaño máximo por archivo | 10 MB |
+| Archivos máximos por novedad | Configurable por tipo (default: 5) |
+| Tipos permitidos | `image/jpeg`, `image/png`, `image/webp`, `application/pdf` |
+| Storage | Convex built-in storage |
+| Retención | Permanente mientras la novedad exista |
+| Acceso | Parent (propietario), Admin (revisión), Crew (lectura) |
 
 *Restricciones*:
-- [x] Fecha mínima: mañana
+- [x] Fecha mínima: mañana (o según configuración del tipo)
 - [x] stop_change requiere mínimo 48h de anticipación
-- [x] No se puede crear si viaje ya inició
+- [x] Validación de horas de anticipación según tipo
 
 **Componentes clave**:
-- `NovedadForm` - Formulario de creación
-- `NovedadTypeSelector` - Selector de tipo
-- `DatePicker` - Selector de fecha
-- `TimePicker` - Selector de hora
-- `RouteTypeSelector` - Selector de ruta afectada
-- `NovedadContextButton` - Botón contextual para crear
+- `NovedadForm` - Formulario de creación con tipos dinámicos
+- `NovedadTypeSelector` - Selector de tipo (desde API)
+- `DatePicker` / `DateRangePicker` - Según tipo de duración
+- `EvidenceUploader` - Upload de archivos con preview
+- `NovedadCard` - Card de novedad con estado e indicador de evidencia
 
-**Hooks**:
-- `useNovedades()` - Lista de novedades del usuario
+**Hooks** (`apps/parent/src/hooks/useNovedades.ts`):
+- `useMyNovedades()` - Lista de novedades del usuario
 - `useNovedadesMutations()` - Crear/cancelar novedad
+- `useNovedadTypes()` - Tipos configurables desde backend
+- `useEvidenceUpload()` - Upload de archivos de evidencia
 
 ---
 
@@ -481,14 +567,46 @@ El Parent Portal es la aplicación web PWA para padres y tutores. Permite seguir
 - [x] Manifest configurado
 - [x] Responsive design (mobile-first)
 
+### Notificaciones del Sistema de Novedades
+
+*Eventos recibidos por el padre*:
+| Evento | Tipo | Canal | Mensaje |
+|--------|------|-------|---------|
+| Novedad aprobada | success | push + in-app | "Tu novedad para {estudiante} ha sido aprobada" |
+| Novedad rechazada | warning | push + in-app | "Tu novedad fue rechazada: {motivo}" |
+| Novedad acusada por crew | info | in-app | "El conductor confirmó la novedad de {estudiante}" |
+| Novedad aplicada | info | in-app | "La novedad de {estudiante} fue aplicada al viaje" |
+| Viaje iniciado | info | push | "El bus de {estudiante} ha iniciado el recorrido" |
+| Estudiante abordó | success | push | "{estudiante} ha subido al bus" |
+| Estudiante entregado | success | push | "{estudiante} ha llegado a destino" |
+| ETA actualizado | info | in-app | "Nueva hora estimada: {hora}" |
+| Incidente reportado | warning | push | "Se reportó un incidente en la ruta de {estudiante}" |
+
+*Configuración de notificaciones*:
+Las preferencias de notificación se configuran en `/settings` (pendiente conectar a backend):
+- Inicio de viaje
+- Fin de viaje
+- Check-in/check-out
+- Alertas de retraso
+- Incidentes
+
 ---
 
 ## Requisitos Pendientes (v2.0)
 
+### Alta Prioridad
+- [ ] **Settings: Conectar datos reales** - Actualmente usa datos mock para algunas preferencias
+- [ ] **Settings: Logout funcional** - El botón de cerrar sesión no tiene handler
+
+### Media Prioridad
+- [ ] Cancelar novedad pendiente (UI - backend listo)
+- [ ] Rutas asignadas en perfil de hijo
+- [ ] Navegación de semanas en calendario
+- [ ] Deep links desde notificaciones usando relatedEntityId
+
+### Baja Prioridad
 - [ ] Push notifications nativas
 - [ ] Chat con conductor/coordinador
-- [ ] Historial de novedades creadas
-- [ ] Cancelar novedad pendiente
 - [ ] Guardado de preferencias en base de datos
 - [ ] 2FA funcional
 - [ ] Modo oscuro

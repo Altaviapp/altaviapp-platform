@@ -21,7 +21,8 @@ import type { Id } from "./_generated/dataModel";
 const STOP_CHANGE_MIN_HOURS = 48;
 
 // Get type labels in Spanish
-function getTypeLabel(type: string): string {
+function getTypeLabel(type: string | undefined | null): string {
+  if (!type) return "Novedad";
   const labels: Record<string, string> = {
     absence: "Ausencia",
     parent_pickup: "Recogida por padre",
@@ -30,6 +31,16 @@ function getTypeLabel(type: string): string {
     late_arrival: "Llegada tarde",
   };
   return labels[type] || type;
+}
+
+// Helper to get effective date from novedad (handles both legacy and new schema)
+function getEffectiveDate(novedad: { date?: string; startDate?: string }): string {
+  return novedad.startDate || novedad.date || "";
+}
+
+// Helper to get effective type from novedad
+function getEffectiveType(novedad: { type?: string; typeCategorySnapshot?: string }): string {
+  return novedad.type || novedad.typeCategorySnapshot || "other";
 }
 
 function getRouteTypeLabel(routeType: string): string {
@@ -47,26 +58,45 @@ function getRouteTypeLabel(routeType: string): string {
 
 /**
  * Create a new novedad (by parent)
+ * Supports both legacy type string and new typeId-based creation
  */
 export const create = mutation({
   args: {
     userId: v.id("users"),
     studentId: v.id("students"),
-    type: v.union(
+    // NEW: typeId-based creation (preferred)
+    typeId: v.optional(v.id("novedadTypes")),
+    // LEGACY: type string (for backwards compatibility)
+    type: v.optional(v.union(
       v.literal("absence"),
       v.literal("parent_pickup"),
       v.literal("stop_change"),
       v.literal("early_pickup"),
       v.literal("late_arrival")
-    ),
+    )),
+    // Route specification
+    routeId: v.optional(v.id("routes")), // Specific route (new)
     affectedRouteType: v.union(
       v.literal("pickup"),
       v.literal("dropoff"),
       v.literal("both")
     ),
-    date: v.string(), // YYYY-MM-DD
+    // Dates - support both legacy and new system
+    date: v.optional(v.string()), // YYYY-MM-DD (legacy, single day)
+    durationType: v.optional(v.union(
+      v.literal("single_day"),
+      v.literal("date_range"),
+      v.literal("permanent"),
+      v.literal("recurring")
+    )),
+    startDate: v.optional(v.string()), // YYYY-MM-DD (new)
+    endDate: v.optional(v.string()), // YYYY-MM-DD (new, for ranges)
+    recurringDays: v.optional(v.array(v.number())), // 0-6 for recurring
+    // Stop change
     newStopId: v.optional(v.id("routeStops")),
+    // Time
     time: v.optional(v.string()), // HH:mm
+    // Content
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -85,7 +115,11 @@ export const create = mutation({
 
     // Verify parent has access to this student (by email match or admin)
     if (user.role === "parent") {
-      if (user.email.toLowerCase() !== student.parentEmail.toLowerCase()) {
+      const hasAccess =
+        user.email.toLowerCase() === student.parentEmail.toLowerCase() ||
+        (student.secondaryParentEmail &&
+          user.email.toLowerCase() === student.secondaryParentEmail.toLowerCase());
+      if (!hasAccess) {
         throw new Error("No tienes permiso para crear novedades para este estudiante");
       }
     } else {
@@ -93,20 +127,77 @@ export const create = mutation({
       await verifyInstitutionAccess(ctx, args.userId, student.institutionId);
     }
 
-    // Validate date is not in the past
+    // Resolve type - prefer typeId, fallback to legacy type
+    let novedadType = null;
+    let effectiveCategory: string | null = null;
+    let requiresApproval = true;
+
+    if (args.typeId) {
+      novedadType = await ctx.db.get(args.typeId);
+      if (!novedadType || novedadType.institutionId !== student.institutionId) {
+        throw new Error("Tipo de novedad no válido");
+      }
+      if (!novedadType.isActive) {
+        throw new Error("Este tipo de novedad no está activo");
+      }
+      effectiveCategory = novedadType.category;
+      requiresApproval = novedadType.requiresApproval;
+    } else if (args.type) {
+      // Legacy type - map to category
+      const legacyTypeToCategory: Record<string, string> = {
+        absence: "absence",
+        parent_pickup: "pickup_change",
+        stop_change: "stop_change",
+        early_pickup: "time_change",
+        late_arrival: "time_change",
+      };
+      effectiveCategory = legacyTypeToCategory[args.type] || "other";
+      requiresApproval = args.type !== "parent_pickup";
+    } else {
+      throw new Error("Debe especificar el tipo de novedad");
+    }
+
+    // Determine effective dates
+    const effectiveStartDate = args.startDate || args.date;
+    const effectiveDurationType = args.durationType || "single_day";
+
+    if (!effectiveStartDate) {
+      throw new Error("Debe especificar la fecha");
+    }
+
+    // Validate date is not in the past (only for non-permanent)
     const today = new Date().toISOString().split("T")[0]!;
-    if (args.date < today) {
+    if (effectiveDurationType !== "permanent" && effectiveStartDate < today) {
       throw new Error("No se pueden crear novedades para fechas pasadas");
     }
 
-    // Validate stop change has minimum advance time
-    if (args.type === "stop_change") {
-      const requestDate = new Date(args.date);
+    // Validate advance time if type requires it
+    if (novedadType?.minAdvanceHours) {
+      const requestDate = new Date(effectiveStartDate);
       const now = new Date();
       const hoursUntil = (requestDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-      if (hoursUntil < STOP_CHANGE_MIN_HOURS) {
-        throw new Error(`Los cambios de parada requieren mínimo ${STOP_CHANGE_MIN_HOURS} horas de anticipación`);
+      if (hoursUntil < novedadType.minAdvanceHours) {
+        throw new Error(
+          `Este tipo de novedad requiere mínimo ${novedadType.minAdvanceHours} horas de anticipación`
+        );
+      }
+    }
+
+    // Validate stop change requirements (legacy or category-based)
+    const isStopChange = effectiveCategory === "stop_change" || args.type === "stop_change";
+    if (isStopChange) {
+      if (!novedadType?.minAdvanceHours) {
+        // Legacy validation
+        const requestDate = new Date(effectiveStartDate);
+        const now = new Date();
+        const hoursUntil = (requestDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+        if (hoursUntil < STOP_CHANGE_MIN_HOURS) {
+          throw new Error(
+            `Los cambios de parada requieren mínimo ${STOP_CHANGE_MIN_HOURS} horas de anticipación`
+          );
+        }
       }
 
       if (!args.newStopId) {
@@ -120,49 +211,64 @@ export const create = mutation({
       }
     }
 
-    // Check for duplicate novedades on same date
-    const existingNovedad = await ctx.db
-      .query("novedades")
-      .withIndex("by_student_date", (q) =>
-        q.eq("studentId", args.studentId).eq("date", args.date)
-      )
-      .filter((q) =>
-        q.and(
-          q.neq(q.field("status"), "cancelled"),
-          q.neq(q.field("status"), "expired"),
-          q.or(
-            q.eq(q.field("affectedRouteType"), args.affectedRouteType),
-            q.eq(q.field("affectedRouteType"), "both"),
-            q.eq(args.affectedRouteType, "both")
+    // Check for duplicate novedades
+    // For single_day, check same date
+    // For date_range/permanent/recurring, check overlapping ranges
+    if (effectiveDurationType === "single_day") {
+      const existingNovedad = await ctx.db
+        .query("novedades")
+        .withIndex("by_student_date", (q) =>
+          q.eq("studentId", args.studentId).eq("date", effectiveStartDate)
+        )
+        .filter((q) =>
+          q.and(
+            q.neq(q.field("status"), "cancelled"),
+            q.neq(q.field("status"), "expired"),
+            q.or(
+              q.eq(q.field("affectedRouteType"), args.affectedRouteType),
+              q.eq(q.field("affectedRouteType"), "both"),
+              q.eq(args.affectedRouteType, "both")
+            )
           )
         )
-      )
-      .first();
+        .first();
 
-    if (existingNovedad) {
-      throw new Error("Ya existe una novedad para este estudiante en esta fecha y tipo de ruta");
+      if (existingNovedad) {
+        throw new Error("Ya existe una novedad para este estudiante en esta fecha y tipo de ruta");
+      }
     }
+    // TODO: Add overlap checking for date_range/permanent/recurring
 
-    // Create the novedad
-    // Parent pickup goes directly to "acknowledged" (no approval needed)
-    // This takes immediate effect when the trip is created/started
-    const initialStatus = args.type === "parent_pickup" ? "acknowledged" : "pending";
+    // Determine initial status
+    // If doesn't require approval, go directly to acknowledged
+    const initialStatus = !requiresApproval ? "acknowledged" : "pending";
 
     const now = Date.now();
     const novedadId = await ctx.db.insert("novedades", {
       institutionId: student.institutionId,
       studentId: args.studentId,
       createdBy: args.userId,
-      type: args.type,
+      // Type fields
+      typeId: args.typeId,
+      typeCategorySnapshot: effectiveCategory || undefined,
+      type: args.type, // Keep legacy type for backwards compatibility
+      // Route fields
+      routeId: args.routeId,
       affectedRouteType: args.affectedRouteType,
-      date: args.date,
+      // Date fields
+      durationType: effectiveDurationType,
+      startDate: effectiveStartDate,
+      endDate: args.endDate,
+      recurringDays: args.recurringDays,
+      date: args.date || effectiveStartDate, // Legacy field, keep populated
+      // Other fields
       newStopId: args.newStopId,
       time: args.time,
       reason: args.reason,
       status: initialStatus,
-      // For parent_pickup, auto-acknowledge
-      acknowledgedAt: args.type === "parent_pickup" ? now : undefined,
-      acknowledgedBy: args.type === "parent_pickup" ? args.userId : undefined,
+      // Auto-acknowledge if no approval required
+      acknowledgedAt: !requiresApproval ? now : undefined,
+      acknowledgedBy: !requiresApproval ? args.userId : undefined,
       createdAt: now,
       updatedAt: now,
     });
@@ -176,6 +282,9 @@ export const create = mutation({
 
     const notifiedUsers = new Set<string>();
 
+    // Get display name for the novedad type
+    const typeName = novedadType?.name || getTypeLabel(args.type || "");
+
     for (const sr of studentRoutes) {
       const route = await ctx.db.get(sr.routeId);
       if (!route || !route.isActive) continue;
@@ -188,15 +297,20 @@ export const create = mutation({
         continue;
       }
 
-      // Determine notification type and title based on novedad type
-      const isParentPickup = args.type === "parent_pickup";
-      const notifTitle = isParentPickup
-        ? `⚠️ PADRE RECOGE: ${student.firstName} ${student.lastName}`
-        : `Nueva novedad: ${getTypeLabel(args.type)}`;
-      const notifMessage = isParentPickup
-        ? `${student.firstName} ${student.lastName} será recogido por su padre. NO ABORDARÁ. Fecha: ${args.date}`
-        : `${student.firstName} ${student.lastName} - ${args.reason}. Fecha: ${args.date}`;
-      const notifType = isParentPickup ? "warning" : "info";
+      // If specific route specified, only notify that route's crew
+      if (args.routeId && sr.routeId !== args.routeId) {
+        continue;
+      }
+
+      // Determine notification type and title based on novedad category
+      const isPickupChange = effectiveCategory === "pickup_change";
+      const notifTitle = isPickupChange
+        ? `⚠️ ${typeName.toUpperCase()}: ${student.firstName} ${student.lastName}`
+        : `Nueva novedad: ${typeName}`;
+      const notifMessage = isPickupChange
+        ? `${student.firstName} ${student.lastName} - ${typeName}. NO ABORDARÁ. Fecha: ${effectiveStartDate}`
+        : `${student.firstName} ${student.lastName} - ${args.reason}. Fecha: ${effectiveStartDate}`;
+      const notifType = isPickupChange || effectiveCategory === "absence" ? "warning" : "info";
 
       // Notify driver
       const driver = await ctx.db.get(route.driverId);
@@ -606,7 +720,9 @@ export const getMyNovedades = query({
 
     // Sort by date descending and apply limit
     allNovedades.sort((a, b) => {
-      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      const dateA = getEffectiveDate(a);
+      const dateB = getEffectiveDate(b);
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
       return b.createdAt - a.createdAt;
     });
 
@@ -856,16 +972,18 @@ export const getForAdmin = query({
     }
 
     if (args.fromDate) {
-      novedades = novedades.filter((n) => n.date >= args.fromDate!);
+      novedades = novedades.filter((n) => getEffectiveDate(n) >= args.fromDate!);
     }
 
     if (args.toDate) {
-      novedades = novedades.filter((n) => n.date <= args.toDate!);
+      novedades = novedades.filter((n) => getEffectiveDate(n) <= args.toDate!);
     }
 
     // Sort by date descending
     novedades.sort((a, b) => {
-      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      const dateA = getEffectiveDate(a);
+      const dateB = getEffectiveDate(b);
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
       return b.createdAt - a.createdAt;
     });
 
@@ -931,7 +1049,9 @@ export const getPendingForAdmin = query({
 
     // Sort by date ascending (oldest first for review)
     novedades.sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      const dateA = getEffectiveDate(a);
+      const dateB = getEffectiveDate(b);
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
       return a.createdAt - b.createdAt;
     });
 
@@ -1067,8 +1187,8 @@ export const getNovedadesForRoute = query({
     };
 
     enriched.sort((a, b) => {
-      const priorityA = typePriority[a.type] || 99;
-      const priorityB = typePriority[b.type] || 99;
+      const priorityA = typePriority[getEffectiveType(a)] || 99;
+      const priorityB = typePriority[getEffectiveType(b)] || 99;
       if (priorityA !== priorityB) return priorityA - priorityB;
       return (a.stopOrder || 0) - (b.stopOrder || 0);
     });
@@ -1272,7 +1392,7 @@ export const getNovedadesForDriverToday = query({
             allNovedades.push({
               _id: novedad._id.toString(),
               studentName: student ? `${student.firstName} ${student.lastName}` : "Desconocido",
-              type: novedad.type,
+              type: getEffectiveType(novedad),
               routeName: route.name,
               reason: novedad.reason || "",
               affectedRouteType: novedad.affectedRouteType,
@@ -1294,5 +1414,266 @@ export const getNovedadesForDriverToday = query({
     };
 
     return { novedades: allNovedades, summary };
+  },
+});
+
+// ============================================
+// EVIDENCE MUTATIONS
+// ============================================
+
+/**
+ * Generate an upload URL for evidence file
+ * Returns a URL that can be used to upload a file to Convex storage
+ */
+export const generateEvidenceUploadUrl = mutation({
+  args: {
+    userId: v.id("users"),
+    novedadId: v.id("novedades"),
+  },
+  handler: async (ctx, args) => {
+    const user = await verifyUser(ctx, args.userId);
+
+    const novedad = await ctx.db.get(args.novedadId);
+    if (!novedad) {
+      throw new Error("Novedad no encontrada");
+    }
+
+    // Only creator or admin can upload evidence
+    if (novedad.createdBy !== args.userId) {
+      if (user.role !== "admin" && user.role !== "super_admin") {
+        throw new Error("Solo el creador puede subir evidencia");
+      }
+      await verifyInstitutionAccess(ctx, args.userId, novedad.institutionId);
+    }
+
+    // Check file limit if type has one
+    if (novedad.typeId) {
+      const novedadType = await ctx.db.get(novedad.typeId);
+      if (novedadType) {
+        const currentCount = novedad.attachments?.length || 0;
+        const maxFiles = novedadType.maxEvidenceFiles || 5;
+        if (currentCount >= maxFiles) {
+          throw new Error(`Máximo ${maxFiles} archivos permitidos`);
+        }
+      }
+    } else {
+      // Default limit for legacy novedades
+      const currentCount = novedad.attachments?.length || 0;
+      if (currentCount >= 5) {
+        throw new Error("Máximo 5 archivos permitidos");
+      }
+    }
+
+    // Generate upload URL
+    const uploadUrl = await ctx.storage.generateUploadUrl();
+
+    return { uploadUrl };
+  },
+});
+
+/**
+ * Save evidence file reference after upload
+ */
+export const saveEvidenceFile = mutation({
+  args: {
+    userId: v.id("users"),
+    novedadId: v.id("novedades"),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    fileType: v.string(),
+    fileSize: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await verifyUser(ctx, args.userId);
+
+    const novedad = await ctx.db.get(args.novedadId);
+    if (!novedad) {
+      throw new Error("Novedad no encontrada");
+    }
+
+    // Only creator or admin can add evidence
+    if (novedad.createdBy !== args.userId) {
+      if (user.role !== "admin" && user.role !== "super_admin") {
+        throw new Error("Solo el creador puede agregar evidencia");
+      }
+      await verifyInstitutionAccess(ctx, args.userId, novedad.institutionId);
+    }
+
+    // Validate file type if type has restrictions
+    if (novedad.typeId) {
+      const novedadType = await ctx.db.get(novedad.typeId);
+      if (novedadType?.allowedFileTypes && novedadType.allowedFileTypes.length > 0) {
+        const isAllowed = novedadType.allowedFileTypes.some((allowed) => {
+          if (allowed.endsWith("/*")) {
+            const category = allowed.replace("/*", "");
+            return args.fileType.startsWith(category);
+          }
+          return args.fileType === allowed;
+        });
+        if (!isAllowed) {
+          throw new Error("Tipo de archivo no permitido");
+        }
+      }
+    }
+
+    // Validate file size (10MB max)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (args.fileSize > maxSize) {
+      throw new Error("El archivo excede el tamaño máximo de 10MB");
+    }
+
+    // Add to attachments array
+    const currentAttachments = novedad.attachments || [];
+    const newAttachment = {
+      storageId: args.storageId,
+      fileName: args.fileName,
+      fileType: args.fileType,
+      fileSize: args.fileSize,
+      uploadedAt: Date.now(),
+    };
+
+    await ctx.db.patch(args.novedadId, {
+      attachments: [...currentAttachments, newAttachment],
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Delete an evidence file
+ */
+export const deleteEvidenceFile = mutation({
+  args: {
+    userId: v.id("users"),
+    novedadId: v.id("novedades"),
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const user = await verifyUser(ctx, args.userId);
+
+    const novedad = await ctx.db.get(args.novedadId);
+    if (!novedad) {
+      throw new Error("Novedad no encontrada");
+    }
+
+    // Only creator or admin can delete evidence
+    if (novedad.createdBy !== args.userId) {
+      if (user.role !== "admin" && user.role !== "super_admin") {
+        throw new Error("Solo el creador puede eliminar evidencia");
+      }
+      await verifyInstitutionAccess(ctx, args.userId, novedad.institutionId);
+    }
+
+    // Find and remove the attachment
+    const currentAttachments = novedad.attachments || [];
+    const attachmentIndex = currentAttachments.findIndex(
+      (a) => a.storageId === args.storageId
+    );
+
+    if (attachmentIndex === -1) {
+      throw new Error("Archivo no encontrado");
+    }
+
+    // Delete from storage
+    await ctx.storage.delete(args.storageId);
+
+    // Remove from array
+    const updatedAttachments = [
+      ...currentAttachments.slice(0, attachmentIndex),
+      ...currentAttachments.slice(attachmentIndex + 1),
+    ];
+
+    await ctx.db.patch(args.novedadId, {
+      attachments: updatedAttachments,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get evidence file URL for viewing
+ */
+export const getEvidenceUrl = query({
+  args: {
+    userId: v.id("users"),
+    novedadId: v.id("novedades"),
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return null;
+    }
+
+    const novedad = await ctx.db.get(args.novedadId);
+    if (!novedad) {
+      return null;
+    }
+
+    // Verify access: creator, admin, or crew assigned to the route
+    const isCreator = novedad.createdBy === args.userId;
+    const isAdmin = user.role === "admin" || user.role === "super_admin";
+
+    if (!isCreator && !isAdmin) {
+      // Check if user is driver/monitor on affected route
+      if (user.role === "driver" || user.role === "monitor") {
+        // Get student routes to check access
+        const studentRoutes = await ctx.db
+          .query("studentRoutes")
+          .withIndex("by_student", (q) => q.eq("studentId", novedad.studentId))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect();
+
+        let hasAccess = false;
+        for (const sr of studentRoutes) {
+          const route = await ctx.db.get(sr.routeId);
+          if (!route) continue;
+
+          // Check if user is driver on this route
+          const driver = await ctx.db.get(route.driverId);
+          if (driver?.userId === args.userId) {
+            hasAccess = true;
+            break;
+          }
+
+          // Check if user is monitor on this route
+          if (route.monitorId) {
+            const monitor = await ctx.db.get(route.monitorId);
+            if (monitor?.userId === args.userId) {
+              hasAccess = true;
+              break;
+            }
+          }
+        }
+
+        if (!hasAccess) {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+
+    // Verify the file exists in the novedad
+    const attachment = novedad.attachments?.find(
+      (a) => a.storageId === args.storageId
+    );
+    if (!attachment) {
+      return null;
+    }
+
+    // Get the URL
+    const url = await ctx.storage.getUrl(args.storageId);
+
+    return {
+      url,
+      fileName: attachment.fileName,
+      fileType: attachment.fileType,
+      fileSize: attachment.fileSize,
+    };
   },
 });

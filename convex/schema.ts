@@ -516,6 +516,69 @@ export default defineSchema({
   // NOVEDADES SYSTEM (Schedule Exceptions)
   // ============================================
 
+  // Novedad Types - Tipos de novedad configurables por institución
+  // Admin puede crear/modificar tipos de novedades con diferentes comportamientos
+  novedadTypes: defineTable({
+    institutionId: v.id("institutions"),
+
+    // Identificación
+    code: v.string(),                    // "absence", "parent_pickup", "medical_leave"
+    name: v.string(),                    // "Ausencia", "Cita Médica"
+    description: v.string(),             // Texto de ayuda para padres
+
+    // Visual
+    icon: v.string(),                    // Nombre icono Lucide: "UserMinus", "Car"
+    color: v.string(),                   // Color Tailwind: "red", "blue", "yellow"
+
+    // Categoría de comportamiento - determina cómo afecta al viaje
+    category: v.union(
+      v.literal("absence"),              // No viaja
+      v.literal("pickup_change"),        // Recoge otra persona
+      v.literal("stop_change"),          // Parada diferente
+      v.literal("time_change"),          // Horario diferente
+      v.literal("location_change"),      // Cambio de domicilio
+      v.literal("schedule_change"),      // Cambio permanente de horario
+      v.literal("route_change"),         // Cambio de ruta
+      v.literal("service_suspension"),   // Suspensión temporal
+      v.literal("other")                 // Otros (no afecta automáticamente)
+    ),
+
+    // Duración permitida para este tipo
+    durationType: v.union(
+      v.literal("single_day"),           // Un día específico
+      v.literal("date_range"),           // Rango de fechas
+      v.literal("permanent"),            // Hasta nuevo aviso
+      v.literal("recurring")             // Días específicos de semana
+    ),
+
+    // Workflow
+    requiresApproval: v.boolean(),       // Requiere aprobación de admin
+    affectsTrips: v.boolean(),           // Afecta viajes programados
+    affectsRouteCalculation: v.boolean(), // Debe recalcular ruta
+
+    // Evidencia
+    evidenceRequired: v.boolean(),       // Evidencia obligatoria
+    evidenceOptional: v.boolean(),       // Evidencia opcional (si no es requerida)
+    maxEvidenceFiles: v.optional(v.number()), // Máximo archivos (default: 5)
+    allowedFileTypes: v.optional(v.array(v.string())), // ["image/*", "application/pdf"]
+
+    // Validaciones
+    minAdvanceHours: v.optional(v.number()), // Horas mínimas de anticipación
+    reasonRequired: v.boolean(),          // Razón obligatoria
+
+    // Sistema
+    isSystemType: v.boolean(),           // Tipos default (no se pueden eliminar)
+    isActive: v.boolean(),
+    sortOrder: v.number(),               // Orden en selector
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_institution", ["institutionId"])
+    .index("by_code", ["institutionId", "code"])
+    .index("by_active", ["institutionId", "isActive"])
+    .index("by_category", ["institutionId", "category"]),
+
   // Trip Students - Estudiantes programados por viaje específico
   // Se genera al crear/programar el trip, copiando de studentRoutes
   // Permite modificaciones específicas para ese día (ausencias, cambios de parada)
@@ -546,39 +609,81 @@ export default defineSchema({
     .index("by_trip_status", ["tripId", "status"]),
 
   // Novedades - Registro de excepciones reportadas por padres
-  // Ausencias, cambios de parada temporales, recogidas por padre, etc.
+  // Sistema unificado: ausencias, cambios de parada, cambios de ubicación, suspensiones, etc.
   novedades: defineTable({
     institutionId: v.id("institutions"),
     studentId: v.id("students"),
     createdBy: v.id("users"),            // Padre que reportó
 
-    // Tipo de novedad
-    type: v.union(
+    // TIPO (referencia a configurable) - nuevo sistema
+    typeId: v.optional(v.id("novedadTypes")),  // Optional para backwards compatibility
+    typeCategorySnapshot: v.optional(v.string()), // Snapshot de category al crear
+
+    // Tipo de novedad (legacy - mantener para backwards compatibility)
+    type: v.optional(v.union(
       v.literal("absence"),              // No viaja hoy/fecha específica
       v.literal("parent_pickup"),        // Padre recoge directamente
       v.literal("stop_change"),          // Cambio de parada temporal
       v.literal("early_pickup"),         // Salida temprana
-      v.literal("late_arrival")          // Llegada tarde (abordará en otra parada o más tarde)
-    ),
+      v.literal("late_arrival")          // Llegada tarde
+    )),
 
-    // Ruta afectada
+    // RUTA ESPECÍFICA (nuevo)
+    routeId: v.optional(v.id("routes")), // Si se especifica ruta específica
+
+    // Ruta afectada (por tipo)
     affectedRouteType: v.union(
       v.literal("pickup"),               // Solo recogida (mañana)
       v.literal("dropoff"),              // Solo entrega (tarde)
       v.literal("both")                  // Ambos servicios
     ),
 
-    // Fecha aplicable (YYYY-MM-DD)
-    date: v.string(),
+    // FECHAS - sistema expandido
+    durationType: v.optional(v.union(
+      v.literal("single_day"),           // Un día específico
+      v.literal("date_range"),           // Rango de fechas
+      v.literal("permanent"),            // Hasta nuevo aviso
+      v.literal("recurring")             // Días específicos de semana
+    )),
+    startDate: v.optional(v.string()),   // YYYY-MM-DD (nuevo campo)
+    endDate: v.optional(v.string()),     // YYYY-MM-DD (para rangos/permanente)
+    recurringDays: v.optional(v.array(v.number())), // 0-6 para recurrente
+
+    // Fecha aplicable (legacy - mantener para backwards compatibility)
+    date: v.optional(v.string()),        // YYYY-MM-DD
 
     // Para cambio de parada
     newStopId: v.optional(v.id("routeStops")),
+
+    // CAMBIOS DE UBICACIÓN (nuevo)
+    locationChange: v.optional(v.object({
+      previousLatitude: v.number(),
+      previousLongitude: v.number(),
+      previousAddress: v.string(),
+      newLatitude: v.number(),
+      newLongitude: v.number(),
+      newAddress: v.string(),
+      distanceChange: v.number(),        // Metros de diferencia
+      suggestedStopId: v.optional(v.id("routeStops")),
+    })),
 
     // Para early_pickup/late_arrival - hora específica
     time: v.optional(v.string()),        // HH:mm format
 
     // Razón del padre
     reason: v.string(),
+
+    // Notas del admin (nuevo)
+    adminNotes: v.optional(v.string()),
+
+    // EVIDENCIA (nuevo)
+    attachments: v.optional(v.array(v.object({
+      storageId: v.id("_storage"),
+      fileName: v.string(),
+      fileType: v.string(),
+      fileSize: v.number(),
+      uploadedAt: v.number(),
+    }))),
 
     // Estado del workflow
     status: v.union(
@@ -600,8 +705,9 @@ export default defineSchema({
     acknowledgedBy: v.optional(v.id("users")),
     acknowledgedAt: v.optional(v.number()),
 
-    // Referencia al trip afectado (se llena al aplicar)
-    tripId: v.optional(v.id("trips")),
+    // Referencia a trips afectados (expandido de single a array)
+    tripId: v.optional(v.id("trips")),                // Legacy - single trip
+    appliedToTrips: v.optional(v.array(v.id("trips"))), // Nuevo - multiple trips
 
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -611,11 +717,15 @@ export default defineSchema({
     .index("by_date", ["date"])
     .index("by_status", ["status"])
     .index("by_student_date", ["studentId", "date"])
-    .index("by_institution_date", ["institutionId", "date"]),
+    .index("by_institution_date", ["institutionId", "date"])
+    .index("by_type", ["typeId"])
+    .index("by_route", ["routeId"])
+    .index("by_start_date", ["institutionId", "startDate"]),
 
-  // Route Change Requests - Solicitudes de cambios permanentes
-  // Para cambios recurrentes que requieren aprobación de coordinación
-  // Ej: "Solo lunes a jueves", "Cambio de parada permanente", "Suspensión temporal"
+  // Route Change Requests - DEPRECATED
+  // Esta tabla está siendo migrada a novedades con durationType: "permanent" | "recurring"
+  // Mantener solo para backwards compatibility durante migración
+  // TODO: Eliminar después de migrar todos los registros existentes
   routeChangeRequests: defineTable({
     institutionId: v.id("institutions"),
     studentId: v.id("students"),

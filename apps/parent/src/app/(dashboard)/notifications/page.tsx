@@ -282,7 +282,7 @@ export default function NotificationsPage() {
                       <div className="flex items-center gap-4 mt-3">
                         {notification.category === 'trip_update' || notification.category === 'eta' ? (
                           <Link
-                            href="/tracking"
+                            href="/inicio"
                             className="flex items-center gap-1 text-sm text-info hover:underline"
                           >
                             <MapPin className="w-4 h-4" />

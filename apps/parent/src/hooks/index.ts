@@ -43,5 +43,13 @@ export {
   useNovedadesMutations,
   useMyRouteChangeRequests,
   useRouteChangeRequestMutations,
+  useNovedadTypes,
+  useEvidenceUpload,
 } from "./useNovedades";
-export type { NovedadType, AffectedRouteType, CreateNovedadInput } from "./useNovedades";
+export type {
+  NovedadType,
+  AffectedRouteType,
+  CreateNovedadInput,
+  NovedadCategory,
+  DurationType,
+} from "./useNovedades";

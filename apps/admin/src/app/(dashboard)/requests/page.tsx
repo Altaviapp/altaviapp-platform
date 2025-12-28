@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle,
@@ -21,6 +21,16 @@ import {
   Bell,
   Eye,
   Loader2,
+  Stethoscope,
+  UserCheck,
+  MapPinned,
+  AlarmClock,
+  Home,
+  Ban,
+  Paperclip,
+  Download,
+  Image as ImageIcon,
+  ExternalLink,
 } from 'lucide-react';
 import { Badge, Card, CardContent, Modal, Tabs, TabsList, Tab, TabsPanel, Button, Textarea } from '@/components/core';
 import { PageHeader, StatsGrid, type StatItem } from '@/components/shared';
@@ -32,6 +42,9 @@ import {
   useNovedadReviewMutations,
   useIncidents,
   useConvexAuth,
+  useNovedadTypes,
+  CATEGORY_LABELS,
+  DURATION_LABELS,
 } from '@/hooks';
 import { cn } from '@/lib/utils';
 
@@ -46,12 +59,52 @@ import { cn } from '@/lib/utils';
 
 type TabType = 'novedades' | 'cambios' | 'incidentes';
 
+// Icon mapping for dynamic types
+const ICON_MAP: Record<string, React.ElementType> = {
+  UserMinus,
+  Stethoscope,
+  Car,
+  UserCheck,
+  MapPin,
+  MapPinned,
+  Clock,
+  AlarmClock,
+  Home,
+  Calendar: CalendarDays,
+  Route,
+  Ban,
+  Bell,
+  AlertTriangle,
+  FileText,
+};
+
+// Color mapping
+const COLOR_MAP: Record<string, string> = {
+  red: 'text-red-600',
+  blue: 'text-blue-600',
+  green: 'text-green-600',
+  yellow: 'text-yellow-600',
+  purple: 'text-purple-600',
+  orange: 'text-orange-600',
+  indigo: 'text-indigo-600',
+  gray: 'text-gray-600',
+};
+
+// Fallback for legacy types
 const NOVEDAD_TYPES: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   absence: { label: 'Ausencia', icon: UserMinus, color: 'text-red-600' },
   parent_pickup: { label: 'Recoge padre', icon: Car, color: 'text-blue-600' },
   stop_change: { label: 'Cambio de parada', icon: MapPin, color: 'text-purple-600' },
   early_pickup: { label: 'Salida temprana', icon: Clock, color: 'text-orange-600' },
   late_arrival: { label: 'Llegada tarde', icon: Clock, color: 'text-yellow-600' },
+  medical_leave: { label: 'Ausencia Médica', icon: Stethoscope, color: 'text-red-600' },
+  authorized_pickup: { label: 'Recoge Autorizado', icon: UserCheck, color: 'text-blue-600' },
+  stop_change_temp: { label: 'Cambio Parada Temporal', icon: MapPin, color: 'text-purple-600' },
+  stop_change_perm: { label: 'Cambio Parada Permanente', icon: MapPinned, color: 'text-purple-600' },
+  location_change: { label: 'Cambio de Domicilio', icon: Home, color: 'text-indigo-600' },
+  schedule_change: { label: 'Cambio de Horario', icon: CalendarDays, color: 'text-green-600' },
+  route_change: { label: 'Cambio de Ruta', icon: Route, color: 'text-orange-600' },
+  service_suspension: { label: 'Suspensión de Servicio', icon: Ban, color: 'text-gray-600' },
 };
 
 const REQUEST_TYPES: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -90,6 +143,7 @@ export default function RequestsPage() {
   const { requests, isLoading: loadingRequests } = usePendingRequests();
   const { approveRequest, rejectRequest, isReady: requestReady } = useReviewMutations();
   const { incidents, isLoading: loadingIncidents } = useIncidents({ status: 'open' });
+  const { types: novedadTypes } = useNovedadTypes(false); // Include inactive for display
 
   // Modal state
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -98,6 +152,43 @@ export default function RequestsPage() {
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | null>(null);
 
   const isLoading = loadingNovedades || loadingRequests || loadingIncidents;
+
+  // Create a map of novedadTypes for quick lookup
+  const novedadTypesMap = useMemo(() => {
+    const map: Record<string, { label: string; icon: React.ElementType; color: string }> = {};
+    for (const type of novedadTypes) {
+      map[type.code] = {
+        label: type.name,
+        icon: ICON_MAP[type.icon] ?? FileText,
+        color: COLOR_MAP[type.color] ?? 'text-gray-600',
+      };
+      // Also map by ID for typeId-based novedades
+      map[type._id] = {
+        label: type.name,
+        icon: ICON_MAP[type.icon] ?? FileText,
+        color: COLOR_MAP[type.color] ?? 'text-gray-600',
+      };
+    }
+    return map;
+  }, [novedadTypes]);
+
+  // Helper to get type config (from dynamic types or fallback)
+  const getTypeConfig = (novedad: any): { label: string; icon: React.ElementType; color: string } => {
+    const defaultConfig = { label: 'Novedad', icon: FileText, color: 'text-gray-600' };
+    // First check if we have a typeId and can find it in our types
+    if (novedad.typeId && novedadTypesMap[novedad.typeId]) {
+      return novedadTypesMap[novedad.typeId]!;
+    }
+    // Check typeCategorySnapshot
+    if (novedad.typeCategorySnapshot && novedadTypesMap[novedad.typeCategorySnapshot]) {
+      return novedadTypesMap[novedad.typeCategorySnapshot]!;
+    }
+    // Check legacy type field
+    if (novedad.type) {
+      return novedadTypesMap[novedad.type] ?? NOVEDAD_TYPES[novedad.type] ?? { label: novedad.type, icon: FileText, color: 'text-gray-600' };
+    }
+    return defaultConfig;
+  };
 
   // Stats
   const stats: StatItem[] = [
@@ -217,8 +308,10 @@ export default function RequestsPage() {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {novedades.map((novedad: any) => {
-                    const typeConfig = NOVEDAD_TYPES[novedad.type] ?? { label: novedad.type, icon: FileText, color: 'text-gray-600' };
+                    const typeConfig = getTypeConfig(novedad);
                     const TypeIcon = typeConfig.icon;
+                    const hasAttachments = novedad.attachments && novedad.attachments.length > 0;
+                    const effectiveDate = novedad.startDate || novedad.date;
 
                     return (
                       <button
@@ -247,18 +340,26 @@ export default function RequestsPage() {
                               <User className="w-3.5 h-3.5" />
                               {novedad.createdByName}
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5" />
-                              Para: {new Date(novedad.date + 'T12:00:00').toLocaleDateString('es-EC', {
-                                weekday: 'short',
-                                day: 'numeric',
-                                month: 'short',
-                              })}
-                            </span>
+                            {effectiveDate && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5" />
+                                Para: {new Date(effectiveDate + 'T12:00:00').toLocaleDateString('es-EC', {
+                                  weekday: 'short',
+                                  day: 'numeric',
+                                  month: 'short',
+                                })}
+                              </span>
+                            )}
                             <span className="flex items-center gap-1">
                               <Clock className="w-3.5 h-3.5" />
                               {formatTimeAgo(novedad.createdAt)}
                             </span>
+                            {hasAttachments && (
+                              <span className="flex items-center gap-1 text-primary">
+                                <Paperclip className="w-3.5 h-3.5" />
+                                {novedad.attachments.length}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
@@ -412,18 +513,33 @@ export default function RequestsPage() {
               <p className="text-xs text-gray-500 mb-1">
                 {selectedItem.itemType === 'novedad' ? 'Tipo de novedad' : 'Tipo de solicitud'}
               </p>
-              <p className="font-medium text-gray-900">
-                {selectedItem.typeLabel || selectedItem.requestTypeLabel}
-              </p>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const config = selectedItem.itemType === 'novedad' ? getTypeConfig(selectedItem) : null;
+                  const Icon = config?.icon ?? FileText;
+                  return config ? (
+                    <>
+                      <Icon className={cn('w-4 h-4', config.color)} />
+                      <p className="font-medium text-gray-900">{config.label}</p>
+                    </>
+                  ) : (
+                    <p className="font-medium text-gray-900">
+                      {selectedItem.typeLabel || selectedItem.requestTypeLabel}
+                    </p>
+                  );
+                })()}
+              </div>
             </div>
 
             {/* Date for novedades */}
             {selectedItem.itemType === 'novedad' && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Fecha</p>
+                  <p className="text-xs text-gray-500 mb-1">
+                    {selectedItem.durationType === 'date_range' ? 'Fecha inicio' : 'Fecha'}
+                  </p>
                   <p className="font-medium text-gray-900">
-                    {new Date(selectedItem.date + 'T12:00:00').toLocaleDateString('es-EC', {
+                    {new Date((selectedItem.startDate || selectedItem.date) + 'T12:00:00').toLocaleDateString('es-EC', {
                       weekday: 'short',
                       day: 'numeric',
                       month: 'short',
@@ -431,10 +547,35 @@ export default function RequestsPage() {
                     })}
                   </p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Aplica a</p>
-                  <p className="font-medium text-gray-900">{selectedItem.routeTypeLabel}</p>
-                </div>
+                {selectedItem.endDate && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500 mb-1">Fecha fin</p>
+                    <p className="font-medium text-gray-900">
+                      {new Date(selectedItem.endDate + 'T12:00:00').toLocaleDateString('es-EC', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                )}
+                {!selectedItem.endDate && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500 mb-1">Aplica a</p>
+                    <p className="font-medium text-gray-900">{selectedItem.routeTypeLabel}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Duration type info */}
+            {selectedItem.itemType === 'novedad' && selectedItem.durationType && (
+              <div className="flex items-center gap-2 text-sm">
+                <CalendarDays className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600">
+                  Duración: {DURATION_LABELS[selectedItem.durationType as keyof typeof DURATION_LABELS] || selectedItem.durationType}
+                </span>
               </div>
             )}
 
@@ -479,6 +620,72 @@ export default function RequestsPage() {
               <p className="text-xs text-gray-500 mb-1">Motivo</p>
               <p className="text-gray-900">{selectedItem.reason}</p>
             </div>
+
+            {/* Attachments/Evidence */}
+            {selectedItem.attachments && selectedItem.attachments.length > 0 && (
+              <div className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Paperclip className="w-4 h-4 text-gray-400" />
+                  <p className="text-xs text-gray-500">Evidencia adjunta ({selectedItem.attachments.length})</p>
+                </div>
+                <div className="space-y-2">
+                  {selectedItem.attachments.map((attachment: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg"
+                    >
+                      {attachment.fileType?.startsWith('image/') ? (
+                        <ImageIcon className="w-5 h-5 text-blue-500" />
+                      ) : (
+                        <FileText className="w-5 h-5 text-gray-500" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {attachment.fileName}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {(attachment.fileSize / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                      <a
+                        href={`/api/evidence/${attachment.storageId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 text-primary hover:bg-primary/10 rounded transition-colors"
+                        title="Ver archivo"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Location Change Info */}
+            {selectedItem.locationChange && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                <p className="text-xs text-indigo-600 mb-2 flex items-center gap-1">
+                  <Home className="w-3.5 h-3.5" />
+                  Cambio de ubicación
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-xs text-gray-500">Anterior</p>
+                    <p className="text-gray-700 truncate">{selectedItem.locationChange.previousAddress}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Nueva</p>
+                    <p className="text-gray-700 truncate">{selectedItem.locationChange.newAddress}</p>
+                  </div>
+                </div>
+                {selectedItem.locationChange.distanceChange > 0 && (
+                  <p className="text-xs text-indigo-600 mt-2">
+                    Diferencia: {(selectedItem.locationChange.distanceChange / 1000).toFixed(2)} km
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Requested by */}
             <div className="flex items-center gap-2 text-sm text-gray-500">

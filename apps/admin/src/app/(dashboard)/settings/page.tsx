@@ -12,6 +12,7 @@ import {
   Users,
   MapPin,
   Save,
+  FileText,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent, Button, Input, Select, Switch } from '@/components/core';
 import { PageHeader } from '@/components/shared';
@@ -48,6 +49,7 @@ const QUICK_LINKS = [
   { href: '/settings/school', label: 'Ubicación del Colegio', icon: MapPin },
   { href: '/settings/grades', label: 'Grados', icon: GraduationCap },
   { href: '/settings/users', label: 'Usuarios', icon: Users },
+  { href: '/settings/novedades', label: 'Tipos de Novedades', icon: FileText },
 ];
 
 const NOTIFICATION_OPTIONS = [

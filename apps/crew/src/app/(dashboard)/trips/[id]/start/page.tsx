@@ -2,9 +2,9 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, PlayCircle, MapPin, Users, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, PlayCircle, MapPin, Users, Clock, AlertCircle, Bell, UserMinus, Car, FileText } from 'lucide-react';
 import Link from 'next/link';
-import { useTrip, useTripOperations, useCurrentPosition } from '@/hooks';
+import { useTrip, useTripOperations, useCurrentPosition, useNovedadesForTrip, useConvexAuth } from '@/hooks';
 import type { Id } from '../../../../../../../../convex/_generated/dataModel';
 
 /**
@@ -18,11 +18,25 @@ export default function StartTripPage() {
   const tripId = (params?.id as string) || '';
   const [checklistCompleted, setChecklistCompleted] = useState(true); // Skip checklist for testing
   const [isStarting, setIsStarting] = useState(false);
+  const { isAuthenticated } = useConvexAuth();
 
   // Get real trip data from Convex
   const { trip: convexTrip, isLoading } = useTrip(tripId as Id<"trips"> | null);
   const { startTrip } = useTripOperations();
   const { getPosition } = useCurrentPosition();
+  const { novedades, hasNovedades } = useNovedadesForTrip(isAuthenticated ? tripId : null);
+
+  // Count novedades by type
+  const novedadesCounts = {
+    absent: novedades.filter((n: any) => n.type === 'absence' || n.typeCategorySnapshot === 'absence').length,
+    parentPickup: novedades.filter((n: any) => n.type === 'parent_pickup' || n.typeCategorySnapshot === 'pickup_change').length,
+    stopChange: novedades.filter((n: any) => n.type === 'stop_change' || n.typeCategorySnapshot === 'stop_change').length,
+    other: novedades.filter((n: any) =>
+      !['absence', 'parent_pickup', 'stop_change'].includes(n.type || '') &&
+      !['absence', 'pickup_change', 'stop_change'].includes(n.typeCategorySnapshot || '')
+    ).length,
+    total: novedades.length,
+  };
 
   // Transform Convex trip to UI format
   const trip = convexTrip ? {
@@ -177,6 +191,51 @@ export default function StartTripPage() {
                 <p className="text-xs text-gray-600 mt-1">
                   Debes completar el checklist antes de iniciar el viaje
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Novedades Warning Banner */}
+          {hasNovedades && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Bell className="w-5 h-5 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-amber-800">
+                    {novedadesCounts.total} {novedadesCounts.total === 1 ? 'Novedad' : 'Novedades'} para este viaje
+                  </h3>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {novedadesCounts.absent > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                        <UserMinus className="w-3 h-3" />
+                        {novedadesCounts.absent} {novedadesCounts.absent === 1 ? 'ausente' : 'ausentes'}
+                      </span>
+                    )}
+                    {novedadesCounts.parentPickup > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                        <Car className="w-3 h-3" />
+                        {novedadesCounts.parentPickup} recoge padre
+                      </span>
+                    )}
+                    {novedadesCounts.stopChange > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                        <MapPin className="w-3 h-3" />
+                        {novedadesCounts.stopChange} cambio parada
+                      </span>
+                    )}
+                    {novedadesCounts.other > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                        <FileText className="w-3 h-3" />
+                        {novedadesCounts.other} {novedadesCounts.other === 1 ? 'otra' : 'otras'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-amber-700 mt-2">
+                    Revisa la lista de estudiantes para ver los detalles de cada novedad.
+                  </p>
+                </div>
               </div>
             </div>
           )}

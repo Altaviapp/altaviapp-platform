@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { Menu, Bell } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useConvexAuth } from '@/hooks';
 
 interface HeaderProps {
   title: string;
@@ -14,6 +15,18 @@ export function Header({
   onMenuClick,
   notificationCount = 0,
 }: HeaderProps) {
+  const { user } = useConvexAuth();
+
+  // Get user initials
+  const userInitials = user?.name
+    ? user.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : '??';
+
   return (
     <header className="bg-white border-b border-gray-200 px-4 lg:px-6 py-4 sticky top-0 z-30">
       <div className="flex items-center justify-between">
@@ -37,7 +50,8 @@ export function Header({
         {/* Right: Notifications */}
         <div className="flex items-center gap-3">
           {/* Notification Bell */}
-          <button
+          <Link
+            href="/notifications"
             className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors"
             aria-label="Notificaciones"
           >
@@ -47,11 +61,11 @@ export function Header({
                 {notificationCount > 9 ? '9+' : notificationCount}
               </span>
             )}
-          </button>
+          </Link>
 
           {/* User Avatar (mobile only) */}
           <div className="lg:hidden w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-            <span className="text-primary font-semibold text-xs">MG</span>
+            <span className="text-primary font-semibold text-xs">{userInitials}</span>
           </div>
         </div>
       </div>

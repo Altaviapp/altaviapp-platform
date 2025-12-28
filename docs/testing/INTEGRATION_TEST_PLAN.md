@@ -1,582 +1,736 @@
-# Plan de Testing de Integración - Altaviapp
+# Plan de Testing de Integración - Altaviapp (LIVE)
 
-**Versión**: 1.0
+**Versión**: 2.0
 **Fecha**: Diciembre 2024
-**Objetivo**: Validar el flujo completo de usuario a través de Admin, Parent y Crew apps
+**Tipo**: Testing en Producción (desde cero)
+**Objetivo**: Validar flujo completo de usuario desde creación de institución hasta operación de viajes
 
 ---
 
-## Resumen Ejecutivo
+## Resumen del Escenario de Prueba
 
-Este plan define un experimento de testing de integración que simula el ciclo de vida completo de operación de transporte escolar, desde la configuración inicial hasta la finalización de viajes con novedades.
+### Usuarios de Testing
 
-### Aplicaciones Involucradas
+| Rol | Email | App | Descripción |
+|-----|-------|-----|-------------|
+| **Admin** | `desarrollo@altaviapp.com` | Admin | Crea institución, invita usuarios |
+| **Parent 1** | `onedreamto@gmail.com` | Parent | 1 estudiante |
+| **Parent 2** | `admin@ceibatic.com` | Parent | 2 estudiantes |
+| **Driver 1** | `christiangoye@gmail.com` | Crew | Conductor principal |
+| **Driver 2** | `luis.alvrz.la@gmail.com` | Crew | Conductor secundario |
+| **Monitor** | `altaviappdev@gmail.com` | Crew | Monitor |
 
-| App | URL Local | Rol de Usuario |
-|-----|-----------|----------------|
-| Admin | `localhost:3001` | Coordinador (admin) |
-| Parent | `localhost:3002` | Padre/Tutor (parent) |
-| Crew | `localhost:3003` | Conductor/Monitor (driver/monitor) |
+### Estudiantes a Crear
 
-### Duración Estimada
+| # | Nombre | Parent | Email Padre | Grado |
+|---|--------|--------|-------------|-------|
+| 1 | Estudiante Alpha | Parent 1 | onedreamto@gmail.com | 5to A |
+| 2 | Estudiante Beta | Parent 2 | admin@ceibatic.com | 4to B |
+| 3 | Estudiante Gamma | Parent 2 | admin@ceibatic.com | 6to A |
 
-| Fase | Duración |
-|------|----------|
-| Setup inicial | 15 min |
-| Configuración de datos | 20 min |
-| Flujo de rutas | 15 min |
-| Flujo de viajes | 20 min |
-| Flujo de novedades | 15 min |
-| Verificación final | 10 min |
-| **Total** | **~95 min** |
+### Rutas a Crear
 
----
+| Ruta | Tipo | Recurrencia | Estudiantes | Horario |
+|------|------|-------------|-------------|---------|
+| Ruta Norte AM | pickup | Lun-Vie | Alpha, Beta, Gamma (3) | 07:00 |
+| Ruta Norte PM | dropoff | Lun-Vie | Alpha, Beta, Gamma (3) | 14:00 |
+| Ruta Especial Domingo | pickup | Una vez (domingo) | Alpha, Beta (2) | 09:00 |
 
-## Prerequisitos
+### URLs de Producción
 
-### 1. Ambiente de Desarrollo
-
-```bash
-# Terminal 1: Convex backend
-npx convex dev
-
-# Terminal 2: Admin app
-pnpm --filter @altaviapp/admin dev
-
-# Terminal 3: Parent app
-pnpm --filter @altaviapp/parent dev
-
-# Terminal 4: Crew app
-pnpm --filter @altaviapp/crew dev
-```
-
-### 2. Datos de Demo (Opcional)
-
-```bash
-# Ejecutar seed de datos de demo
-npx convex run seed/createDemo:seedDemoData
-```
-
-### 3. Usuarios de Prueba
-
-Si no hay datos de demo, crear usuarios manualmente:
-
-| Rol | Email | Contraseña |
-|-----|-------|------------|
-| Admin | `admin@test.com` | `Test1234!` |
-| Parent | `parent@test.com` | `Test1234!` |
-| Driver | `driver@test.com` | `Test1234!` |
-| Monitor | `monitor@test.com` | `Test1234!` |
+| App | URL |
+|-----|-----|
+| Admin | `https://admin.altaviapp.com` |
+| Parent | `https://padres.altaviapp.com` |
+| Crew | `https://crew.altaviapp.com` |
 
 ---
 
-## Fase 1: Configuración Inicial (Admin App)
+## Fase 1: Creación de Institución (Admin App)
 
-### 1.1 Login y Verificación de Dashboard
+### 1.1 Registro de Nueva Institución
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Ir a `localhost:3001/login` | Página de login visible | ☐ |
-| 2 | Login con credenciales de admin | Redirige a `/dashboard` | ☐ |
-| 3 | Verificar métricas del dashboard | Grid de 6 métricas visible | ☐ |
-| 4 | Verificar sección de viajes activos | Lista vacía o con viajes | ☐ |
+| 1 | Ir a `https://admin.altaviapp.com/signup` | Página de registro | ☐ |
+| 2 | Llenar datos de institución: | | |
+| | - Nombre: `Escuela Demo Testing` | Campo llenado | ☐ |
+| | - Email Admin: `desarrollo@altaviapp.com` | Campo validado | ☐ |
+| | - Contraseña: `[tu contraseña]` | Campo llenado | ☐ |
+| | - Confirmar contraseña | Coincide | ☐ |
+| 3 | Aceptar términos | Checkbox marcado | ☐ |
+| 4 | Click "Crear Cuenta" | Toast de éxito | ☐ |
+| 5 | Verificar email (si aplica) | Link en correo | ☐ |
+| 6 | Login con credenciales | Redirige a `/dashboard` | ☐ |
 
-### 1.2 Configuración de Institución
+### 1.2 Configuración Inicial de Institución
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
 | 1 | Ir a `/settings` | Página de configuración | ☐ |
-| 2 | Verificar ubicación de escuela | Lat/Long configurados | ☐ |
-| 3 | Si no hay ubicación: configurar | Mapa muestra pin en escuela | ☐ |
-| 4 | Ir a `/settings/grades` | Lista de grados | ☐ |
-| 5 | Verificar al menos 3 grados | Grados visibles en lista | ☐ |
+| 2 | Click en mapa para ubicar escuela | Pin en ubicación real | ☐ |
+| 3 | Guardar ubicación | Toast de éxito | ☐ |
+| 4 | Verificar coordenadas | Lat/Long correctos | ☐ |
 
-### 1.3 Configuración de Tipos de Novedad
+### 1.3 Configuración de Grados
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Ir a `/settings/novedades` | Lista de tipos de novedad | ☐ |
-| 2 | Verificar tipos de sistema | absence, parent_pickup, etc. | ☐ |
-| 3 | (Opcional) Crear tipo personalizado | Nuevo tipo aparece en lista | ☐ |
+| 1 | Ir a `/settings/grades` | Lista de grados (vacía) | ☐ |
+| 2 | Crear grados necesarios: | | |
+| | - `5to A` | Grado creado | ☐ |
+| | - `4to B` | Grado creado | ☐ |
+| | - `6to A` | Grado creado | ☐ |
+| 3 | Verificar 3 grados en lista | Lista actualizada | ☐ |
+
+### 1.4 Verificar Tipos de Novedad
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `/settings/novedades` | Lista de tipos | ☐ |
+| 2 | Verificar tipos de sistema: | | |
+| | - Ausencia | ✓ | ☐ |
+| | - Recoge Padre | ✓ | ☐ |
+| | - Cambio de Parada | ✓ | ☐ |
+| 3 | (Opcional) Crear tipo personalizado | Tipo creado | ☐ |
 
 ---
 
-## Fase 2: Creación de Datos Esenciales (Admin App)
+## Fase 2: Configuración de Flota (Admin App)
 
-### 2.1 Crear Vehículos
+### 2.1 Crear Vehículo 1 (Principal)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Ir a `/fleet` | Tab de vehículos visible | ☐ |
-| 2 | Click "Nuevo Vehículo" | Formulario de creación | ☐ |
+| 1 | Ir a `/fleet` → Tab Vehículos | Lista vacía | ☐ |
+| 2 | Click "Nuevo Vehículo" | Formulario | ☐ |
 | 3 | Llenar datos: | | |
-| | - Placa: `ABC-123` | Campo validado | ☐ |
+| | - Placa: `TES-001` | Campo validado | ☐ |
 | | - Marca: `Toyota` | Campo llenado | ☐ |
 | | - Modelo: `Hiace` | Campo llenado | ☐ |
-| | - Año: `2022` | Campo validado | ☐ |
+| | - Año: `2023` | Campo validado | ☐ |
 | | - Capacidad: `15` | Campo validado | ☐ |
-| 4 | Click "Guardar" | Toast de éxito, redirige a lista | ☐ |
-| 5 | Verificar vehículo en lista | Vehículo aparece con status activo | ☐ |
+| 4 | Click "Guardar" | Toast éxito, vehículo en lista | ☐ |
 
-**Datos del vehículo creado:**
-- ID: `________________`
-- Placa: `________________`
+**Vehículo 1 ID:** `________________`
 
-### 2.2 Crear Conductor
+### 2.2 Crear Vehículo 2 (Secundario)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Ir a `/fleet` → Tab Conductores | Lista de conductores | ☐ |
-| 2 | Click "Nuevo Conductor" | Formulario de creación | ☐ |
-| 3 | Llenar datos: | | |
-| | - Nombre: `Juan Pérez` | Campo llenado | ☐ |
-| | - Email: `driver@test.com` | Campo validado | ☐ |
-| | - Teléfono: `0991234567` | Campo validado | ☐ |
-| | - Licencia: `0912345678` | Campo llenado | ☐ |
-| | - Tipo: `C` | Selector llenado | ☐ |
-| | - Vencimiento: `2025-12-31` | Fecha futura | ☐ |
-| 4 | Click "Guardar" | Toast de éxito | ☐ |
-| 5 | Verificar conductor en lista | Conductor aparece con status activo | ☐ |
+| 1 | Click "Nuevo Vehículo" | Formulario | ☐ |
+| 2 | Llenar datos: | | |
+| | - Placa: `TES-002` | Campo validado | ☐ |
+| | - Marca: `Hyundai` | Campo llenado | ☐ |
+| | - Modelo: `H350` | Campo llenado | ☐ |
+| | - Año: `2022` | Campo validado | ☐ |
+| | - Capacidad: `20` | Campo validado | ☐ |
+| 3 | Click "Guardar" | Toast éxito | ☐ |
 
-**Datos del conductor creado:**
-- ID: `________________`
-- Nombre: `________________`
-
-### 2.3 Crear Monitor (Opcional)
-
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Ir a `/fleet` → Tab Monitores | Lista de monitores | ☐ |
-| 2 | Click "Nuevo Monitor" | Formulario de creación | ☐ |
-| 3 | Llenar datos básicos | Campos validados | ☐ |
-| 4 | Click "Guardar" | Toast de éxito | ☐ |
-
-### 2.4 Crear Estudiantes (Mínimo 3)
-
-**Estudiante 1:**
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Ir a `/students` | Lista de estudiantes | ☐ |
-| 2 | Click "Nuevo Estudiante" | Formulario de creación | ☐ |
-| 3 | Llenar datos: | | |
-| | - Nombre: `Carlos` | Campo llenado | ☐ |
-| | - Apellido: `Rodríguez` | Campo llenado | ☐ |
-| | - Grado: `5to A` | Selector llenado | ☐ |
-| | - Email Padre: `parent@test.com` | Campo validado | ☐ |
-| | - Teléfono: `0991111111` | Campo validado | ☐ |
-| 4 | Configurar ubicación de hogar | Mapa con pin seleccionado | ☐ |
-| 5 | Click "Guardar" | Toast de éxito | ☐ |
-
-**Estudiante 2:**
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Crear segundo estudiante | | |
-| | - Nombre: `María López` | | ☐ |
-| | - Grado: `4to B` | | ☐ |
-| | - Email Padre: `parent@test.com` (mismo padre) | | ☐ |
-| 2 | Configurar ubicación diferente | Pin en otra dirección | ☐ |
-| 3 | Guardar | Toast de éxito | ☐ |
-
-**Estudiante 3:**
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Crear tercer estudiante | | |
-| | - Nombre: `Pedro Gómez` | | ☐ |
-| | - Grado: `5to A` | | ☐ |
-| | - Email Padre: `parent2@test.com` (otro padre) | | ☐ |
-| 2 | Configurar ubicación diferente | Pin en otra dirección | ☐ |
-| 3 | Guardar | Toast de éxito | ☐ |
-
-**Datos de estudiantes creados:**
-| # | Nombre | Grado | Email Padre |
-|---|--------|-------|-------------|
-| 1 | Carlos Rodríguez | 5to A | parent@test.com |
-| 2 | María López | 4to B | parent@test.com |
-| 3 | Pedro Gómez | 5to A | parent2@test.com |
+**Vehículo 2 ID:** `________________`
 
 ---
 
-## Fase 3: Creación de Rutas (Admin App)
+## Fase 3: Invitación de Usuarios (Admin App)
 
-### 3.1 Crear Ruta de Recogida (Pickup)
+> **IMPORTANTE**: Los conductores y monitores NO se crean directamente.
+> Se envía una invitación con código que el usuario usa para registrarse en Crew App.
+
+### 3.1 Invitar Driver 1 (christiangoye@gmail.com)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Ir a `/routes` | Lista de rutas | ☐ |
+| 1 | Ir a `/fleet` → Tab Conductores | Lista vacía | ☐ |
+| 2 | Click "Invitar Conductor" | Formulario de invitación | ☐ |
+| 3 | Llenar datos: | | |
+| | - Email: `christiangoye@gmail.com` | Campo validado | ☐ |
+| | - Nombre: `Christian` (opcional) | Campo llenado | ☐ |
+| | - Apellido: `Goye` (opcional) | Campo llenado | ☐ |
+| 4 | Click "Enviar Invitación" | Toast: "Invitación enviada" | ☐ |
+| 5 | Verificar en lista | Status: "Invitado" | ☐ |
+| 6 | **Anotar código de invitación** | Código visible en modal/lista | ☐ |
+
+**Código invitación Driver 1:** `________________`
+
+### 3.2 Invitar Driver 2 (luis.alvrz.la@gmail.com)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Click "Invitar Conductor" | Formulario | ☐ |
+| 2 | Email: `luis.alvrz.la@gmail.com` | Campo validado | ☐ |
+| 3 | Nombre: `Luis Álvarez` | Campo llenado | ☐ |
+| 4 | Click "Enviar Invitación" | Toast éxito | ☐ |
+
+**Código invitación Driver 2:** `________________`
+
+### 3.3 Invitar Monitor (altaviappdev@gmail.com)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `/fleet` → Tab Monitores | Lista vacía | ☐ |
+| 2 | Click "Invitar Monitor" | Formulario | ☐ |
+| 3 | Email: `altaviappdev@gmail.com` | Campo validado | ☐ |
+| 4 | Nombre: `Altaviapp Dev` | Campo llenado | ☐ |
+| 5 | Click "Enviar Invitación" | Toast éxito | ☐ |
+
+**Código invitación Monitor:** `________________`
+
+---
+
+## Fase 4: Registro de Crew (Crew App)
+
+> Los usuarios invitados deben registrarse usando su código de invitación.
+
+### 4.1 Registro Driver 1 (christiangoye@gmail.com)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `https://crew.altaviapp.com/signup` | Página de registro | ☐ |
+| 2 | Ingresar código de invitación | Código validado | ☐ |
+| 3 | Llenar datos: | | |
+| | - Email: `christiangoye@gmail.com` | Pre-llenado o validado | ☐ |
+| | - Nombre completo | Campo llenado | ☐ |
+| | - Contraseña | Campo llenado | ☐ |
+| 4 | Click "Crear Cuenta" | Toast éxito | ☐ |
+| 5 | Login automático o manual | Redirige a `/dashboard` | ☐ |
+| 6 | Verificar rol: "Conductor" | Badge visible | ☐ |
+
+### 4.2 Verificar en Admin App
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Admin App: `/fleet` → Conductores | Lista actualizada | ☐ |
+| 2 | Ver Christian Goye | Status: "Activo" (no "Invitado") | ☐ |
+| 3 | Verificar datos completos | Perfil auto-creado | ☐ |
+
+### 4.3 Registro Driver 2 (luis.alvrz.la@gmail.com)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Crew App: `/signup` con código | Registro exitoso | ☐ |
+| 2 | Login | Dashboard visible | ☐ |
+| 3 | Admin: Verificar status activo | Conductor en lista | ☐ |
+
+### 4.4 Registro Monitor (altaviappdev@gmail.com)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Crew App: `/signup` con código monitor | Registro exitoso | ☐ |
+| 2 | Login | Dashboard visible | ☐ |
+| 3 | Verificar rol: "Monitor" | Badge visible | ☐ |
+| 4 | Admin: Verificar status activo | Monitor en lista | ☐ |
+
+---
+
+## Fase 5: Creación de Estudiantes (Admin App)
+
+### 5.1 Estudiante Alpha (Parent 1)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `/students` | Lista vacía | ☐ |
+| 2 | Click "Nuevo Estudiante" | Formulario | ☐ |
+| 3 | Llenar datos: | | |
+| | - Nombre: `Alpha` | Campo llenado | ☐ |
+| | - Apellido: `Testing` | Campo llenado | ☐ |
+| | - Grado: `5to A` | Selector | ☐ |
+| | - Email Padre: `onedreamto@gmail.com` | Campo validado | ☐ |
+| | - Teléfono: `0991111111` | Campo validado | ☐ |
+| 4 | Click en mapa para ubicar hogar | Pin seleccionado | ☐ |
+| 5 | Click "Guardar" | Toast éxito | ☐ |
+
+**Estudiante Alpha ID:** `________________`
+**Ubicación:** `________________`
+
+### 5.2 Estudiante Beta (Parent 2 - hijo 1)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Click "Nuevo Estudiante" | Formulario | ☐ |
+| 2 | Llenar datos: | | |
+| | - Nombre: `Beta` | Campo llenado | ☐ |
+| | - Apellido: `Testing` | Campo llenado | ☐ |
+| | - Grado: `4to B` | Selector | ☐ |
+| | - Email Padre: `admin@ceibatic.com` | Campo validado | ☐ |
+| | - Teléfono: `0992222222` | Campo validado | ☐ |
+| 3 | Ubicar hogar en mapa | Ubicación diferente | ☐ |
+| 4 | Click "Guardar" | Toast éxito | ☐ |
+
+**Estudiante Beta ID:** `________________`
+**Ubicación:** `________________`
+
+### 5.3 Estudiante Gamma (Parent 2 - hijo 2)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Click "Nuevo Estudiante" | Formulario | ☐ |
+| 2 | Llenar datos: | | |
+| | - Nombre: `Gamma` | Campo llenado | ☐ |
+| | - Apellido: `Testing` | Campo llenado | ☐ |
+| | - Grado: `6to A` | Selector | ☐ |
+| | - Email Padre: `admin@ceibatic.com` | (mismo que Beta) | ☐ |
+| | - Teléfono: `0992222222` | (mismo que Beta) | ☐ |
+| 3 | Ubicar hogar en mapa | Misma ubicación que Beta | ☐ |
+| 4 | Click "Guardar" | Toast éxito | ☐ |
+
+**Estudiante Gamma ID:** `________________`
+
+### 5.4 Verificar Lista de Estudiantes
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ver lista en `/students` | 3 estudiantes | ☐ |
+| 2 | Verificar Alpha → Parent 1 | onedreamto@gmail.com | ☐ |
+| 3 | Verificar Beta, Gamma → Parent 2 | admin@ceibatic.com | ☐ |
+
+---
+
+## Fase 6: Registro de Parents (Parent App)
+
+### 6.1 Registro Parent 1 (onedreamto@gmail.com)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `https://padres.altaviapp.com/signup` | Página de registro | ☐ |
+| 2 | Email: `onedreamto@gmail.com` | Campo validado | ☐ |
+| 3 | Contraseña | Campo llenado | ☐ |
+| 4 | Click "Crear Cuenta" | Toast éxito | ☐ |
+| 5 | Verificar email (si aplica) | Link en correo | ☐ |
+| 6 | Login | Redirige a dashboard | ☐ |
+| 7 | Ver hijo: Alpha Testing | Tarjeta visible | ☐ |
+
+### 6.2 Verificar Perfil de Hijo (Parent 1)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `/hijos` | Lista con 1 hijo | ☐ |
+| 2 | Click en Alpha | Perfil del estudiante | ☐ |
+| 3 | Verificar datos | Nombre, grado, dirección | ☐ |
+| 4 | Verificar código QR | QR visible y funcional | ☐ |
+| 5 | (Sin rutas aún) | Mensaje "Sin rutas" | ☐ |
+
+### 6.3 Registro Parent 2 (admin@ceibatic.com)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Cerrar sesión o nueva ventana | | |
+| 2 | Parent App: `/signup` | Registro exitoso | ☐ |
+| 3 | Email: `admin@ceibatic.com` | Campo validado | ☐ |
+| 4 | Completar registro | Toast éxito | ☐ |
+| 5 | Login | Dashboard | ☐ |
+| 6 | Ver 2 hijos: Beta y Gamma | 2 tarjetas visibles | ☐ |
+
+---
+
+## Fase 7: Creación de Rutas (Admin App)
+
+### 7.1 Ruta Norte AM (Pickup - Lun-Vie)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `/routes` | Lista vacía | ☐ |
 | 2 | Click "Nueva Ruta" | Wizard paso 1 | ☐ |
 
 **Paso 1 - Planificación:**
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 3 | Tipo: Recogida (pickup) | Radio seleccionado | ☐ |
-| 4 | Hora objetivo: `07:30` | Hora de llegada a escuela | ☐ |
-| 5 | Seleccionar vehículo creado | Vehículo `ABC-123` seleccionado | ☐ |
-| 6 | Seleccionar conductor creado | Conductor `Juan Pérez` | ☐ |
-| 7 | Nombre: `Ruta Norte AM` | Campo llenado | ☐ |
-| 8 | Click "Siguiente" | Avanza a paso 2 | ☐ |
+| 3 | Nombre: `Ruta Norte AM` | Campo llenado | ☐ |
+| 4 | Tipo: `Recogida (pickup)` | Radio seleccionado | ☐ |
+| 5 | Hora objetivo: `07:00` | Hora de llegada a escuela | ☐ |
+| 6 | Vehículo: `TES-001` | Selector | ☐ |
+| 7 | Conductor: `Christian Goye` | Selector (Driver 1) | ☐ |
+| 8 | Monitor: `Altaviapp Dev` (opcional) | Selector | ☐ |
+| 9 | Click "Siguiente" | Avanza a paso 2 | ☐ |
 
 **Paso 2 - Asignación de Paradas:**
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 9 | Ver estudiantes disponibles | 3 estudiantes en lista | ☐ |
-| 10 | Seleccionar Carlos Rodríguez | Se agrega a seleccionados | ☐ |
-| 11 | Seleccionar María López | Se agrega a seleccionados | ☐ |
-| 12 | Seleccionar Pedro Gómez | Se agrega a seleccionados | ☐ |
-| 13 | Click "Calcular Ruta" | Mapa muestra polilínea | ☐ |
-| 14 | Verificar orden de paradas | ETAs calculados | ☐ |
-| 15 | Click "Siguiente" | Avanza a paso 3 | ☐ |
+| 10 | Ver estudiantes disponibles | 3 estudiantes | ☐ |
+| 11 | Seleccionar: Alpha Testing | ✓ | ☐ |
+| 12 | Seleccionar: Beta Testing | ✓ | ☐ |
+| 13 | Seleccionar: Gamma Testing | ✓ | ☐ |
+| 14 | Click "Calcular Ruta" | Polilínea en mapa | ☐ |
+| 15 | Verificar orden de paradas | ETAs calculados | ☐ |
+| 16 | Click "Siguiente" | Avanza a paso 3 | ☐ |
 
-**Paso 3 - Confirmación:**
+**Paso 3 - Recurrencia y Confirmación:**
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 16 | Recurrencia: Diaria | Lun-Vie seleccionados | ☐ |
-| 17 | Verificar resumen | Info correcta | ☐ |
-| 18 | Toggle: Activa = ON | Ruta activa | ☐ |
-| 19 | Click "Crear Ruta" | Toast de éxito | ☐ |
-| 20 | Verificar en lista | Ruta aparece | ☐ |
+| 17 | Tipo recurrencia: `Diaria` | Selector | ☐ |
+| 18 | Días: Lun, Mar, Mié, Jue, Vie | 5 días seleccionados | ☐ |
+| 19 | Toggle: Activa = ON | Ruta activa | ☐ |
+| 20 | Click "Crear Ruta" | Toast éxito | ☐ |
+| 21 | Verificar en lista | Ruta Norte AM visible | ☐ |
 
-**Datos de ruta de recogida:**
-- ID: `________________`
-- Nombre: `Ruta Norte AM`
-- Tipo: `pickup`
-- Hora: `07:30`
+**Ruta Norte AM ID:** `________________`
 
-### 3.2 Crear Ruta de Entrega (Dropoff)
+### 7.2 Ruta Norte PM (Dropoff - Lun-Vie)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Click "Nueva Ruta" | Wizard paso 1 | ☐ |
-| 2 | Tipo: Entrega (dropoff) | Radio seleccionado | ☐ |
-| 3 | Hora objetivo: `14:00` | Hora de salida de escuela | ☐ |
-| 4 | Mismo vehículo y conductor | Seleccionados | ☐ |
-| 5 | Nombre: `Ruta Norte PM` | Campo llenado | ☐ |
-| 6 | Seleccionar mismos 3 estudiantes | Agregados | ☐ |
-| 7 | Calcular y crear ruta | Toast de éxito | ☐ |
+| 1 | Click "Nueva Ruta" | Wizard | ☐ |
+| 2 | Nombre: `Ruta Norte PM` | Campo llenado | ☐ |
+| 3 | Tipo: `Entrega (dropoff)` | Radio seleccionado | ☐ |
+| 4 | Hora objetivo: `14:00` | Hora de salida | ☐ |
+| 5 | Mismo vehículo y conductor | Seleccionados | ☐ |
+| 6 | Seleccionar 3 estudiantes | Alpha, Beta, Gamma | ☐ |
+| 7 | Calcular ruta | Polilínea | ☐ |
+| 8 | Recurrencia: Lun-Vie | 5 días | ☐ |
+| 9 | Crear ruta | Toast éxito | ☐ |
 
-**Datos de ruta de entrega:**
-- ID: `________________`
-- Nombre: `Ruta Norte PM`
-- Tipo: `dropoff`
-- Hora: `14:00`
+**Ruta Norte PM ID:** `________________`
+
+### 7.3 Ruta Especial Domingo (Pickup - Una vez)
+
+> Esta ruta es para un evento especial del domingo, con solo 2 estudiantes (1 de cada padre).
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Click "Nueva Ruta" | Wizard | ☐ |
+| 2 | Nombre: `Ruta Especial Domingo` | Campo llenado | ☐ |
+| 3 | Tipo: `Recogida (pickup)` | Radio seleccionado | ☐ |
+| 4 | Hora objetivo: `09:00` | Hora mañana domingo | ☐ |
+| 5 | Vehículo: `TES-002` | Otro vehículo | ☐ |
+| 6 | Conductor: `Luis Álvarez` | Driver 2 | ☐ |
+| 7 | Siguiente | Paso 2 | ☐ |
+
+**Paso 2 - Estudiantes (solo 2):**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 8 | Seleccionar: Alpha Testing | 1 de Parent 1 | ☐ |
+| 9 | Seleccionar: Beta Testing | 1 de Parent 2 | ☐ |
+| 10 | NO seleccionar Gamma | Solo 2 estudiantes | ☐ |
+| 11 | Calcular ruta | Polilínea optimizada | ☐ |
+| 12 | Siguiente | Paso 3 | ☐ |
+
+**Paso 3 - Recurrencia única:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 13 | Tipo recurrencia: `Una vez` | Selector | ☐ |
+| 14 | Fecha: Próximo domingo | Selector de fecha | ☐ |
+| 15 | Toggle: Activa = ON | Ruta activa | ☐ |
+| 16 | Crear ruta | Toast éxito | ☐ |
+
+**Ruta Domingo ID:** `________________`
+**Fecha:** `________________`
+
+### 7.4 Verificar Rutas en Lista
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ver `/routes` | 3 rutas en lista | ☐ |
+| 2 | Ruta Norte AM | pickup, Lun-Vie, 3 estudiantes | ☐ |
+| 3 | Ruta Norte PM | dropoff, Lun-Vie, 3 estudiantes | ☐ |
+| 4 | Ruta Especial Domingo | pickup, una vez, 2 estudiantes | ☐ |
 
 ---
 
-## Fase 4: Verificación en Parent App
+## Fase 8: Verificación Cross-App
 
-### 4.1 Login y Verificación de Hijos
+### 8.1 Parent App - Ver Rutas Asignadas
 
+**Parent 1 (onedreamto@gmail.com):**
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Ir a `localhost:3002/login` | Página de login | ☐ |
-| 2 | Login con `parent@test.com` | Redirige a `/inicio` | ☐ |
-| 3 | Verificar dashboard | Lista de hijos visible | ☐ |
-| 4 | Ver Carlos Rodríguez | Tarjeta de estudiante | ☐ |
-| 5 | Ver María López | Tarjeta de estudiante | ☐ |
+| 1 | Login Parent App | Dashboard | ☐ |
+| 2 | Ir a `/hijos` → Alpha | Perfil | ☐ |
+| 3 | Verificar rutas: | | |
+| | - Ruta Norte AM (pickup) | ✓ | ☐ |
+| | - Ruta Norte PM (dropoff) | ✓ | ☐ |
+| | - Ruta Especial Domingo | ✓ | ☐ |
 
-### 4.2 Verificar Perfil de Hijo
-
+**Parent 2 (admin@ceibatic.com):**
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Ir a `/hijos` | Lista de hijos | ☐ |
-| 2 | Click en Carlos Rodríguez | Perfil del estudiante | ☐ |
-| 3 | Verificar datos | Nombre, grado, dirección | ☐ |
-| 4 | Verificar código QR | QR visible y descargable | ☐ |
-| 5 | Verificar rutas asignadas | `Ruta Norte AM` y `PM` | ☐ |
+| 1 | Login Parent App | Dashboard | ☐ |
+| 2 | Ver Beta | 3 rutas (AM, PM, Domingo) | ☐ |
+| 3 | Ver Gamma | 2 rutas (solo AM y PM, NO domingo) | ☐ |
 
-### 4.3 Verificar Calendario
+### 8.2 Crew App - Ver Rutas Asignadas
 
+**Driver 1 (christiangoye@gmail.com):**
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Ir a `/calendario` | Vista semanal | ☐ |
-| 2 | Verificar día actual | Tiene viajes programados | ☐ |
-| 3 | Ver detalles de viaje | Ruta, hora, conductor | ☐ |
+| 1 | Login Crew App | Dashboard | ☐ |
+| 2 | Ver "Mis Rutas" | | |
+| | - Ruta Norte AM | ✓ | ☐ |
+| | - Ruta Norte PM | ✓ | ☐ |
+| 3 | NO ver Ruta Domingo | (asignada a Driver 2) | ☐ |
+
+**Driver 2 (luis.alvrz.la@gmail.com):**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Login Crew App | Dashboard | ☐ |
+| 2 | Ver "Mis Rutas" | | |
+| | - Ruta Especial Domingo | ✓ | ☐ |
+| 3 | NO ver rutas AM/PM | (asignadas a Driver 1) | ☐ |
 
 ---
 
-## Fase 5: Flujo de Viaje (Crew App)
+## Fase 9: Flujo de Viaje Regular (Lun-Vie)
 
-### 5.1 Login como Conductor
-
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Ir a `localhost:3003/login` | Página de login | ☐ |
-| 2 | Login con `driver@test.com` | Redirige a `/dashboard` | ☐ |
-| 3 | Verificar dashboard | Saludo personalizado | ☐ |
-| 4 | Ver rutas del día | `Ruta Norte AM` visible | ☐ |
-
-### 5.2 Iniciar Viaje de Recogida
+### 9.1 Iniciar Viaje - Ruta Norte AM (Crew App)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Click en `Ruta Norte AM` | Ir a página de ruta | ☐ |
-| 2 | Click "Iniciar Viaje" | Página `/trips/[id]/start` | ☐ |
-| 3 | Verificar resumen | 3 estudiantes, 3 paradas | ☐ |
-| 4 | Verificar checklist status | Completado o pendiente | ☐ |
-| 5 | Click "INICIAR VIAJE" | Crea viaje, redirige a `/active` | ☐ |
+| 1 | Login Driver 1 (Christian) | Dashboard | ☐ |
+| 2 | Ver "Ruta Norte AM" en rutas del día | Badge: 3 estudiantes | ☐ |
+| 3 | Click en ruta | Detalle de ruta | ☐ |
+| 4 | Click "Iniciar Viaje" | `/trips/[id]/start` | ☐ |
+| 5 | Verificar checklist | Items completos | ☐ |
+| 6 | Verificar estudiantes: 3 | Alpha, Beta, Gamma | ☐ |
+| 7 | Click "INICIAR" | Viaje creado, `/active` | ☐ |
 
-**Trip ID creado:** `________________`
+**Trip ID AM:** `________________`
 
-### 5.3 Verificar Tracking en Parent App
-
-**En paralelo (otra ventana/pestaña):**
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Parent App: Ir a `/inicio` | Dashboard | ☐ |
-| 2 | Ver tarjeta de Carlos | Estado: "En ruta" (azul) | ☐ |
-| 3 | Expandir tarjeta | Mapa con ubicación del bus | ☐ |
-| 4 | Verificar ETA | Tiempo estimado visible | ☐ |
-
-### 5.4 Check-in de Estudiantes (Crew App)
+### 9.2 Tracking en Parent App
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | En `/trips/[id]/active` | Viaje activo visible | ☐ |
-| 2 | Click "Ver Estudiantes" | Ir a `/trips/[id]/students` | ☐ |
-| 3 | Ver lista de estudiantes | 3 estudiantes, status: Esperando | ☐ |
+| 1 | Parent 1: Ver dashboard | Alpha "En ruta" (azul) | ☐ |
+| 2 | Expandir tarjeta | Mapa con bus | ☐ |
+| 3 | Ver ETA | Tiempo estimado | ☐ |
+| 4 | Parent 2: Ver dashboard | Beta y Gamma "En ruta" | ☐ |
 
-**Check-in Estudiante 1:**
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 4 | Click en Carlos Rodríguez | Modal de detalle | ☐ |
-| 5 | Click "Marcar Abordó" | Status cambia a "A bordo" | ☐ |
-| 6 | Verificar timestamp | Hora de check-in registrada | ☐ |
-
-**Verificar notificación en Parent App:**
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 7 | Parent App: Ver `/notifications` | Notificación de check-in | ☐ |
-| 8 | Mensaje: "Carlos ha subido al bus" | Texto correcto | ☐ |
-
-**Check-in Estudiantes 2 y 3:**
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 9 | Check-in María López | Status: A bordo | ☐ |
-| 10 | Check-in Pedro Gómez | Status: A bordo | ☐ |
-| 11 | Verificar resumen | 3/3 a bordo | ☐ |
-
-### 5.5 Completar Viaje
+### 9.3 Check-in de Estudiantes
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Volver a `/trips/[id]/active` | Mapa activo | ☐ |
-| 2 | Click "Terminar Viaje" | Modal de confirmación | ☐ |
-| 3 | Confirmar | Viaje cambia a "completado" | ☐ |
-| 4 | Verificar en Admin App | Viaje aparece como completado | ☐ |
+| 1 | Crew: `/trips/[id]/students` | Lista de 3 estudiantes | ☐ |
+| 2 | Check-in Alpha | Status: "A bordo" | ☐ |
+| 3 | Parent 1: Notificación | "Alpha subió al bus" | ☐ |
+| 4 | Check-in Beta | Status: "A bordo" | ☐ |
+| 5 | Check-in Gamma | Status: "A bordo" | ☐ |
+| 6 | Parent 2: 2 notificaciones | "Beta subió...", "Gamma subió..." | ☐ |
+| 7 | Crew: Verificar 3/3 | Todos a bordo | ☐ |
+
+### 9.4 Completar Viaje
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Crew: Click "Terminar Viaje" | Modal confirmación | ☐ |
+| 2 | Confirmar | Status: "Completado" | ☐ |
+| 3 | Admin: Ver en `/trips` | Viaje completado | ☐ |
+| 4 | Parents: Ver historial | Viaje en historial | ☐ |
 
 ---
 
-## Fase 6: Flujo de Novedades
+## Fase 10: Flujo de Novedades
 
-### 6.1 Crear Novedad de Ausencia (Parent App)
-
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Parent App: Ir a `/novedades/create` | Formulario de novedad | ☐ |
-| 2 | Seleccionar hijo: Carlos Rodríguez | Hijo seleccionado | ☐ |
-| 3 | Seleccionar tipo: Ausencia | Tipo seleccionado | ☐ |
-| 4 | Seleccionar fecha: mañana | Fecha válida | ☐ |
-| 5 | Seleccionar ruta: Ambos | Afecta ida y vuelta | ☐ |
-| 6 | Razón: "Cita médica" | Campo llenado | ☐ |
-| 7 | (Opcional) Adjuntar imagen | Archivo subido | ☐ |
-| 8 | Click "Enviar" | Toast de éxito | ☐ |
-| 9 | Verificar en `/novedades` | Novedad con status "Pendiente" | ☐ |
-
-**Novedad ID:** `________________`
-
-### 6.2 Aprobar Novedad (Admin App)
+### 10.1 Crear Novedad de Ausencia (Parent 1)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Admin App: Ir a `/requests` | Tab de novedades | ☐ |
-| 2 | Ver novedad de Carlos | Badge "Pendiente" | ☐ |
-| 3 | Click en novedad | Modal de revisión | ☐ |
-| 4 | Verificar info: estudiante, tipo, fecha | Datos correctos | ☐ |
-| 5 | Verificar evidencia (si hay) | Imagen visible | ☐ |
-| 6 | Click "Aprobar" | Modal se cierra | ☐ |
-| 7 | Verificar status | Badge cambia a "Aprobada" | ☐ |
+| 1 | Parent 1: Ir a `/novedades/create` | Formulario | ☐ |
+| 2 | Seleccionar: Alpha Testing | Hijo seleccionado | ☐ |
+| 3 | Tipo: Ausencia | Tipo seleccionado | ☐ |
+| 4 | Fecha: [próximo día hábil] | Fecha válida | ☐ |
+| 5 | Ruta: Ambos trayectos | AM y PM | ☐ |
+| 6 | Razón: "Cita médica programada" | Campo llenado | ☐ |
+| 7 | (Opcional) Adjuntar justificante | Archivo subido | ☐ |
+| 8 | Click "Enviar" | Toast éxito | ☐ |
+| 9 | Ver en `/novedades` | Status: "Pendiente" | ☐ |
 
-### 6.3 Verificar Notificación (Parent App)
+**Novedad Ausencia ID:** `________________`
 
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Parent App: Ir a `/notifications` | Lista de notificaciones | ☐ |
-| 2 | Ver notificación de aprobación | "Tu novedad fue aprobada" | ☐ |
-| 3 | Ir a `/novedades` | Status: "Aprobada" (verde) | ☐ |
-
-### 6.4 Verificar Novedad en Crew App
+### 10.2 Aprobar Novedad (Admin)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Crew App: Ir a `/dashboard` | Dashboard | ☐ |
-| 2 | Ver card de novedades | Badge: 1 ausencia | ☐ |
-| 3 | Ir a ruta del día | Iniciar nuevo viaje | ☐ |
-| 4 | En `/trips/[id]/start` | Banner de novedades visible | ☐ |
-| 5 | Verificar: 1 ausente | Badge rojo con contador | ☐ |
+| 1 | Admin: Ir a `/requests` | Badge: 1 pendiente | ☐ |
+| 2 | Click en novedad de Alpha | Modal de revisión | ☐ |
+| 3 | Ver detalles: estudiante, tipo, fecha | Datos correctos | ☐ |
+| 4 | Ver evidencia (si hay) | Imagen/PDF visible | ☐ |
+| 5 | Click "Aprobar" | Modal cierra | ☐ |
+| 6 | Verificar status | "Aprobada" (verde) | ☐ |
 
-### 6.5 Acusar Recibo de Novedad (Crew App)
-
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Iniciar viaje | Ir a `/trips/[id]/active` | ☐ |
-| 2 | Ver indicador de novedades | Banner ámbar visible | ☐ |
-| 3 | Click en indicador | Ir a `/trips/[id]/students` | ☐ |
-| 4 | Ver Carlos Rodríguez | Status: Ausente | ☐ |
-| 5 | Abrir panel de novedades | Novedad de ausencia visible | ☐ |
-| 6 | Click "Acusar" en novedad | Botón cambia a "Recibida" | ☐ |
-
-### 6.6 Crear Novedad "Recoge Padre" (Auto-aprobación)
+### 10.3 Verificar Notificación (Parent 1)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Parent App: Ir a `/novedades/create` | Formulario | ☐ |
-| 2 | Seleccionar: María López | Hijo seleccionado | ☐ |
+| 1 | Parent 1: Ver `/notifications` | "Novedad aprobada" | ☐ |
+| 2 | Ir a `/novedades` | Status: "Aprobada" | ☐ |
+
+### 10.4 Crear Novedad Recoge Padre (Parent 2)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Parent 2: `/novedades/create` | Formulario | ☐ |
+| 2 | Seleccionar: Beta Testing | Hijo seleccionado | ☐ |
 | 3 | Tipo: Recoge Padre | Tipo seleccionado | ☐ |
-| 4 | Fecha: mañana | Fecha válida | ☐ |
-| 5 | Ruta: Entrega (dropoff) | Solo ruta de vuelta | ☐ |
-| 6 | Razón: "Cita al dentista" | Campo llenado | ☐ |
-| 7 | Click "Enviar" | Toast de éxito | ☐ |
-| 8 | Verificar en `/novedades` | Status: "Confirmada" (auto) | ☐ |
+| 4 | Fecha: [mismo día que ausencia] | Fecha válida | ☐ |
+| 5 | Ruta: Solo PM (dropoff) | Solo regreso | ☐ |
+| 6 | Razón: "Evento familiar" | Campo llenado | ☐ |
+| 7 | Click "Enviar" | Toast éxito | ☐ |
+| 8 | Ver en `/novedades` | Status: "Confirmada" (auto) | ☐ |
 
-**Nota:** Las novedades "Recoge Padre" no requieren aprobación del admin.
+**Novedad Recoge Padre ID:** `________________`
 
----
-
-## Fase 7: Verificación de Viaje con Novedades Aplicadas
-
-### 7.1 Día Siguiente - Iniciar Viaje con Ausencia
-
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Crew App: Ir a dashboard | Rutas del día | ☐ |
-| 2 | Ver novedades del día | 1 ausencia, 1 recoge padre | ☐ |
-| 3 | Iniciar ruta de recogida | `/trips/[id]/start` | ☐ |
-| 4 | Verificar banner | Carlos: ausente | ☐ |
-| 5 | Iniciar viaje | `/trips/[id]/active` | ☐ |
-| 6 | Ver estudiantes | Carlos NO aparece en pendientes | ☐ |
-| 7 | Solo 2 estudiantes para recoger | María y Pedro | ☐ |
-
-### 7.2 Ruta de Entrega con Recoge Padre
-
-| # | Paso | Resultado Esperado | ✓ |
-|---|------|-------------------|---|
-| 1 | Iniciar ruta de entrega (PM) | `/trips/[id]/start` | ☐ |
-| 2 | Verificar banner | María: recoge padre | ☐ |
-| 3 | Iniciar viaje | `/trips/[id]/active` | ☐ |
-| 4 | Ver estudiantes | María marcada "recoge padre" | ☐ |
-| 5 | Solo entregar: Pedro | 1 estudiante a entregar | ☐ |
+> **NOTA**: Las novedades "Recoge Padre" se auto-aprueban y no requieren acción del admin.
 
 ---
 
-## Fase 8: Testing de Incidentes (Opcional)
+## Fase 11: Viaje con Novedades Aplicadas
 
-### 8.1 Reportar Incidente Durante Viaje
+### 11.1 Día con Novedades - Ruta AM
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Crew App: Durante viaje activo | `/trips/[id]/active` | ☐ |
-| 2 | Click "Reportar Incidente" | `/trips/[id]/incidents` | ☐ |
+| 1 | Driver 1: Dashboard | Badge: "1 ausencia" | ☐ |
+| 2 | Click en Ruta Norte AM | Ver novedades | ☐ |
+| 3 | Click "Iniciar Viaje" | `/trips/[id]/start` | ☐ |
+| 4 | Ver banner de novedades | "Alpha: Ausente" | ☐ |
+| 5 | Verificar estudiantes: 2 | Solo Beta y Gamma | ☐ |
+| 6 | Iniciar viaje | Viaje con 2 estudiantes | ☐ |
+
+### 11.2 Día con Novedades - Ruta PM
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Iniciar Ruta Norte PM | `/trips/[id]/start` | ☐ |
+| 2 | Ver banner | Alpha: Ausente, Beta: Recoge Padre | ☐ |
+| 3 | Estudiantes a entregar: 1 | Solo Gamma | ☐ |
+| 4 | Iniciar y completar viaje | Viaje con 1 estudiante | ☐ |
+
+---
+
+## Fase 12: Viaje Especial Domingo
+
+### 12.1 Preparación
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Admin: Verificar ruta activa | "Ruta Especial Domingo" | ☐ |
+| 2 | Verificar fecha correcta | Próximo domingo | ☐ |
+| 3 | Verificar 2 estudiantes | Alpha y Beta | ☐ |
+
+### 12.2 Ejecutar Viaje (Driver 2)
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Driver 2 (Luis): Login domingo | Dashboard | ☐ |
+| 2 | Ver "Ruta Especial Domingo" | Badge: 2 estudiantes | ☐ |
+| 3 | Iniciar viaje | `/trips/[id]/start` | ☐ |
+| 4 | Verificar: Alpha y Beta | 2 estudiantes | ☐ |
+| 5 | Iniciar y hacer check-ins | A bordo | ☐ |
+| 6 | Completar viaje | Status: Completado | ☐ |
+
+### 12.3 Verificar Parents
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Parent 1: Notificación check-in | Alpha | ☐ |
+| 2 | Parent 2: Notificación check-in | Solo Beta (no Gamma) | ☐ |
+| 3 | Gamma NO recibió tracking | No estaba en ruta | ☐ |
+
+---
+
+## Fase 13: Testing de Incidentes (Opcional)
+
+### 13.1 Reportar Incidente
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Durante viaje activo | `/trips/[id]/active` | ☐ |
+| 2 | Click "Reportar Incidente" | Formulario | ☐ |
 | 3 | Tipo: Retraso | Selector | ☐ |
-| 4 | Severidad: Media | Selector | ☐ |
-| 5 | Descripción: "Tráfico intenso" | Campo llenado | ☐ |
-| 6 | Click "Reportar" | Toast de éxito | ☐ |
+| 4 | Severidad: Baja | Selector | ☐ |
+| 5 | Descripción: "Tráfico leve" | Campo | ☐ |
+| 6 | Click "Reportar" | Toast éxito | ☐ |
 
-### 8.2 Verificar Incidente en Admin
+### 13.2 Verificar en Admin
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
-| 1 | Admin App: Ir a `/incidents` | Lista de incidentes | ☐ |
-| 2 | Ver incidente reportado | Badge: Media (amarillo) | ☐ |
-| 3 | Click para ver detalle | Info completa | ☐ |
+| 1 | Admin: `/incidents` | Incidente en lista | ☐ |
+| 2 | Ver detalle | Info completa | ☐ |
 
 ---
 
-## Checklist de Validación Final
+## Checklist Final
 
 ### Datos Creados
 
-| Entidad | Cantidad | IDs |
-|---------|----------|-----|
-| Vehículos | 1 | |
-| Conductores | 1 | |
-| Monitores | 0-1 | |
-| Estudiantes | 3 | |
-| Rutas | 2 | |
-| Viajes | 2+ | |
-| Novedades | 2 | |
-| Incidentes | 0-1 | |
+| Entidad | Cantidad | Verificado |
+|---------|----------|------------|
+| Institución | 1 | ☐ |
+| Vehículos | 2 | ☐ |
+| Conductores | 2 | ☐ |
+| Monitores | 1 | ☐ |
+| Estudiantes | 3 | ☐ |
+| Parents | 2 | ☐ |
+| Rutas regulares | 2 | ☐ |
+| Rutas especiales | 1 | ☐ |
+| Viajes completados | 3+ | ☐ |
+| Novedades | 2 | ☐ |
 
 ### Flujos Validados
 
 | Flujo | Status |
 |-------|--------|
-| Login/Logout en 3 apps | ☐ |
-| CRUD de vehículos | ☐ |
-| CRUD de conductores | ☐ |
-| CRUD de estudiantes | ☐ |
-| Creación de rutas con wizard | ☐ |
-| Optimización de ruta (polilínea) | ☐ |
-| Inicio de viaje (lazy creation) | ☐ |
+| Signup Admin → Crear institución | ☐ |
+| Configurar ubicación escuela | ☐ |
+| Crear grados | ☐ |
+| Crear vehículos | ☐ |
+| Invitar conductores (código) | ☐ |
+| Invitar monitores (código) | ☐ |
+| Registro crew con código | ☐ |
+| Crear estudiantes | ☐ |
+| Registro parents | ☐ |
+| Crear rutas recurrentes (Lun-Vie) | ☐ |
+| Crear ruta única (domingo) | ☐ |
+| Cross-app: Parents ven rutas | ☐ |
+| Cross-app: Crew ve sus rutas | ☐ |
+| Iniciar viaje (lazy creation) | ☐ |
 | GPS tracking en tiempo real | ☐ |
 | Check-in de estudiantes | ☐ |
 | Notificaciones de check-in | ☐ |
-| Tracking en Parent App | ☐ |
-| Creación de novedades | ☐ |
-| Upload de evidencia | ☐ |
-| Aprobación de novedades | ☐ |
-| Auto-aprobación de parent_pickup | ☐ |
-| Acuse de recibo de novedades | ☐ |
+| Crear novedad con evidencia | ☐ |
+| Auto-aprobación parent_pickup | ☐ |
+| Aprobación manual de ausencia | ☐ |
 | Aplicación de novedades a viaje | ☐ |
-| Reporte de incidentes | ☐ |
+| Viaje especial una vez | ☐ |
 
 ### Cross-App Communication
 
-| Acción | Origen | Destino | Verificado |
-|--------|--------|---------|------------|
-| Crear estudiante | Admin | Parent (ve hijo) | ☐ |
-| Crear ruta | Admin | Crew (ve ruta) | ☐ |
-| Iniciar viaje | Crew | Parent (tracking) | ☐ |
-| Check-in | Crew | Parent (notificación) | ☐ |
-| Crear novedad | Parent | Admin (pendiente) | ☐ |
-| Aprobar novedad | Admin | Parent (notificación) | ☐ |
-| Aprobar novedad | Admin | Crew (ve novedad) | ☐ |
-| Acusar recibo | Crew | Parent (notificación) | ☐ |
+| Acción | Origen | Destino | ✓ |
+|--------|--------|---------|---|
+| Crear estudiante | Admin | Parent ve hijo | ☐ |
+| Crear ruta | Admin | Crew ve ruta | ☐ |
+| Crear ruta | Admin | Parent ve ruta hijo | ☐ |
+| Invitar conductor | Admin | Crew puede registrarse | ☐ |
+| Iniciar viaje | Crew | Parent ve tracking | ☐ |
+| Check-in | Crew | Parent recibe notif | ☐ |
+| Crear novedad | Parent | Admin ve pendiente | ☐ |
+| Aprobar novedad | Admin | Parent recibe notif | ☐ |
+| Aprobar novedad | Admin | Crew ve novedad | ☐ |
+| Acusar recibo | Crew | Parent ve estado | ☐ |
 
 ---
 
 ## Troubleshooting
 
-### Problemas Comunes
-
-| Problema | Causa Probable | Solución |
-|----------|----------------|----------|
-| "Convex error" | Backend no sincronizado | Reiniciar `npx convex dev` |
-| No aparecen rutas | Recurrencia no incluye día actual | Verificar días de la semana |
-| GPS no funciona | Permisos denegados | Permitir geolocalización en navegador |
-| Notificaciones no llegan | Real-time no conectado | Verificar conexión Convex |
-| QR no escanea | Cámara no permitida | Permitir acceso a cámara |
-
-### Logs Útiles
-
-```bash
-# Ver logs de Convex
-npx convex logs
-
-# Ver errores específicos
-npx convex logs --filter error
-```
+| Problema | Causa | Solución |
+|----------|-------|----------|
+| Ruta no aparece para crew | Día incorrecto de recurrencia | Verificar días seleccionados |
+| Parent no ve hijo | Email no coincide | Verificar email exacto |
+| Código de invitación no funciona | Expirado o usado | Generar nueva invitación |
+| Novedad no aplica al viaje | Fecha incorrecta | Verificar fecha de novedad |
+| Tracking no actualiza | GPS deshabilitado | Permitir geolocalización |
+| Ruta domingo no aparece | Fecha pasada | Verificar fecha futura |
 
 ---
 
-## Notas del Tester
+## Notas del Testing
 
-**Fecha de ejecución:** ________________
+**Fecha:** ________________
 
 **Tester:** ________________
 
-**Ambiente:**
-- Browser: ________________
-- OS: ________________
-- Resolución: ________________
+**Dispositivos usados:**
+- Admin: ________________
+- Parent: ________________
+- Crew: ________________
 
 **Observaciones:**
 
@@ -586,11 +740,11 @@ npx convex logs --filter error
 
 **Bugs encontrados:**
 
-| # | Descripción | Severidad | Screenshot |
-|---|-------------|-----------|------------|
-| 1 | | | |
-| 2 | | | |
-| 3 | | | |
+| # | Descripción | Severidad | App | Screenshot |
+|---|-------------|-----------|-----|------------|
+| 1 | | | | |
+| 2 | | | | |
+| 3 | | | | |
 
 ---
 
@@ -599,4 +753,3 @@ npx convex logs --filter error
 - [ADMIN_PRD.md](../prd/ADMIN_PRD.md)
 - [PARENT_PRD.md](../prd/PARENT_PRD.md)
 - [CREW_PRD.md](../prd/CREW_PRD.md)
-- [DATABASE_SCHEMA.md](../database/DATABASE_SCHEMA.md)

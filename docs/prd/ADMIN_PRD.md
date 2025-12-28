@@ -371,46 +371,92 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 
 **Funcionalidades**:
 
-*Tabs de solicitudes*:
+*Estadisticas*:
+- [x] Novedades pendientes (badge amarillo)
+- [x] Cambios permanentes pendientes (badge morado)
+- [x] Incidentes abiertos (badge rojo)
 
-**Tab 1 - Novedades (cambios diarios)**:
-- [x] Lista de novedades pendientes de aprobación
-- [x] Tipos: ausencia, recoge padre, cambio de parada, salida temprana, llegada tarde
-- [x] Info: estudiante, grado, tipo, razón, solicitante, fecha
-- [x] Modal de revisión con:
-  - Info del estudiante
-  - Tipo de novedad
-  - Fecha afectada
-  - Tipo de ruta afectada (ida, entrega, ambos)
-  - Razón
-  - Notas de revisión (opcional)
-  - Botones aprobar/rechazar
+*Tab 1 - Novedades (cambios diarios)*:
+- [x] Lista de novedades pendientes de aprobacion
+- [x] Tipos de novedad:
+  - `absence` - Ausencia (no viaja hoy)
+  - `parent_pickup` - Recoge padre (efecto inmediato, sin aprobacion)
+  - `stop_change` - Cambio de parada temporal
+  - `early_pickup` - Salida temprana
+  - `late_arrival` - Llegada tarde
+- [x] Info mostrada: estudiante, grado, tipo, razon, solicitante, fecha afectada
+- [x] Badge de estado (pendiente, aprobado, rechazado)
+- [x] Click abre modal de revision
 
-**Tab 2 - Cambios Permanentes**:
+*Tab 2 - Cambios Permanentes*:
 - [x] Lista de solicitudes de cambio de ruta pendientes
-- [x] Tipos: cambio de horario, cambio de parada, cambio de ruta, suspensión
-- [x] Info: estudiante, grado, tipo, razón, solicitante, fecha
-- [x] Modal de revisión similar
+- [x] Tipos de cambio permanente:
+  - `schedule_change` - Cambio de horario (dias de la semana)
+  - `stop_change` - Cambio de parada permanente
+  - `route_change` - Cambio de ruta
+  - `service_suspension` - Suspension de servicio
+- [x] Info: estudiante, grado, tipo, razon, solicitante, fecha inicio/fin
+- [x] Modal de revision similar
 
-**Tab 3 - Incidentes**:
-- [x] Link a página de incidentes
-- [x] Vista rápida de severidad y estado
+*Tab 3 - Incidentes*:
+- [x] Lista de incidentes abiertos
+- [x] Tipos: accidente, averia, comportamiento, emergencia, otro
+- [x] Badge de severidad (baja, media, alta, critica)
+- [x] Click navega a `/incidents/[id]`
 
-*Flujo de aprobación*:
-- [x] Novedades de "recoge padre": NO requieren aprobación (efecto inmediato)
-- [x] Otras novedades: requieren aprobación del coordinador
-- [x] Estados: pendiente → aprobado/rechazado → aplicado
+*Modal de revision*:
+- [x] Info del estudiante (avatar, nombre, grado)
+- [x] Tipo de novedad/solicitud
+- [x] Fecha(s) afectada(s)
+- [x] Tipo de ruta afectada (ida, entrega, ambos)
+- [x] Razon del solicitante
+- [x] Campo de notas de revision (opcional)
+- [x] Botones aprobar/rechazar con loading state
 
-**Componentes clave**:
-- `NovedadesTab` - Lista de novedades
-- `PermanentChangesTab` - Lista de cambios permanentes
-- `ReviewModal` - Modal de revisión con formulario
+*Flujo de aprobacion*:
+- [x] Novedades `parent_pickup`: NO requieren aprobacion (estado `acknowledged` inmediato)
+- [x] Otras novedades: requieren aprobacion del coordinador
+- [x] Estados novedad: pending → approved/rejected → acknowledged → applied
+- [x] Estados cambio permanente: pending → approved/rejected
+- [x] Notificaciones automaticas a padres y crew
 
-**Hooks**:
-- `usePendingNovedades()` - Novedades pendientes
-- `usePendingRequests()` - Cambios permanentes pendientes
+**Hooks** (`apps/admin/src/hooks/`):
+
+*useNovedades.ts*:
+- `usePendingNovedades()` - Novedades pendientes de revision
+- `useNovedades(options)` - Todas las novedades con filtros
+- `usePendingNovedadesCount()` - Contador para badges
+- `useNovedad(id)` - Detalle de una novedad
 - `useNovedadReviewMutations()` - Aprobar/rechazar novedades
+
+*useRouteChangeRequests.ts*:
+- `usePendingRequests()` - Cambios permanentes pendientes
+- `usePendingRequestsCount()` - Contador para badges
+- `useRouteChangeRequest(id)` - Detalle de una solicitud
 - `useReviewMutations()` - Aprobar/rechazar cambios
+
+*useIncidents.ts*:
+- `useIncidents(filters)` - Lista de incidentes con filtros
+- `useIncident(id)` - Detalle de incidente
+- `useIncidentMutations()` - Reportar, actualizar, resolver
+
+**Backend** (`convex/`):
+
+*novedades.ts*:
+- `create` - Crear novedad (padres)
+- `cancel` - Cancelar novedad
+- `review` - Aprobar/rechazar (admin)
+- `acknowledge` - Acusar recibo (crew)
+- `applyToTrip` - Aplicar al viaje
+- `getPendingForAdmin` - Novedades pendientes
+- `getForAdmin` - Todas con filtros
+
+*routeChangeRequests.ts*:
+- `create` - Crear solicitud (padres)
+- `review` - Aprobar/rechazar (admin)
+- `cancel` - Cancelar solicitud
+- `getPending` - Solicitudes pendientes
+- `getById` - Detalle de solicitud
 
 ---
 
@@ -424,39 +470,69 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 | `/users/[id]` | ✅ | Detalle de usuario |
 | `/settings/users/[id]/edit` | ✅ | Editar usuario |
 
+> **Nota**: `/settings/users` y `/settings/users/new` redirigen a `/users`.
+> La creacion de usuarios se realiza mediante el sistema de invitaciones.
+
 **Funcionalidades**:
 
 *Lista de usuarios*:
-- [x] Stats: total, admins, drivers, parents
-- [x] Búsqueda por nombre/email
+- [x] Stats: total, admins, drivers, monitors, parents, activos
+- [x] Busqueda por nombre/email
 - [x] Filtro por rol (todos, admin, driver, monitor, parent)
+- [x] Chips de filtro rapido por rol
 - [x] Tabla con:
   - Avatar con iniciales, nombre
   - Email
   - Badge de rol con color
-  - Estado (activo, pendiente, inactivo)
-  - Último login (relativo: "Hace X min", "Ayer", etc.)
+  - Estado (activo, inactivo)
+  - Ultimo login (relativo: "Hace X min", "Ayer", etc.)
+- [x] Click en fila navega a detalle
 
-*Invitación de usuarios*:
-- [x] Modal de invitación
-- [x] Formulario: email, rol, mensaje
-- [x] Envío de email de invitación
+*Detalle de usuario* (`/users/[id]`):
+- [x] Informacion de contacto (email, telefono, verificacion)
+- [x] Informacion de cuenta (nombre, rol)
+- [x] Actividad (ultimo acceso, fecha registro)
+- [x] Seguridad (intentos fallidos, bloqueo)
+- [x] Acciones: editar, activar/desactivar
+
+*Invitacion de usuarios*:
+- [x] Modal de invitacion (`InviteUserModal`)
+- [x] Formulario: email, nombre, apellido, telefono, rol
+- [x] Generacion de codigo de invitacion (6 digitos)
+- [x] Codigo expira en 7 dias
+- [x] Conectado a API HTTP de invitaciones
+
+*Edicion de usuario* (`/settings/users/[id]/edit`):
+- [x] Formulario: nombre, telefono, rol, estado
+- [x] Email no editable
+- [x] Preview de permisos por rol
+- [x] Conectado a Convex mutations
 
 *Roles y colores*:
 - Super Admin: rojo
 - Admin: morado
 - Driver: azul
 - Monitor: verde
-- Parent: azul claro
+- Parent: ambar
 
 **Componentes clave**:
-- `UsersTable` - Tabla de usuarios
-- `InviteUserModal` - Modal de invitación
-- `RoleBadge` - Badge de rol con color
+- `DataTable` - Tabla reutilizable de usuarios
+- `InviteUserModal` - Modal de invitacion con codigo
+- `StatusBadge` - Badge de estado
+- `DetailSection` / `DetailItem` - Componentes de detalle
 
 **Hooks**:
-- `useUsers()` - Lista de usuarios
-- `useUserStats()` - Estadísticas de usuarios
+- `useUsers()` - Lista de usuarios con filtro por rol
+- `useUser()` - Usuario individual por ID
+- `useUserStats()` - Estadisticas de usuarios
+- `useUserMutations()` - Mutaciones (update, deactivate, reactivate)
+
+**Backend** (`convex/users.ts`):
+- `listUsers` - Query con filtros por rol e institucion
+- `getUserById` - Query de usuario por ID
+- `updateUser` - Mutation para actualizar usuario
+- `deactivateUser` - Mutation para desactivar (soft delete)
+- `reactivateUser` - Mutation para reactivar
 
 ---
 

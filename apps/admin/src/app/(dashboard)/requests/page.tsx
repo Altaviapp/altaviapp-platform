@@ -102,7 +102,7 @@ export default function RequestsPage() {
   // Stats
   const stats: StatItem[] = [
     { label: 'Novedades Pendientes', value: novedades.length, icon: Bell, color: 'info' },
-    { label: 'Cambios Permanentes', value: requests.length, icon: RefreshCw, color: 'purple' as any },
+    { label: 'Cambios Permanentes', value: requests.length, icon: RefreshCw, color: 'warning' },
     { label: 'Incidentes Abiertos', value: incidents.length, icon: AlertTriangle, color: 'danger' },
   ];
 

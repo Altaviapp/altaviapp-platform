@@ -540,27 +540,92 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 - [x] Cámara (para QR)
 - [x] Notificaciones push
 
-### Notificaciones del Sistema de Novedades
+### Notificaciones
+**Estado**: ✅ Implementado
 
-*Eventos recibidos por el crew*:
-| Evento | Tipo | Canal | Mensaje |
-|--------|------|-------|---------|
-| Nueva novedad para viaje | info | push + in-app | "Nueva novedad: {estudiante} - {tipo}" |
-| Novedad pendiente de acuse | reminder | push | "Tienes {N} novedades sin confirmar para hoy" |
-| Viaje con ausencias | warning | in-app | "Este viaje tiene {N} ausencias" |
-| Novedad cancelada | info | in-app | "La novedad de {estudiante} fue cancelada" |
-| Estudiante check-in exitoso | success | in-app | "{estudiante} abordó en {parada}" |
-| Incidente creado | info | in-app | "Incidente #{id} reportado" |
+**UI de Notificaciones**:
+- [x] `NotificationDropdown` - Panel desplegable en header (móvil-optimizado)
+  - Icono campana con badge de conteo
+  - Últimas 10 notificaciones
+  - Diseño móvil con targets táctiles grandes
+  - Iconos por categoría
+  - "Marcar todas como leídas"
+- [x] `NotificationList` en Dashboard - Últimas 3 notificaciones
 
-*Notificaciones enviadas por el crew*:
-| Acción | Destinatario | Mensaje |
-|--------|--------------|---------|
-| Check-in de estudiante | Parent | "{estudiante} ha subido al bus" |
-| Check-out de estudiante | Parent | "{estudiante} ha sido entregado" |
-| Acusar recibo novedad | Parent | "El conductor confirmó la novedad de {estudiante}" |
-| Reportar incidente | Admin + Parent | "Se reportó un incidente: {tipo}" |
-| Viaje iniciado | Admin | "Viaje {ruta} ha iniciado" |
-| Viaje completado | Admin | "Viaje {ruta} completado: {N} estudiantes" |
+**Categorías de Notificación**:
+| Categoría | Icono | Color | Descripción |
+|-----------|-------|-------|-------------|
+| novedad | Bell | Azul primario | Novedades de padres |
+| trip_update | Bus | Azul info | Actualizaciones de viaje |
+| checkin | CheckCircle | Verde | Check-ins exitosos |
+| incident | AlertTriangle | Rojo | Incidentes reportados |
+| system | Info | Gris | Notificaciones del sistema |
+
+**Eventos Recibidos por Crew**:
+| Evento | Tipo | Categoría | Mensaje |
+|--------|------|-----------|---------|
+| Nueva novedad para viaje | info/warning | novedad | "Nueva novedad: {estudiante} - {tipo}" |
+| Novedad pendiente de acuse | info | novedad | "Tienes {N} novedades sin confirmar" |
+| Viaje con ausencias | warning | novedad | "Este viaje tiene {N} ausencias" |
+| Novedad cancelada | info | novedad | "La novedad de {estudiante} fue cancelada" |
+| Estudiante check-in exitoso | success | checkin | "{estudiante} abordó en {parada}" |
+
+**Eventos Enviados por Crew**:
+| Acción | Destinatario | Categoría | Mensaje |
+|--------|--------------|-----------|---------|
+| Check-in de estudiante | Parent | checkin | "{estudiante} ha subido al bus" |
+| Check-out de estudiante | Parent | checkin | "{estudiante} ha sido entregado" |
+| Acusar recibo novedad | Parent | novedad | "El conductor confirmó la novedad" |
+| Reportar incidente | Admin + Parent | incident | "Se reportó un incidente: {tipo}" |
+| Viaje iniciado | Admin | trip_update | "Viaje {ruta} ha iniciado" |
+| Viaje completado | Admin | trip_update | "Viaje {ruta} completado" |
+
+**Deep Linking**:
+- Notificación con `relatedEntityType: "novedad"` → Muestra detalle en novedades del viaje
+- Notificación con `relatedEntityType: "trip"` → Navega al viaje activo
+- Notificación con `relatedEntityType: "student"` → Muestra estudiante en lista
+
+**Hooks**:
+- `useNotifications(options?)` - Lista de notificaciones con filtros
+- `useUnreadCount()` - Conteo de no leídas en tiempo real
+- `useNotificationMutations()` - markAsRead, markAllAsRead, deleteNotification
+- `useUnreadNotifications(limit?)` - Convenience wrapper
+
+**Archivos App**:
+- `apps/crew/src/hooks/useNotifications.ts` - Hooks de notificaciones
+- `apps/crew/src/components/layout/NotificationDropdown.tsx` - Wrapper con navegación (variant="mobile")
+- `apps/crew/src/components/dashboard/NotificationList.tsx` - Wrapper para dashboard
+
+**Componentes Compartidos** (`@altaviapp/ui`):
+Los componentes de notificación están estandarizados en el paquete compartido para consistencia cross-app:
+
+| Componente | Descripción |
+|------------|-------------|
+| `NotificationDropdown` | Panel desplegable con badge, variantes desktop/mobile |
+| `NotificationItem` | Fila individual con icono, contenido, tiempo |
+| `NotificationList` | Lista para dashboard con header y "ver todas" |
+
+**Utilidades Compartidas**:
+- `CATEGORY_CONFIG` - Iconos y colores por categoría
+- `TYPE_CONFIG` - Iconos y colores por tipo (success, info, warning, error)
+- `formatRelativeTime()` - Formato de tiempo relativo en español ("Hace X min")
+- `getNotificationConfig()` - Obtener config por categoría o tipo
+
+**Tipos Compartidos** (`@altaviapp/ui`):
+```typescript
+type NotificationCategory = 'checkin' | 'trip_update' | 'eta' | 'novedad' |
+  'incident' | 'relay' | 'approval_request' | 'system';
+type NotificationType = 'success' | 'info' | 'warning' | 'error';
+type RelatedEntityType = 'trip' | 'student' | 'novedad' | 'incident' |
+  'vehicle' | 'route_change_request';
+```
+
+**Variante Mobile**:
+Crew usa `variant="mobile"` que proporciona:
+- Touch targets de 44x44px mínimo
+- Panel más ancho (100vw - 2rem)
+- Max-height: 70vh
+- Tipografía ligeramente más grande
 
 ---
 

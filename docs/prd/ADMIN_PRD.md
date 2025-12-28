@@ -75,7 +75,7 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 | `/fleet/vehicles/new` | ✅ | Crear vehículo |
 | `/fleet/vehicles/[id]` | ✅ | Detalle de vehículo |
 | `/fleet/vehicles/[id]/edit` | ✅ | Editar vehículo |
-| `/fleet/drivers/new` | ✅ | Crear conductor |
+| `/fleet/drivers/new` | ✅ | Invitar conductor (envía código) |
 | `/fleet/drivers/[id]` | ✅ | Detalle de conductor |
 | `/fleet/drivers/[id]/edit` | ✅ | Editar conductor |
 | `/fleet/monitors/new` | ✅ | Crear monitor/auxiliar |
@@ -162,27 +162,50 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - [x] Vista de QR individual
 - [x] Descarga e impresión
 
-*Importación masiva*:
+*Importación masiva (CSV)*:
 - [x] Upload de archivo CSV
 - [x] Validación previa con preview
 - [x] Detección de errores inline
 - [x] Detección de hogares (agrupar por parentEmail)
 - [x] Plantilla CSV descargable
+- [x] Toggle para enviar invitaciones
+
+*Creación manual con detección de hogares*:
+- [x] Verificación de email en tiempo real (debounced 500ms)
+- [x] Detección automática de hogar existente
+- [x] Auto-llenado de datos del padre si existe hogar
+- [x] Estados visuales del email:
+  - ✅ Usuario registrado (verde)
+  - 📧 Invitación pendiente (azul)
+  - 🏠 Hogar existente (primario con lista de hermanos)
+  - ✉️ Necesita invitación (amarillo con toggle)
+- [x] Botón dinámico según contexto:
+  - "Agregar al Hogar" si hay hogar existente
+  - "Guardar y Enviar Invitación" si se enviará invitación
+  - "Guardar Estudiante" por defecto
+- [x] Muestra hermanos existentes al detectar hogar
 
 *Invitación de padres*:
-- [x] Enviar invitación ahora o guardar para después
+- [x] Enviar invitación desde creación manual o CSV
+- [x] Toggle de envío de invitación
 - [x] Estados: provisorio → invitado → activo
 - [x] Soporte para tutor secundario
+- [x] Detección de invitación pendiente (evita duplicados)
 
 **Componentes clave**:
 - `StudentTable` - Tabla con columnas: avatar, nombre, grado, ubicación, estado, QR
 - `StudentForm` - Formulario de creación/edición
 - `ImportWizard` - Wizard de importación CSV
 - `QRCodeView` - Vista de código QR con acciones
+- `HouseholdCard` - Card de hogar detectado con hermanos
 
-**Hooks**:
+**Hooks** (`apps/admin/src/hooks/useStudents.ts`):
 - `useStudents()` - Lista de estudiantes con filtros
 - `useStudent()` - Estudiante individual
+- `useParentEmailCheck(email)` - Verifica estado del email del padre
+- `useStudentMutations()` - Incluye `createStudentWithInvitation()`
+- `useValidateStudentImport()` - Validación de CSV
+- `useStudentImportMutations()` - Importación masiva
 
 ---
 
@@ -375,10 +398,9 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 
 *Estadisticas*:
 - [x] Novedades pendientes (badge amarillo)
-- [x] Cambios permanentes pendientes (badge morado)
 - [x] Incidentes abiertos (badge rojo)
 
-*Tab 1 - Novedades (cambios diarios)*:
+*Tab 1 - Novedades*:
 - [x] Lista de novedades pendientes de aprobacion
 - [x] Tipos de novedad dinámicos (configurables en `/settings/novedades`):
   - Tipos de sistema: absence, parent_pickup, stop_change, early_pickup, late_arrival, medical_leave
@@ -388,26 +410,17 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - [x] Badge de estado (pendiente, aprobado, rechazado)
 - [x] Indicador de evidencia adjunta (icono clip)
 - [x] Click abre modal de revision
+- [x] Soporte para novedades permanentes via `durationType: permanent | recurring`
 
-*Tab 2 - Cambios Permanentes*:
-- [x] Lista de solicitudes de cambio de ruta pendientes
-- [x] Tipos de cambio permanente:
-  - `schedule_change` - Cambio de horario (dias de la semana)
-  - `stop_change` - Cambio de parada permanente
-  - `route_change` - Cambio de ruta
-  - `service_suspension` - Suspension de servicio
-- [x] Info: estudiante, grado, tipo, razon, solicitante, fecha inicio/fin
-- [x] Modal de revision similar
-
-*Tab 3 - Incidentes*:
+*Tab 2 - Incidentes*:
 - [x] Lista de incidentes abiertos
 - [x] Tipos: accidente, averia, comportamiento, emergencia, otro
 - [x] Badge de severidad (baja, media, alta, critica)
 - [x] Click navega a `/incidents/[id]`
 
-*Modal de revision*:
+*Modal de revision (novedades)*:
 - [x] Info del estudiante (avatar, nombre, grado)
-- [x] Tipo de novedad/solicitud (dinámico, con icono y color)
+- [x] Tipo de novedad (dinámico, con icono y color)
 - [x] Fecha(s) afectada(s)
 - [x] Ruta específica afectada (nombre y horario de la ruta)
 - [x] Razon del solicitante
@@ -422,7 +435,6 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - [x] Novedades `parent_pickup`: NO requieren aprobacion (estado `acknowledged` inmediato)
 - [x] Otras novedades: requieren aprobacion del coordinador
 - [x] Estados novedad: pending → approved/rejected → acknowledged → applied
-- [x] Estados cambio permanente: pending → approved/rejected
 - [x] Notificaciones automaticas a padres y crew
 
 *Diagrama de flujo de status cross-app*:
@@ -480,12 +492,6 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - `useNovedad(id)` - Detalle de una novedad
 - `useNovedadReviewMutations()` - Aprobar/rechazar novedades
 
-*useRouteChangeRequests.ts*:
-- `usePendingRequests()` - Cambios permanentes pendientes
-- `usePendingRequestsCount()` - Contador para badges
-- `useRouteChangeRequest(id)` - Detalle de una solicitud
-- `useReviewMutations()` - Aprobar/rechazar cambios
-
 *useIncidents.ts*:
 - `useIncidents(filters)` - Lista de incidentes con filtros
 - `useIncident(id)` - Detalle de incidente
@@ -501,13 +507,6 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - `applyToTrip` - Aplicar al viaje
 - `getPendingForAdmin` - Novedades pendientes
 - `getForAdmin` - Todas con filtros
-
-*routeChangeRequests.ts*:
-- `create` - Crear solicitud (padres)
-- `review` - Aprobar/rechazar (admin)
-- `cancel` - Cancelar solicitud
-- `getPending` - Solicitudes pendientes
-- `getById` - Detalle de solicitud
 
 ---
 
@@ -760,22 +759,80 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 - [x] Formato fecha: DD/MM/YYYY
 - [x] Formato hora: 24h
 
-### Notificaciones del Sistema de Novedades
+### Notificaciones
+**Estado**: ✅ Implementado
 
-*Eventos y destinatarios*:
-| Evento | Destinatario | Tipo | Canal | Mensaje |
-|--------|--------------|------|-------|---------|
-| Novedad creada | Admin | info | in-app | "Nueva novedad: {estudiante} - {tipo}" |
-| Novedad aprobada | Parent | success | push + in-app | "Tu novedad para {estudiante} ha sido aprobada" |
-| Novedad rechazada | Parent | warning | push + in-app | "Tu novedad fue rechazada: {motivo}" |
-| Novedad acusada | Parent | info | in-app | "El conductor confirmó la novedad de {estudiante}" |
-| Viaje con novedades | Crew | warning | push | "{N} novedades afectan este viaje" |
-| Novedad sin acusar | Crew | reminder | push | "Tienes novedades pendientes de confirmar" |
-| Viaje iniciado con ausencias | Admin | info | in-app | "Viaje {ruta} iniciado con {N} ausencias" |
+**UI de Notificaciones (Header)**:
+- [x] `NotificationDropdown` - Panel desplegable en header
+  - Icono campana con badge de conteo
+  - Últimas 10 notificaciones
+  - Iconos por categoría
+  - "Marcar todas como leídas"
+  - Click para marcar individual como leída
 
-*Implementación*:
-- Backend: `convex/notifications.ts` - triggers en review(), acknowledge(), applyToTrip()
-- Canales: Convex real-time (in-app), Push notifications (pendiente), Email (pendiente)
-- Persistencia: Notificaciones guardadas en tabla `notifications`
+**Categorías de Notificación**:
+| Categoría | Icono | Color | Descripción |
+|-----------|-------|-------|-------------|
+| incident | AlertTriangle | Rojo | Incidentes reportados |
+| approval_request | Clock | Amarillo | Novedades pendientes de aprobación |
+| novedad | Bell | Azul primario | Novedades creadas/actualizadas |
+| trip_update | Bus | Azul info | Viajes iniciados/completados |
+| checkin | CheckCircle | Verde | Check-ins de estudiantes |
+| system | Info | Gris | Notificaciones del sistema |
+
+**Eventos Recibidos por Admin**:
+| Evento | Tipo | Categoría | Mensaje |
+|--------|------|-----------|---------|
+| Incidente reportado (crítico) | error | incident | "Incidente CRÍTICO: {título}" |
+| Incidente reportado (alto) | warning | incident | "Incidente URGENTE: {título}" |
+| Incidente reportado (medio/bajo) | info | incident | "Incidente reportado: {título}" |
+| Novedad pendiente aprobación | warning | approval_request | "Novedad pendiente: {tipo} - Requiere aprobación" |
+| Novedad creada | info | novedad | "Nueva novedad: {estudiante} - {tipo}" |
+| Viaje iniciado con ausencias | info | trip_update | "Viaje {ruta} iniciado con {N} ausencias" |
+
+**Deep Linking**:
+- Notificación con `relatedEntityType: "incident"` → Navega a `/incidents/{id}`
+- Notificación con `relatedEntityType: "novedad"` → Navega a `/novedades` (filtrado)
+- Notificación con `relatedEntityType: "trip"` → Navega a `/trips/{id}`
+
+**Hooks**:
+- `useNotifications(options?)` - Lista de notificaciones con filtros (unreadOnly, limit)
+- `useUnreadCount()` - Conteo de no leídas en tiempo real
+- `useNotificationMutations()` - markAsRead, markAllAsRead, deleteNotification
+- `useUnreadNotifications(limit?)` - Convenience wrapper
+
+**Archivos App**:
+- `apps/admin/src/hooks/useNotifications.ts` - Hooks de notificaciones
+- `apps/admin/src/components/layout/NotificationDropdown.tsx` - Wrapper con navegación
+
+**Componentes Compartidos** (`@altaviapp/ui`):
+Los componentes de notificación están estandarizados en el paquete compartido para consistencia cross-app:
+
+| Componente | Descripción |
+|------------|-------------|
+| `NotificationDropdown` | Panel desplegable con badge, variantes desktop/mobile |
+| `NotificationItem` | Fila individual con icono, contenido, tiempo |
+| `NotificationList` | Lista para dashboard con header y "ver todas" |
+
+**Utilidades Compartidas**:
+- `CATEGORY_CONFIG` - Iconos y colores por categoría
+- `TYPE_CONFIG` - Iconos y colores por tipo (success, info, warning, error)
+- `formatRelativeTime()` - Formato de tiempo relativo en español ("Hace X min")
+- `getNotificationConfig()` - Obtener config por categoría o tipo
+
+**Tipos Compartidos** (`@altaviapp/ui`):
+```typescript
+type NotificationCategory = 'checkin' | 'trip_update' | 'eta' | 'novedad' |
+  'incident' | 'relay' | 'approval_request' | 'system';
+type NotificationType = 'success' | 'info' | 'warning' | 'error';
+type RelatedEntityType = 'trip' | 'student' | 'novedad' | 'incident' |
+  'vehicle' | 'route_change_request';
+```
+
+**Implementación Backend**:
+- `convex/notifications.ts` - Queries y mutations
+- `convex/incidents.ts` - Trigger para todos los incidentes
+- `convex/novedades.ts` - Trigger para novedades pendientes de aprobación
+- Canales: Convex real-time (in-app), Push (pendiente), Email (pendiente)
 
 ---

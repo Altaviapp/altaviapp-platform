@@ -63,25 +63,41 @@ export const reportIncident = mutation({
       updatedAt: now,
     });
 
-    // Notify admins of critical/high severity incidents
-    if (args.severity === "critical" || args.severity === "high") {
-      const admins = await ctx.db
-        .query("users")
-        .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
-        .filter((q) => q.eq(q.field("role"), "admin"))
-        .filter((q) => q.eq(q.field("isActive"), true))
-        .collect();
+    // Notify admins of all incidents
+    const admins = await ctx.db
+      .query("users")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("role"), "admin"),
+          q.eq(q.field("role"), "super_admin")
+        )
+      )
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
 
-      for (const admin of admins) {
-        await ctx.db.insert("notifications", {
-          userId: admin._id,
-          title: `Incidente ${args.severity === "critical" ? "CRÍTICO" : "URGENTE"}`,
-          message: `${args.title} - ${args.type}`,
-          type: args.severity === "critical" ? "error" : "warning",
-          read: false,
-          createdAt: now,
-        });
-      }
+    // Determine notification title and type based on severity
+    const severityConfig: Record<string, { title: string; type: "error" | "warning" | "info" }> = {
+      critical: { title: "Incidente CRÍTICO", type: "error" },
+      high: { title: "Incidente URGENTE", type: "warning" },
+      medium: { title: "Incidente reportado", type: "info" },
+      low: { title: "Incidente menor", type: "info" },
+    };
+
+    const config = severityConfig[args.severity] ?? severityConfig.low;
+
+    for (const admin of admins) {
+      await ctx.db.insert("notifications", {
+        userId: admin._id,
+        title: config!.title,
+        message: `${args.title} - ${args.type}`,
+        type: config!.type,
+        category: "incident",
+        relatedEntityType: "incident",
+        relatedEntityId: incidentId,
+        read: false,
+        createdAt: now,
+      });
     }
 
     return { success: true, incidentId };

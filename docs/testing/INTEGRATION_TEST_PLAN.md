@@ -224,56 +224,141 @@
 
 ## Fase 5: Creación de Estudiantes (Admin App)
 
-### 5.1 Estudiante Alpha (Parent 1)
+> **NOTA**: Hay dos métodos para crear estudiantes. Elige UNO:
+> - **Método A**: Importación CSV (recomendado - crea hogares + envía invitaciones)
+> - **Método B**: Creación manual (uno por uno)
+
+### Método A: Importación CSV (Recomendado) ⭐
+
+#### 5.A.1 Preparar Archivo CSV
+
+Crear archivo `estudiantes_test.csv` con el siguiente contenido:
+
+```csv
+Nombres,Apellidos,Grado,Email Padre,Nombre Padre,Telefono
+Alpha,Testing,5to A,onedreamto@gmail.com,Parent One,+593991111111
+Beta,Testing,4to B,admin@ceibatic.com,Parent Two,+593992222222
+Gamma,Testing,6to A,admin@ceibatic.com,Parent Two,+593992222222
+```
+
+#### 5.A.2 Importar Estudiantes
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `/students` | Lista de estudiantes | ☐ |
+| 2 | Click "Importar" o ir a `/students/import` | Wizard de importación | ☐ |
+| 3 | (Opcional) Click "Descargar Plantilla" | Descarga `plantilla_estudiantes.csv` | ☐ |
+| 4 | Arrastrar `estudiantes_test.csv` a zona de drop | Archivo cargado | ☐ |
+| 5 | Verificar "3 estudiantes encontrados" | Mensaje de confirmación | ☐ |
+| 6 | Click "Siguiente" o esperar validación | Paso 2: Vista previa | ☐ |
+
+#### 5.A.3 Validar Datos y Hogares
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Verificar cards de resumen: | | |
+| | - Válidos: 3 | Badge verde | ☐ |
+| | - Hogares: 2 | Badge azul | ☐ |
+| | - Nuevas invitaciones: 2 | Badge amarillo | ☐ |
+| 2 | Ver "Hogares Detectados": | | |
+| | - `onedreamto@gmail.com` (1 estudiante) | Parent 1 | ☐ |
+| | - `admin@ceibatic.com` (2 estudiantes) | Parent 2 | ☐ |
+| 3 | Verificar toggle "Enviar invitaciones" | Activado por defecto | ☐ |
+
+#### 5.A.4 Ejecutar Importación
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Click "Importar 3 estudiantes" | Loading... | ☐ |
+| 2 | Esperar proceso | Paso 3: Confirmación | ☐ |
+| 3 | Verificar resumen: | | |
+| | - Estudiantes creados: 3 | ✓ | ☐ |
+| | - Hogares: 2 | ✓ | ☐ |
+| | - Invitaciones enviadas: 2 | ✓ | ☐ |
+| 4 | Click "Ver Estudiantes" | Redirige a `/students` | ☐ |
+| 5 | Verificar 3 estudiantes en lista | Alpha, Beta, Gamma | ☐ |
+
+**Invitaciones enviadas a:**
+- [ ] `onedreamto@gmail.com` (Parent 1)
+- [ ] `admin@ceibatic.com` (Parent 2)
+
+---
+
+### Método B: Creación Manual (con Detección de Hogares)
+
+> Este método también detecta hogares y permite enviar invitaciones, igual que el CSV.
+
+#### 5.B.1 Estudiante Alpha (Parent 1 - Nuevo)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
 | 1 | Ir a `/students` | Lista vacía | ☐ |
 | 2 | Click "Nuevo Estudiante" | Formulario | ☐ |
-| 3 | Llenar datos: | | |
+| 3 | En Email Padre: `onedreamto@gmail.com` | Esperar verificación... | ☐ |
+| 4 | Verificar estado del email | Card amarilla: "Enviar invitación" | ☐ |
+| 5 | Verificar toggle "Enviar invitación" | Toggle activado por defecto | ☐ |
+| 6 | Llenar resto de datos: | | |
 | | - Nombre: `Alpha` | Campo llenado | ☐ |
 | | - Apellido: `Testing` | Campo llenado | ☐ |
 | | - Grado: `5to A` | Selector | ☐ |
-| | - Email Padre: `onedreamto@gmail.com` | Campo validado | ☐ |
-| | - Teléfono: `0991111111` | Campo validado | ☐ |
-| 4 | Click en mapa para ubicar hogar | Pin seleccionado | ☐ |
-| 5 | Click "Guardar" | Toast éxito | ☐ |
+| | - Nombre Padre: `Parent One` | Campo llenado | ☐ |
+| | - Teléfono: `+593991111111` | Campo llenado | ☐ |
+| 7 | Verificar botón | "Guardar y Enviar Invitación" | ☐ |
+| 8 | Click en botón | Toast éxito + Invitación enviada | ☐ |
 
 **Estudiante Alpha ID:** `________________`
-**Ubicación:** `________________`
+**Invitación enviada a:** `onedreamto@gmail.com` ☐
 
-### 5.2 Estudiante Beta (Parent 2 - hijo 1)
+#### 5.B.2 Estudiante Beta (Parent 2 - Nuevo)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
 | 1 | Click "Nuevo Estudiante" | Formulario | ☐ |
-| 2 | Llenar datos: | | |
+| 2 | En Email Padre: `admin@ceibatic.com` | Esperar verificación... | ☐ |
+| 3 | Verificar estado del email | Card amarilla: "Enviar invitación" | ☐ |
+| 4 | Verificar toggle "Enviar invitación" | Toggle activado | ☐ |
+| 5 | Llenar resto de datos: | | |
 | | - Nombre: `Beta` | Campo llenado | ☐ |
 | | - Apellido: `Testing` | Campo llenado | ☐ |
 | | - Grado: `4to B` | Selector | ☐ |
-| | - Email Padre: `admin@ceibatic.com` | Campo validado | ☐ |
-| | - Teléfono: `0992222222` | Campo validado | ☐ |
-| 3 | Ubicar hogar en mapa | Ubicación diferente | ☐ |
-| 4 | Click "Guardar" | Toast éxito | ☐ |
+| | - Nombre Padre: `Parent Two` | Campo llenado | ☐ |
+| | - Teléfono: `+593992222222` | Campo llenado | ☐ |
+| 6 | Click "Guardar y Enviar Invitación" | Toast éxito | ☐ |
 
 **Estudiante Beta ID:** `________________`
-**Ubicación:** `________________`
+**Invitación enviada a:** `admin@ceibatic.com` ☐
 
-### 5.3 Estudiante Gamma (Parent 2 - hijo 2)
+#### 5.B.3 Estudiante Gamma (Parent 2 - Hogar Existente)
 
 | # | Paso | Resultado Esperado | ✓ |
 |---|------|-------------------|---|
 | 1 | Click "Nuevo Estudiante" | Formulario | ☐ |
-| 2 | Llenar datos: | | |
+| 2 | En Email Padre: `admin@ceibatic.com` | Esperar verificación... | ☐ |
+| 3 | **Verificar detección de hogar** | Card azul: "Hogar existente detectado" | ☐ |
+| 4 | Verificar hermano mostrado | "Beta Testing (4to B)" visible | ☐ |
+| 5 | Verificar auto-llenado de padre | Nombre: "Parent Two" auto-llenado | ☐ |
+| 6 | Verificar teléfono auto-llenado | "+593992222222" auto-llenado | ☐ |
+| 7 | Verificar NO hay toggle de invitación | (ya existe invitación pendiente) | ☐ |
+| 8 | Llenar datos del estudiante: | | |
 | | - Nombre: `Gamma` | Campo llenado | ☐ |
 | | - Apellido: `Testing` | Campo llenado | ☐ |
 | | - Grado: `6to A` | Selector | ☐ |
-| | - Email Padre: `admin@ceibatic.com` | (mismo que Beta) | ☐ |
-| | - Teléfono: `0992222222` | (mismo que Beta) | ☐ |
-| 3 | Ubicar hogar en mapa | Misma ubicación que Beta | ☐ |
-| 4 | Click "Guardar" | Toast éxito | ☐ |
+| 9 | Verificar botón | "Agregar al Hogar" | ☐ |
+| 10 | Click en botón | Toast éxito | ☐ |
 
 **Estudiante Gamma ID:** `________________`
+**Hogar detectado:** Beta Testing ☐
+
+#### 5.B.4 Verificar Invitaciones Creadas
+
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ir a `/settings/invitations` | Lista de invitaciones | ☐ |
+| 2 | Verificar invitación Parent 1 | `onedreamto@gmail.com` - Pendiente | ☐ |
+| 3 | Verificar invitación Parent 2 | `admin@ceibatic.com` - Pendiente | ☐ |
+| 4 | Total de invitaciones | 2 pendientes | ☐ |
+
+---
 
 ### 5.4 Verificar Lista de Estudiantes
 
@@ -286,6 +371,9 @@
 ---
 
 ## Fase 6: Registro de Parents (Parent App)
+
+> **NOTA**: Ambos métodos (CSV y Manual) envían invitaciones automáticamente.
+> Los padres recibirán un email con código de invitación para crear su cuenta.
 
 ### 6.1 Registro Parent 1 (onedreamto@gmail.com)
 
@@ -625,7 +713,7 @@
 
 ---
 
-## Fase 13: Testing de Incidentes (Opcional)
+## Fase 13: Testing de Incidentes
 
 ### 13.1 Reportar Incidente
 
@@ -644,6 +732,157 @@
 |---|------|-------------------|---|
 | 1 | Admin: `/incidents` | Incidente en lista | ☐ |
 | 2 | Ver detalle | Info completa | ☐ |
+
+---
+
+## Fase 14: Testing de Notificaciones
+
+> Validar el sistema de notificaciones en tiempo real across apps.
+
+### 14.1 Notificaciones en Admin App
+
+**UI de Notificaciones:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Login Admin App | Dashboard | ☐ |
+| 2 | Verificar icono campana en header | Icono visible | ☐ |
+| 3 | Click en campana | Dropdown despliega | ☐ |
+| 4 | Verificar header "Notificaciones" | Título visible | ☐ |
+| 5 | Click fuera del dropdown | Se cierra | ☐ |
+
+**Notificación de Incidente:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Crew: Reportar incidente (severidad alta) | Incidente creado | ☐ |
+| 2 | Admin: Ver badge en campana | Badge incrementa | ☐ |
+| 3 | Click en campana | Notificación visible | ☐ |
+| 4 | Verificar icono AlertTriangle (rojo) | Categoría "incident" | ☐ |
+| 5 | Verificar título "Incidente URGENTE" | Severidad alta | ☐ |
+| 6 | Click en notificación | Navega a `/incidents/{id}` | ☐ |
+| 7 | Verificar notificación marcada leída | Sin dot azul | ☐ |
+
+**Notificación de Novedad Pendiente:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Parent: Crear novedad de ausencia | Novedad pendiente | ☐ |
+| 2 | Admin: Ver badge en campana | Badge incrementa | ☐ |
+| 3 | Click en campana | Notificación visible | ☐ |
+| 4 | Verificar icono Clock (amarillo) | Categoría "approval_request" | ☐ |
+| 5 | Verificar título incluye "pendiente" | Requiere aprobación | ☐ |
+| 6 | Click en notificación | Navega a `/novedades` | ☐ |
+
+**Marcar Todas como Leídas:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Tener varias notificaciones no leídas | Badge > 1 | ☐ |
+| 2 | Abrir dropdown | Ver notificaciones | ☐ |
+| 3 | Click "Marcar todas" | Toast éxito | ☐ |
+| 4 | Verificar badge desaparece | Badge = 0 | ☐ |
+| 5 | Todas sin dot azul | Leídas | ☐ |
+
+### 14.2 Notificaciones en Crew App
+
+**UI de Notificaciones (Mobile):**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Login Crew App (móvil) | Dashboard | ☐ |
+| 2 | Verificar icono campana en header | Icono visible | ☐ |
+| 3 | Click en campana | Dropdown despliega | ☐ |
+| 4 | Verificar ancho panel | 100vw - 2rem | ☐ |
+| 5 | Verificar touch targets | Mínimo 44x44px | ☐ |
+
+**Notificación en Dashboard:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Scroll a "Notificaciones Recientes" | Card visible | ☐ |
+| 2 | Verificar últimas 3 notificaciones | Lista | ☐ |
+| 3 | Verificar iconos por tipo | Success/Info/Warning | ☐ |
+| 4 | Verificar formato tiempo | "Hace X min" | ☐ |
+| 5 | Click "Ver todas" | Navega a `/notifications` | ☐ |
+
+**Notificación de Novedad:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Admin: Aprobar novedad | Novedad aprobada | ☐ |
+| 2 | Crew: Ver badge actualizado | Badge visible | ☐ |
+| 3 | Verificar notificación | Categoría "novedad" | ☐ |
+
+### 14.3 Notificaciones en Parent App
+
+**Página de Notificaciones:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Login Parent App | Dashboard | ☐ |
+| 2 | Ir a `/notifications` | Página de notificaciones | ☐ |
+| 3 | Ver lista completa | Todas las notificaciones | ☐ |
+| 4 | Verificar iconos por tipo | Success/Info/Warning/Error | ☐ |
+| 5 | Verificar formato tiempo | "Hace X min" | ☐ |
+
+**Notificación de Check-in:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Crew: Hacer check-in de estudiante | Check-in exitoso | ☐ |
+| 2 | Parent: Ver `/notifications` | Nueva notificación | ☐ |
+| 3 | Verificar tipo "success" | Icono verde | ☐ |
+| 4 | Verificar mensaje | "{estudiante} subió al bus" | ☐ |
+
+**Notificación de Novedad Aprobada:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Parent: Crear novedad | Novedad pendiente | ☐ |
+| 2 | Admin: Aprobar novedad | Novedad aprobada | ☐ |
+| 3 | Parent: Ver `/notifications` | Nueva notificación | ☐ |
+| 4 | Verificar tipo "success" | Icono verde | ☐ |
+| 5 | Verificar mensaje | "Tu novedad ha sido aprobada" | ☐ |
+
+**Marcar como Leída:**
+| # | Paso | Resultado Esperado | ✓ |
+|---|------|-------------------|---|
+| 1 | Ver notificación no leída | Con indicador azul | ☐ |
+| 2 | Click en notificación | Marcada como leída | ☐ |
+| 3 | Verificar indicador desaparece | Sin dot azul | ☐ |
+
+### 14.4 Cross-App Notification Flow
+
+| Acción | Origen | Destino | Categoría | ✓ |
+|--------|--------|---------|-----------|---|
+| Check-in estudiante | Crew | Parent | checkin | ☐ |
+| Check-out estudiante | Crew | Parent | checkin | ☐ |
+| Reportar incidente | Crew | Admin | incident | ☐ |
+| Crear novedad | Parent | Admin | approval_request | ☐ |
+| Aprobar novedad | Admin | Parent | novedad | ☐ |
+| Aprobar novedad | Admin | Crew | novedad | ☐ |
+| Rechazar novedad | Admin | Parent | novedad | ☐ |
+
+### 14.5 Deep Linking desde Notificaciones
+
+**Admin App:**
+| Entidad | Click en Notificación | Navegación | ✓ |
+|---------|----------------------|------------|---|
+| Incidente | Notificación de incidente | `/incidents/{id}` | ☐ |
+| Novedad | Notificación de aprobación | `/novedades` | ☐ |
+| Viaje | Notificación de viaje | `/trips/{id}` | ☐ |
+
+**Crew App:**
+| Entidad | Click en Notificación | Navegación | ✓ |
+|---------|----------------------|------------|---|
+| Novedad | Notificación de novedad | `/novedades` | ☐ |
+| Viaje | Notificación de viaje | `/trips/{id}` | ☐ |
+| Estudiante | Notificación de estudiante | `/students/{id}` | ☐ |
+
+### 14.6 Categorías y Colores
+
+Verificar que cada categoría muestra el icono y color correcto:
+
+| Categoría | Icono | Color | App | ✓ |
+|-----------|-------|-------|-----|---|
+| checkin | CheckCircle | Verde (success) | Parent | ☐ |
+| trip_update | Bus | Azul (info) | All | ☐ |
+| eta | MapPin | Amarillo (warning) | Parent | ☐ |
+| novedad | Bell | Azul primario | All | ☐ |
+| incident | AlertTriangle | Rojo (error) | Admin/Parent | ☐ |
+| approval_request | Clock | Amarillo (warning) | Admin | ☐ |
+| system | Info | Gris | All | ☐ |
 
 ---
 
@@ -681,6 +920,10 @@
 | Crear ruta única (domingo) | ☐ |
 | Cross-app: Parents ven rutas | ☐ |
 | Cross-app: Crew ve sus rutas | ☐ |
+| Notificaciones Admin (dropdown) | ☐ |
+| Notificaciones Crew (dropdown + dashboard) | ☐ |
+| Notificaciones Parent (página) | ☐ |
+| Deep linking desde notificaciones | ☐ |
 | Iniciar viaje (lazy creation) | ☐ |
 | GPS tracking en tiempo real | ☐ |
 | Check-in de estudiantes | ☐ |
@@ -705,6 +948,8 @@
 | Aprobar novedad | Admin | Parent recibe notif | ☐ |
 | Aprobar novedad | Admin | Crew ve novedad | ☐ |
 | Acusar recibo | Crew | Parent ve estado | ☐ |
+| Reportar incidente | Crew | Admin recibe notif | ☐ |
+| Incidente crítico | Crew | Admin notif urgente | ☐ |
 
 ---
 
@@ -718,6 +963,10 @@
 | Novedad no aplica al viaje | Fecha incorrecta | Verificar fecha de novedad |
 | Tracking no actualiza | GPS deshabilitado | Permitir geolocalización |
 | Ruta domingo no aparece | Fecha pasada | Verificar fecha futura |
+| Notificación no aparece | Usuario no en institución | Verificar institutionId |
+| Badge no actualiza | Convex subscription inactiva | Refrescar página |
+| Deep link no funciona | relatedEntityId vacío | Verificar trigger en backend |
+| Icono incorrecto | Categoría no seteada | Verificar category en notif |
 
 ---
 

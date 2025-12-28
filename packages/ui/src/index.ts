@@ -25,3 +25,26 @@ export {
   type LocationSelectorProps,
   type LocationValue,
 } from './components/location-selector';
+
+// Notifications
+export {
+  // Types
+  type NotificationType,
+  type NotificationCategory,
+  type RelatedEntityType,
+  type Notification as NotificationData,
+  type DeepLinkConfig,
+  // Components
+  NotificationItem,
+  type NotificationItemProps,
+  NotificationDropdown,
+  type NotificationDropdownProps,
+  NotificationList,
+  type NotificationListProps,
+  // Utilities
+  CATEGORY_CONFIG,
+  TYPE_CONFIG,
+  getNotificationConfig,
+  type CategoryConfig,
+  formatRelativeTime,
+} from './components/notifications';

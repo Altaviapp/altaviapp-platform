@@ -151,8 +151,8 @@ export function useConvexDashboard() {
     title: n.title,
     message: n.message,
     read: n.read,
-    timestamp: n._creationTime?.toString() ?? "",
-    createdAt: n._creationTime?.toString() ?? "",
+    timestamp: n.createdAt?.toString() ?? "",
+    createdAt: n.createdAt?.toString() ?? "",
   }));
 
   // Get vehicle from first trip (driver typically has one vehicle)

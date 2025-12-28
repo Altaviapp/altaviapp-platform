@@ -1,7 +1,8 @@
 'use client';
 
-import { Menu, Bell, Settings, ChevronRight } from 'lucide-react';
+import { Menu, Settings, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
+import { NotificationDropdown } from './NotificationDropdown';
 
 interface Breadcrumb {
   label: string;
@@ -12,7 +13,6 @@ interface HeaderProps {
   title: string;
   breadcrumbs?: Breadcrumb[];
   onMenuClick?: () => void;
-  notificationCount?: number;
 }
 
 /**
@@ -30,7 +30,6 @@ export function Header({
   title,
   breadcrumbs,
   onMenuClick,
-  notificationCount = 0,
 }: HeaderProps) {
   const today = new Date().toLocaleDateString('es-EC', {
     day: '2-digit',
@@ -90,18 +89,8 @@ export function Header({
               Hoy: {today}
             </span>
 
-            {/* Notification Bell */}
-            <button
-              className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              aria-label="Notificaciones"
-            >
-              <Bell className="w-5 h-5 text-gray-600" />
-              {notificationCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[16px] h-4 bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
-                  {notificationCount > 9 ? '9+' : notificationCount}
-                </span>
-              )}
-            </button>
+            {/* Notification Dropdown */}
+            <NotificationDropdown />
 
             {/* Settings - desktop only */}
             <Link

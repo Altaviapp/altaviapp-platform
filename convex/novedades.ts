@@ -349,6 +349,41 @@ export const create = mutation({
       }
     }
 
+    // Notify admins if novedad requires approval
+    if (requiresApproval) {
+      const admins = await ctx.db
+        .query("users")
+        .withIndex("by_institution", (q) => q.eq("institutionId", student.institutionId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("isActive"), true),
+            q.or(
+              q.eq(q.field("role"), "admin"),
+              q.eq(q.field("role"), "super_admin")
+            )
+          )
+        )
+        .collect();
+
+      const typeName = novedadType?.name || getTypeLabel(args.type || "");
+
+      for (const admin of admins) {
+        if (!notifiedUsers.has(admin._id)) {
+          await ctx.db.insert("notifications", {
+            userId: admin._id,
+            title: `Novedad pendiente: ${typeName}`,
+            message: `${student.firstName} ${student.lastName} - Requiere aprobación`,
+            type: "warning",
+            category: "approval_request",
+            relatedEntityType: "novedad",
+            relatedEntityId: novedadId,
+            read: false,
+            createdAt: now,
+          });
+        }
+      }
+    }
+
     return { success: true, novedadId, status: initialStatus };
   },
 });

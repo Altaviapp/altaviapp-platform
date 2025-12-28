@@ -283,9 +283,39 @@ El Parent Portal es la aplicación web PWA para padres y tutores. Permite seguir
 - `UnreadBadge` - Badge de no leídas
 
 **Hooks**:
-- `useNotifications()` - Lista de notificaciones
-- `useUnreadCount()` - Conteo de no leídas
-- `useMarkAsRead()` - Marcar como leída
+- `useNotifications()` - Lista de notificaciones con filtros
+- `useUnreadCount()` - Conteo de no leídas en tiempo real
+- `useNotificationMutations()` - markAsRead, markAllAsRead, delete
+- `useUnreadNotifications()` - Convenience wrapper
+
+**Archivos**:
+- `apps/parent/src/hooks/useNotifications.ts`
+- `apps/parent/src/app/(dashboard)/notifications/page.tsx`
+
+**Eventos Recibidos por Parent**:
+| Evento | Tipo | Categoría | Mensaje |
+|--------|------|-----------|---------|
+| Estudiante abordó | success | checkin | "{estudiante} ha subido al bus" |
+| Estudiante entregado | success | checkin | "{estudiante} ha sido entregado" |
+| Viaje iniciado | info | trip_update | "El bus de {estudiante} ha iniciado" |
+| Viaje completado | info | trip_update | "El viaje ha terminado" |
+| ETA actualizado | info | eta | "Llegada estimada: {hora}" |
+| Novedad aprobada | success | novedad | "Tu novedad fue aprobada" |
+| Novedad rechazada | warning | novedad | "Tu novedad fue rechazada: {motivo}" |
+| Novedad confirmada | info | novedad | "El conductor confirmó la novedad" |
+| Incidente reportado | warning | incident | "Se reportó un incidente en el viaje" |
+| Cambio de vehículo | info | relay | "El bus cambió a {placa}" |
+
+**Eventos Enviados por Parent**:
+| Acción | Destinatario | Categoría | Mensaje |
+|--------|--------------|-----------|---------|
+| Crear novedad | Crew + Admin | novedad | "Nueva novedad: {tipo}" |
+| Cancelar novedad | Crew | novedad | "Novedad cancelada" |
+
+**Deep Linking**:
+- Notificación con `category: "trip_update"` o `"eta"` → "Ver en mapa" navega a `/inicio`
+- Notificación con `relatedEntityType: "novedad"` → Navega a `/novedades`
+- Notificación con `relatedEntityType: "incident"` → Muestra detalle del incidente
 
 ---
 
@@ -567,7 +597,17 @@ Tipos predefinidos del sistema:
 - [x] Manifest configurado
 - [x] Responsive design (mobile-first)
 
-### Notificaciones del Sistema de Novedades
+### Notificaciones
+**Estado**: ✅ Implementado
+
+**UI de Notificaciones (Página Completa)**:
+Parent usa una página dedicada `/notifications` en lugar de dropdown en header:
+- [x] Lista completa de notificaciones
+- [x] Filtros (leídas/no leídas)
+- [x] Iconos por tipo (success, info, warning, error)
+- [x] Formato de tiempo relativo
+- [x] Marcar como leída individual
+- [x] Marcar todas como leídas
 
 *Eventos recibidos por el padre*:
 | Evento | Tipo | Canal | Mensaje |
@@ -581,6 +621,30 @@ Tipos predefinidos del sistema:
 | Estudiante entregado | success | push | "{estudiante} ha llegado a destino" |
 | ETA actualizado | info | in-app | "Nueva hora estimada: {hora}" |
 | Incidente reportado | warning | push | "Se reportó un incidente en la ruta de {estudiante}" |
+
+**Hooks**:
+- `useNotifications(options?)` - Lista de notificaciones con filtros
+- `useUnreadCount()` - Conteo de no leídas en tiempo real
+- `useNotificationMutations()` - markAsRead, markAllAsRead, deleteNotification
+- `useUnreadNotifications(limit?)` - Convenience wrapper
+
+**Archivos App**:
+- `apps/parent/src/hooks/useNotifications.ts` - Hooks de notificaciones
+- `apps/parent/src/app/(dashboard)/notifications/page.tsx` - Página de notificaciones
+
+**Componentes Compartidos Disponibles** (`@altaviapp/ui`):
+Los componentes de notificación compartidos están disponibles para consistencia cross-app si se necesita agregar dropdown en header:
+
+| Componente | Descripción |
+|------------|-------------|
+| `NotificationDropdown` | Panel desplegable con badge, variantes desktop/mobile |
+| `NotificationItem` | Fila individual con icono, contenido, tiempo |
+| `NotificationList` | Lista para dashboard con header y "ver todas" |
+
+**Utilidades Compartidas**:
+- `CATEGORY_CONFIG` - Iconos y colores por categoría
+- `TYPE_CONFIG` - Iconos y colores por tipo
+- `formatRelativeTime()` - Formato de tiempo relativo en español
 
 *Configuración de notificaciones*:
 Las preferencias de notificación se configuran en `/settings` (pendiente conectar a backend):

@@ -20,8 +20,9 @@ export {
   useStudentsWithRoutes,
   useValidateStudentImport,
   useStudentImportMutations,
+  useParentEmailCheck,
 } from "./useStudents";
-export type { StudentImportData } from "./useStudents";
+export type { StudentImportData, ParentEmailStatus } from "./useStudents";
 
 // Fleet (Vehicles, Drivers, Monitors)
 export {
@@ -69,14 +70,6 @@ export {
   useReportsDashboard,
 } from "./useReports";
 export type { TripStatus } from "./useReports";
-
-// Route Change Requests (Approval Workflow)
-export {
-  usePendingRequests,
-  usePendingRequestsCount,
-  useRouteChangeRequest,
-  useReviewMutations,
-} from "./useRouteChangeRequests";
 
 // Novedades (Schedule Exceptions)
 export {
@@ -128,3 +121,11 @@ export type {
   NovedadTypeDuration,
   NovedadTypeFormData,
 } from "./useNovedadTypes";
+
+// Notifications
+export {
+  useNotifications,
+  useUnreadCount,
+  useNotificationMutations,
+  useUnreadNotifications,
+} from "./useNotifications";

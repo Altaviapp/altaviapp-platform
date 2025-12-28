@@ -63,3 +63,11 @@ export type { IncidentType, IncidentSeverity, ReportIncidentInput } from './useI
 // Calendar hooks (for calendar view)
 export { useCalendarTrips } from './useCalendarTrips';
 export type { CalendarTrip } from './useCalendarTrips';
+
+// Notifications hooks
+export {
+  useNotifications,
+  useUnreadCount,
+  useNotificationMutations,
+  useUnreadNotifications,
+} from './useNotifications';

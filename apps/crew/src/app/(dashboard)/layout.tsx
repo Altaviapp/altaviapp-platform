@@ -69,7 +69,6 @@ export default function DashboardLayout({
         <Header
           title={getPageTitle()}
           onMenuClick={() => setSidebarOpen(true)}
-          notificationCount={3}
         />
 
         {/* Page Content */}

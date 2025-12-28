@@ -1,23 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, MapPin } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-import { useStudent, useStudentMutations } from '@/hooks';
+import { useStudent, useStudentMutations, useInstitutionGrades } from '@/hooks';
 import { GoogleMapsProvider, LocationPicker } from '@altaviapp/maps';
 import type { LatLng } from '@altaviapp/maps';
-
-const grades = [
-  { value: '1ro', label: '1ro Básica' },
-  { value: '2do', label: '2do Básica' },
-  { value: '3ro', label: '3ro Básica' },
-  { value: '4to', label: '4to Básica' },
-  { value: '5to', label: '5to Básica' },
-  { value: '6to', label: '6to Básica' },
-];
 
 /**
  * Edit Student Page
@@ -53,6 +44,13 @@ export default function EditStudentPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { student, isLoading, notFound } = useStudent(studentId as any);
   const { updateStudent } = useStudentMutations();
+  const { grades: institutionGrades } = useInstitutionGrades();
+
+  // Convert grades array to select options
+  const gradeOptions = useMemo(
+    () => institutionGrades.map((g) => ({ value: g, label: g })),
+    [institutionGrades]
+  );
 
   // Load student data into form
   useEffect(() => {
@@ -196,7 +194,7 @@ export default function EditStudentPage() {
               type="select"
               value={formData.grade}
               onChange={handleChange('grade')}
-              options={grades}
+              options={gradeOptions}
               required
             />
           </FormFieldRow>

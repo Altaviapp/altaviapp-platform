@@ -5,13 +5,15 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   MapPin, Users, Clock, Bus, Phone, Edit, Trash2,
-  ChevronRight, GraduationCap, Route, User, Loader2
+  ChevronRight, GraduationCap, Route, User, Loader2,
+  Power, PowerOff
 } from 'lucide-react';
 import { PageHeader, StatusBadge, DetailSection, ConfirmDialog } from '@/components/shared';
 import { cn } from '@/lib/utils';
 import { GoogleMapsProvider, InteractiveMap, RoutePolyline } from '@altaviapp/maps';
 import type { MarkerInfo } from '@altaviapp/maps';
 import { useRoute, useRouteMutations } from '@/hooks';
+import type { Id } from '../../../../../../../convex/_generated/dataModel';
 
 // Type labels for route types
 const typeLabels: Record<string, { label: string; color: string }> = {
@@ -30,6 +32,7 @@ export default function RouteDetailPage() {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [map, setMap] = useState<google.maps.Map | null>(null);
 
   // Handler for when map loads
@@ -40,7 +43,7 @@ export default function RouteDetailPage() {
   // Real data from Convex
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { route, isLoading, notFound } = useRoute(routeId as any);
-  const { deactivateRoute } = useRouteMutations();
+  const { deleteRoute, updateRoute } = useRouteMutations();
 
   if (isLoading) {
     return (
@@ -95,12 +98,25 @@ export default function RouteDetailPage() {
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await deactivateRoute(routeId as any);
+      await deleteRoute(routeId as Id<'routes'>);
       router.push('/routes');
     } catch (error) {
-      console.error('Error deactivating route:', error);
+      console.error('Error deleting route:', error);
       setIsDeleting(false);
+    }
+  };
+
+  const handleToggleStatus = async () => {
+    if (!route) return;
+    setIsTogglingStatus(true);
+    try {
+      await updateRoute(routeId as Id<'routes'>, {
+        isActive: !route.isActive,
+      });
+    } catch (error) {
+      console.error('Error toggling route status:', error);
+    } finally {
+      setIsTogglingStatus(false);
     }
   };
 
@@ -130,6 +146,13 @@ export default function RouteDetailPage() {
             </div>
           }
           actions={[
+            {
+              label: route.isActive ? 'Desactivar' : 'Activar',
+              onClick: handleToggleStatus,
+              icon: route.isActive ? PowerOff : Power,
+              variant: route.isActive ? 'secondary' : 'primary',
+              disabled: isTogglingStatus,
+            },
             {
               label: 'Editar Ruta',
               href: `/routes/${route._id}/edit`,

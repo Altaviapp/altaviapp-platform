@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
 import { useInvitationMutations } from '@/hooks';
 import { CheckCircle, Mail } from 'lucide-react';
+import { PhoneInput } from '@altaviapp/ui';
 
 /**
  * New Monitor Page - Simple invitation form
@@ -194,12 +195,14 @@ export default function NewMonitorPage() {
             <FormField
               label="Teléfono"
               name="phone"
-              type="tel"
-              value={formData.phone}
-              onChange={handleChange('phone')}
-              placeholder="+593XXXXXXXXX"
               hint="Opcional - El monitor puede agregarlo después"
-            />
+            >
+              <PhoneInput
+                value={formData.phone}
+                onChange={handleChange('phone')}
+                autoDetectCountry={true}
+              />
+            </FormField>
           </FormFieldRow>
         </FormSection>
 

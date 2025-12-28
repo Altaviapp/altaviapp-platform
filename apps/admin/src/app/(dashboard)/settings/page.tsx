@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Settings, Building, Bell, Shield, Globe, Clock, Save, Users, MapPin, Mail, Phone, ChevronRight } from 'lucide-react';
+import { Settings, Building, Bell, Shield, Globe, Clock, Save, Users, MapPin, Mail, Phone, ChevronRight, GraduationCap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Mock institution data
@@ -70,6 +70,16 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-3">
                   <MapPin className="w-5 h-5" />
                   <span className="font-medium">Ubicación del Colegio</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </Link>
+              <Link
+                href="/settings/grades"
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-left transition-colors text-gray-600 hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-3">
+                  <GraduationCap className="w-5 h-5" />
+                  <span className="font-medium">Grados</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400" />
               </Link>

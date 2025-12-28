@@ -81,6 +81,8 @@ export interface RegisterInstitutionData {
   institutionType: 'school' | 'corporate';
   institutionAddress: string;
   institutionCity: string;
+  institutionCountry?: string; // 'EC' | 'CO' - default 'EC'
+  institutionDepartment?: string; // Province/Department code
   // Subscription plan
   plan: 'basic' | 'professional' | 'enterprise';
 }

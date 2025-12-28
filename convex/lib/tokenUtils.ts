@@ -2,26 +2,26 @@
  * Token Generation Utilities
  *
  * Provides utilities for generating secure tokens for:
- * - Invitation codes (8 digits)
- * - Email verification tokens (8 digits)
+ * - Invitation codes (6 digits)
+ * - Email verification tokens (6 digits)
  * - Token expiration calculations
  */
 
 /**
- * Generates an 8-digit code for invitations
- * Format: 12345678
+ * Generates a 6-digit code for invitations
+ * Format: 123456
  *
- * Range: 10,000,000 to 99,999,999 (90 million possible codes)
+ * Range: 100,000 to 999,999 (900,000 possible codes)
  */
 export function generateInvitationCode(): string {
-  const min = 10000000; // 10 million
-  const max = 99999999; // 99 million
+  const min = 100000; // 100 thousand
+  const max = 999999; // 999 thousand
   return Math.floor(Math.random() * (max - min + 1) + min).toString();
 }
 
 /**
- * Generates an 8-digit code for email verification
- * Format: 87654321
+ * Generates a 6-digit code for email verification
+ * Format: 654321
  *
  * Uses the same format as invitation codes
  */
@@ -54,11 +54,11 @@ export function getTokenExpiration(hours: number): number {
 }
 
 /**
- * Validates an 8-digit code format
+ * Validates a 6-digit code format
  *
  * @param code - The code to validate
- * @returns true if code is exactly 8 digits
+ * @returns true if code is exactly 6 digits
  */
 export function isValidCodeFormat(code: string): boolean {
-  return /^\d{8}$/.test(code);
+  return /^\d{6}$/.test(code);
 }

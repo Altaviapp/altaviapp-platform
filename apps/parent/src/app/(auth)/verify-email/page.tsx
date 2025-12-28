@@ -9,7 +9,7 @@ export default function VerifyEmailPage() {
   const router = useRouter();
   const { user, verifyEmail, resendVerificationEmail, isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const [code, setCode] = useState(['', '', '', '', '', '', '', '']);
+  const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState('');
@@ -46,15 +46,15 @@ export default function VerifyEmailPage() {
     setError('');
 
     // Auto-focus next input
-    if (value && index < 7) {
+    if (value && index < 5) {
       const nextInput = document.getElementById(`code-${index + 1}`);
       nextInput?.focus();
     }
 
     // Auto-submit when all digits entered
-    if (value && index === 7) {
+    if (value && index === 5) {
       const fullCode = newCode.join('');
-      if (fullCode.length === 8) {
+      if (fullCode.length === 6) {
         handleVerify(fullCode);
       }
     }
@@ -71,8 +71,8 @@ export default function VerifyEmailPage() {
   // Handle paste
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8);
-    if (pastedData.length === 8) {
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pastedData.length === 6) {
       const newCode = pastedData.split('');
       setCode(newCode);
       handleVerify(pastedData);
@@ -94,7 +94,7 @@ export default function VerifyEmailPage() {
     } else {
       setError(result.error || 'Código incorrecto');
       // Clear code on error
-      setCode(['', '', '', '', '', '', '', '']);
+      setCode(['', '', '', '', '', '']);
       document.getElementById('code-0')?.focus();
     }
 
@@ -121,10 +121,10 @@ export default function VerifyEmailPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const fullCode = code.join('');
-    if (fullCode.length === 8) {
+    if (fullCode.length === 6) {
       handleVerify(fullCode);
     } else {
-      setError('Ingresa el código completo de 8 dígitos');
+      setError('Ingresa el código completo de 6 dígitos');
     }
   };
 
@@ -174,7 +174,7 @@ export default function VerifyEmailPage() {
           Verifica tu Email
         </h1>
         <p className="text-sm text-gray-600">
-          Hemos enviado un código de 8 dígitos a:
+          Hemos enviado un código de 6 dígitos a:
         </p>
         <p className="text-sm font-medium text-primary mt-1">
           {user?.email}
@@ -215,7 +215,7 @@ export default function VerifyEmailPage() {
 
         <button
           type="submit"
-          disabled={isLoading || code.join('').length !== 8}
+          disabled={isLoading || code.join('').length !== 6}
           className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
         >
           {isLoading ? (

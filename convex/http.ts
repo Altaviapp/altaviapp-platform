@@ -1033,6 +1033,8 @@ http.route({
         institutionType: body.institutionType,
         institutionAddress: body.institutionAddress,
         institutionCity: body.institutionCity,
+        institutionCountry: body.institutionCountry,
+        institutionDepartment: body.institutionDepartment,
         plan: body.plan,
       });
 
@@ -1821,6 +1823,148 @@ http.route({
 // CORS preflight for GPS device endpoint
 http.route({
   path: "/gps/device",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Institution-Token",
+      },
+    });
+  }),
+});
+
+/**
+ * GPS Sandbox Endpoint (for testing/configuration)
+ * POST /gps/sandbox
+ *
+ * Receives GPS data for sandbox testing.
+ * Stores samples without affecting trips - used for configuring field mapping.
+ * Authentication via X-Institution-Token header or Bearer token.
+ *
+ * Body: Any JSON payload from GPS device
+ */
+http.route({
+  path: "/gps/sandbox",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Get authentication token
+      const authHeader = request.headers.get("Authorization");
+      const institutionToken = request.headers.get("X-Institution-Token");
+
+      let token = "";
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      } else if (institutionToken) {
+        token = institutionToken;
+      } else {
+        throw new Error("No authentication token provided");
+      }
+
+      // Get raw payload as string
+      const rawPayload = await request.text();
+      if (!rawPayload) {
+        throw new Error("Empty payload");
+      }
+
+      // Get source IP if available
+      const sourceIp = request.headers.get("X-Forwarded-For") ||
+                       request.headers.get("X-Real-IP") ||
+                       undefined;
+
+      const result = await ctx.runMutation(api.gpsWebhook.processSandboxWebhook, {
+        institutionToken: token,
+        rawPayload,
+        sourceIp,
+      });
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    } catch (error: any) {
+      return new Response(JSON.stringify({ success: false, error: error.message }), {
+        status: error.message.includes("authentication") || error.message.includes("Token") ? 401 : 400,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    }
+  }),
+});
+
+// CORS preflight for GPS sandbox endpoint
+http.route({
+  path: "/gps/sandbox",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Institution-Token",
+      },
+    });
+  }),
+});
+
+/**
+ * GPS Device Endpoint with Field Mapping (v2)
+ * POST /gps/device/v2
+ *
+ * Processes GPS data using the configured field mapping from gpsDevices.
+ * Automatically detects which device sent the data based on deviceId field.
+ * Only works with active devices that have field mapping configured.
+ *
+ * Body: Any JSON payload from GPS device
+ */
+http.route({
+  path: "/gps/device/v2",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Get authentication token
+      const authHeader = request.headers.get("Authorization");
+      const institutionToken = request.headers.get("X-Institution-Token");
+
+      let token = "";
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      } else if (institutionToken) {
+        token = institutionToken;
+      } else {
+        throw new Error("No authentication token provided");
+      }
+
+      // Get raw payload
+      const rawPayload = await request.text();
+      if (!rawPayload) {
+        throw new Error("Empty payload");
+      }
+
+      const result = await ctx.runMutation(api.gpsWebhook.processGpsWithMapping, {
+        institutionToken: token,
+        rawPayload,
+      });
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    } catch (error: any) {
+      return new Response(JSON.stringify({ success: false, error: error.message }), {
+        status: error.message.includes("authentication") || error.message.includes("Token") ? 401 : 400,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
+    }
+  }),
+});
+
+// CORS preflight for GPS device v2 endpoint
+http.route({
+  path: "/gps/device/v2",
   method: "OPTIONS",
   handler: httpAction(async () => {
     return new Response(null, {

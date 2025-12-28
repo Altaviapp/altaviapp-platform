@@ -53,3 +53,45 @@ export function useSchoolLocationMutation() {
 
   return { updateSchoolLocation };
 }
+
+/**
+ * Hook to get institution grades
+ *
+ * Returns configured grades for the institution (or defaults if not configured)
+ */
+export function useInstitutionGrades() {
+  const { userId, institutionId } = useConvexAuth();
+
+  const result = useQuery(
+    api.institutions.getInstitutionGrades,
+    userId && institutionId ? { userId, institutionId } : "skip"
+  );
+
+  return {
+    grades: result?.grades ?? [],
+    isCustom: result?.isCustom ?? false,
+    isLoading: result === undefined,
+  };
+}
+
+/**
+ * Mutation hook for updating institution grades
+ */
+export function useInstitutionGradesMutation() {
+  const { userId, institutionId } = useConvexAuth();
+  const updateGradesMutation = useMutation(api.institutions.updateInstitutionGrades);
+
+  const updateGrades = async (grades: string[]) => {
+    if (!userId || !institutionId) {
+      throw new Error("No autenticado");
+    }
+
+    return updateGradesMutation({
+      userId,
+      institutionId,
+      grades,
+    });
+  };
+
+  return { updateGrades };
+}

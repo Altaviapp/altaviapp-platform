@@ -137,3 +137,74 @@ export function useStudentsWithRoutes() {
     isLoading: students === undefined,
   };
 }
+
+// ============================================
+// BULK IMPORT HOOKS
+// ============================================
+
+export type StudentImportData = {
+  firstName: string;
+  lastName: string;
+  grade: string;
+  dateOfBirth?: number;
+  address?: string;
+  parentEmail: string;
+  parentName?: string;
+  parentPhone?: string;
+  emergencyContact?: string;
+};
+
+/**
+ * Hook for validating student import (preview mode)
+ */
+export function useValidateStudentImport(students: StudentImportData[]) {
+  const { userId, institutionId } = useConvexAuth();
+
+  const validation = useQuery(
+    api.students.validateStudentImport,
+    userId && institutionId && students.length > 0
+      ? { userId, institutionId, students }
+      : "skip"
+  );
+
+  return {
+    validation,
+    isLoading: validation === undefined && students.length > 0,
+    isReady: validation !== undefined,
+  };
+}
+
+/**
+ * Hook for bulk import mutations
+ */
+export function useStudentImportMutations() {
+  const { userId, institutionId } = useConvexAuth();
+
+  const importStudentsBulk = useMutation(api.students.importStudentsBulk);
+  const inviteSecondaryGuardian = useMutation(api.students.inviteSecondaryGuardian);
+
+  return {
+    /**
+     * Import students in bulk with optional parent invitations
+     */
+    importStudents: async (
+      students: StudentImportData[],
+      sendInvitations: boolean
+    ) => {
+      if (!userId || !institutionId) throw new Error("Not authenticated");
+      return importStudentsBulk({ userId, institutionId, students, sendInvitations });
+    },
+
+    /**
+     * Invite a secondary guardian for a student
+     */
+    inviteSecondaryGuardian: async (
+      studentId: Id<"students">,
+      email: string,
+      name: string
+    ) => {
+      if (!userId) throw new Error("Not authenticated");
+      return inviteSecondaryGuardian({ userId, studentId, email, name });
+    },
+  };
+}

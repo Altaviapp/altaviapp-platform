@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { X, Loader2, Mail, UserPlus, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/providers/AuthProvider';
+import { PhoneInput } from '@altaviapp/ui';
 
 interface InviteUserModalProps {
   isOpen: boolean;
@@ -32,7 +33,7 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('+593');
+  const [phone, setPhone] = useState('');
   const [role, setRole] = useState<InviteRole>('parent');
 
   const [isLoading, setIsLoading] = useState(false);
@@ -46,7 +47,7 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
       setEmail('');
       setFirstName('');
       setLastName('');
-      setPhone('+593');
+      setPhone('');
       setRole('parent');
       setError('');
       setSuccess(false);
@@ -107,7 +108,7 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
           email: email.toLowerCase(),
           firstName: firstName || undefined,
           lastName: lastName || undefined,
-          phone: phone !== '+593' ? phone : undefined,
+          phone: phone || undefined,
           role,
         }),
       });
@@ -253,14 +254,11 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Telefono
                 </label>
-                <input
-                  type="tel"
+                <PhoneInput
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                  placeholder="+593999123456"
+                  onChange={setPhone}
+                  autoDetectCountry={true}
                 />
-                <p className="text-xs text-gray-500 mt-1">Formato Ecuador: +593XXXXXXXXX</p>
               </div>
 
               {/* Role */}

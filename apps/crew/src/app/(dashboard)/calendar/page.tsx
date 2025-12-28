@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Sunrise, Sunset, CheckCircle, Clock, XCircle, Bus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Sunrise, Sunset, CheckCircle, Clock, XCircle, Bus, Play, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useCalendarTrips } from '@/hooks';
+import { useCalendarTrips, useTripOperations } from '@/hooks';
 import { LoadingState } from '@/components/shared/LoadingState';
 
 const monthNames = [
@@ -14,18 +15,21 @@ const monthNames = [
 
 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-const statusConfig: Record<string, { color: string; icon: typeof Clock }> = {
-  scheduled: { color: 'bg-blue-500', icon: Clock },
-  in_progress: { color: 'bg-green-500', icon: Bus },
-  completed: { color: 'bg-gray-400', icon: CheckCircle },
-  cancelled: { color: 'bg-red-500', icon: XCircle },
+const statusConfig: Record<string, { color: string; icon: typeof Clock; label: string }> = {
+  scheduled: { color: 'bg-blue-500', icon: Clock, label: 'Programado' },
+  in_progress: { color: 'bg-green-500', icon: Bus, label: 'En curso' },
+  completed: { color: 'bg-gray-400', icon: CheckCircle, label: 'Completado' },
+  cancelled: { color: 'bg-red-500', icon: XCircle, label: 'Cancelado' },
 };
 
 export default function CalendarPage() {
+  const router = useRouter();
   const today = new Date();
+  const todayString = today.toISOString().split('T')[0]!;
   const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // Default to today's date so trips are shown immediately
+  const [selectedDate, setSelectedDate] = useState<string>(todayString);
 
   const { trips, tripsByDate, isLoading } = useCalendarTrips(currentYear, currentMonth);
 
@@ -37,7 +41,8 @@ export default function CalendarPage() {
     } else {
       setCurrentMonth(currentMonth - 1);
     }
-    setSelectedDate(null);
+    // Keep today's date selected when navigating, or first day of new month
+    setSelectedDate(todayString);
   };
 
   const goToNextMonth = () => {
@@ -47,7 +52,8 @@ export default function CalendarPage() {
     } else {
       setCurrentMonth(currentMonth + 1);
     }
-    setSelectedDate(null);
+    // Keep today's date selected when navigating, or first day of new month
+    setSelectedDate(todayString);
   };
 
   const goToToday = () => {
@@ -98,8 +104,8 @@ export default function CalendarPage() {
     });
   }
 
-  const todayString = today.toISOString().split('T')[0];
-  const selectedTrips = selectedDate ? tripsByDate[selectedDate] || [] : [];
+  const selectedTrips = tripsByDate[selectedDate] || [];
+  const isSelectedToday = selectedDate === todayString;
 
   if (isLoading) {
     return <LoadingState variant="page" />;
@@ -208,46 +214,47 @@ export default function CalendarPage() {
       </div>
 
       {/* Selected Date Trips */}
-      {selectedDate && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Viajes del {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-EC', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long'
-            })}
-          </h3>
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          {isSelectedToday ? 'Viajes de Hoy' : `Viajes del ${new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-EC', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long'
+          })}`}
+        </h3>
 
-          {selectedTrips.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">No hay viajes programados para este día</p>
-          ) : (
-            <div className="space-y-3">
-              {selectedTrips.map((trip) => {
-                const isPickup = trip.routeType === 'pickup';
-                const Icon = isPickup ? Sunrise : Sunset;
-                const status = statusConfig[trip.status] ?? statusConfig.scheduled!;
-                const StatusIcon = status.icon;
+        {selectedTrips.length === 0 ? (
+          <p className="text-gray-500 text-center py-4">No hay viajes programados para este día</p>
+        ) : (
+          <div className="space-y-3">
+            {selectedTrips.map((trip) => {
+              const isPickup = trip.routeType === 'pickup';
+              const TypeIcon = isPickup ? Sunrise : Sunset;
+              const status = statusConfig[trip.status] ?? statusConfig.scheduled!;
+              const StatusIcon = status.icon;
+              const canStart = trip.status === 'scheduled' && isSelectedToday;
+              const isActive = trip.status === 'in_progress';
 
-                return (
-                  <Link
-                    key={trip._id}
-                    href={`/trips/${trip._id}`}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className={cn(
-                      'w-10 h-10 rounded-lg flex items-center justify-center',
-                      isPickup ? 'bg-warning/10' : 'bg-info/10'
-                    )}>
-                      <Icon className={cn('w-5 h-5', isPickup ? 'text-warning' : 'text-info')} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {trip.routeName}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {isPickup ? 'Recogida' : 'Entrega'}
-                      </p>
-                    </div>
+              return (
+                <div
+                  key={trip._id}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-gray-50"
+                >
+                  <div className={cn(
+                    'w-10 h-10 rounded-lg flex items-center justify-center',
+                    isPickup ? 'bg-warning/10' : 'bg-info/10'
+                  )}>
+                    <TypeIcon className={cn('w-5 h-5', isPickup ? 'text-warning' : 'text-info')} />
+                  </div>
+                  <Link href={`/trips/${trip._id}`} className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {trip.routeName}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {isPickup ? 'Recogida' : 'Entrega'}
+                    </p>
+                  </Link>
+                  <div className="flex items-center gap-2">
                     <div className={cn(
                       'flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
                       trip.status === 'completed' ? 'bg-gray-100 text-gray-600' :
@@ -256,18 +263,34 @@ export default function CalendarPage() {
                       'bg-blue-50 text-blue-700'
                     )}>
                       <StatusIcon className="w-3 h-3" />
-                      {trip.status === 'completed' ? 'Completado' :
-                       trip.status === 'in_progress' ? 'En curso' :
-                       trip.status === 'cancelled' ? 'Cancelado' :
-                       'Programado'}
+                      <span className="hidden sm:inline">{status.label}</span>
                     </div>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                    {/* Action button for today's trips */}
+                    {canStart && (
+                      <Link
+                        href={`/trips/${trip._id}/start`}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-accent text-primary rounded-lg text-xs font-medium hover:bg-accent/90 transition-colors"
+                      >
+                        <Play className="w-3 h-3" />
+                        <span>Iniciar</span>
+                      </Link>
+                    )}
+                    {isActive && (
+                      <Link
+                        href={`/trips/${trip._id}/active`}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>Ver</span>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Legend */}
       <div className="flex items-center justify-center gap-4 text-xs text-gray-500">

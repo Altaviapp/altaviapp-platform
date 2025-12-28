@@ -2,7 +2,7 @@
  * Email Verification API
  *
  * Handles email verification for new users:
- * - Verify email with 8-digit token
+ * - Verify email with 6-digit token
  * - Resend verification email
  * - Check verification status
  *
@@ -21,7 +21,25 @@ import {
 import { generateEmailVerificationEmail } from "./lib/emailTemplates";
 
 /**
- * Verify email with 8-digit token
+ * Get app URL based on user role for email verification links
+ */
+function getAppUrlByRole(role: string): string {
+  switch (role) {
+    case "super_admin":
+    case "admin":
+      return process.env.ADMIN_APP_URL || "https://admin.altaviapp.com";
+    case "parent":
+      return process.env.PARENT_APP_URL || "https://padres.altaviapp.com";
+    case "driver":
+    case "monitor":
+      return process.env.CREW_APP_URL || "https://crew.altaviapp.com";
+    default:
+      return process.env.PARENT_APP_URL || "https://padres.altaviapp.com";
+  }
+}
+
+/**
+ * Verify email with 6-digit token
  * User enters token from email to verify their account
  */
 export const verifyEmailToken = mutation({
@@ -31,7 +49,7 @@ export const verifyEmailToken = mutation({
   handler: async (ctx, args) => {
     // Validate format
     if (!isValidCodeFormat(args.token)) {
-      throw new Error("Código inválido. Debe tener 8 dígitos.");
+      throw new Error("Código inválido. Debe tener 6 dígitos.");
     }
 
     // Find user by verification token
@@ -116,6 +134,7 @@ export const resendVerificationEmail = mutation({
       to: user.email,
       firstName: user.firstName || user.name || "Usuario",
       verificationCode: emailVerificationToken,
+      appUrl: getAppUrlByRole(user.role),
     });
 
     return {

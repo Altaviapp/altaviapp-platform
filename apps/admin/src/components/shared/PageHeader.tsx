@@ -17,6 +17,7 @@ interface ActionButton {
   href?: string;
   icon?: LucideIcon;
   variant?: 'primary' | 'secondary' | 'danger';
+  disabled?: boolean;
 }
 
 interface PageHeaderProps {
@@ -115,10 +116,11 @@ export function PageHeader({
                 action.variant === 'danger' &&
                   'bg-red-600 text-white hover:bg-red-700',
                 !action.variant &&
-                  'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50',
+                action.disabled && 'opacity-50 cursor-not-allowed'
               );
 
-              if (action.href) {
+              if (action.href && !action.disabled) {
                 return (
                   <Link key={index} href={action.href} className={buttonClasses}>
                     {Icon && <Icon className="w-4 h-4" />}
@@ -131,6 +133,7 @@ export function PageHeader({
                 <button
                   key={index}
                   onClick={action.onClick}
+                  disabled={action.disabled}
                   className={buttonClasses}
                 >
                   {Icon && <Icon className="w-4 h-4" />}

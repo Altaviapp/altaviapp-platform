@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap, Plus, Search, QrCode, MapPin, ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react';
+import { GraduationCap, Plus, Search, QrCode, MapPin, ChevronLeft, ChevronRight, Download, Loader2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudents } from '@/hooks';
 
@@ -67,6 +67,13 @@ export default function StudentsPage() {
             <Download className="w-5 h-5" />
             Exportar
           </button>
+          <Link
+            href="/students/import"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-colors"
+          >
+            <Upload className="w-5 h-5" />
+            Importar CSV
+          </Link>
           <Link
             href="/students/new"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"

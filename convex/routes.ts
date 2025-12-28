@@ -482,6 +482,246 @@ export const createRouteWithStops = mutation({
 });
 
 /**
+ * Update route with stops (from wizard edit mode)
+ *
+ * Replaces all route data including:
+ * - Route metadata (name, type, times, optimization data)
+ * - Deletes all existing stops and creates new ones
+ * - Deletes all existing studentRoutes and creates new ones
+ *
+ * Future trips will automatically use the new data since
+ * trips are created on-demand when driver starts.
+ */
+export const updateRouteWithStops = mutation({
+  args: {
+    userId: v.id("users"),
+    routeId: v.id("routes"),
+    // Route data
+    name: v.string(),
+    type: v.union(v.literal("pickup"), v.literal("dropoff")),
+    vehicleId: v.id("vehicles"),
+    driverId: v.id("drivers"),
+    monitorId: v.optional(v.id("monitors")),
+    scheduledStartTime: v.string(),
+    scheduledEndTime: v.string(),
+    // Target times
+    schoolArrivalTime: v.optional(v.string()),
+    schoolDepartureTime: v.optional(v.string()),
+    // Recurrence
+    recurrence: v.optional(
+      v.object({
+        type: v.union(
+          v.literal("daily"),
+          v.literal("weekly"),
+          v.literal("monthly"),
+          v.literal("one_time")
+        ),
+        daysOfWeek: v.optional(v.array(v.string())),
+        dayOfWeek: v.optional(v.string()),
+        dayOfMonth: v.optional(v.number()),
+        specificDate: v.optional(v.string()),
+      })
+    ),
+    // Optimization data
+    optimizedPolyline: v.optional(v.string()),
+    estimatedDuration: v.optional(v.number()),
+    estimatedDistance: v.optional(v.number()),
+    // Stops with students
+    stops: v.array(
+      v.object({
+        name: v.string(),
+        address: v.string(),
+        latitude: v.number(),
+        longitude: v.number(),
+        scheduledTime: v.string(),
+        estimatedArrivalTime: v.optional(v.string()),
+        durationFromPrevious: v.optional(v.number()),
+        order: v.number(),
+        geofenceRadius: v.optional(v.number()),
+        studentId: v.id("students"),
+      })
+    ),
+    // Whether route is active
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+
+    // Get existing route
+    const route = await ctx.db.get(args.routeId);
+    if (!route) {
+      throw new Error("Ruta no encontrada");
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+
+    // Verify vehicle belongs to institution
+    const vehicle = await ctx.db.get(args.vehicleId);
+    if (!vehicle || vehicle.institutionId !== route.institutionId) {
+      throw new Error("Vehículo no válido para esta institución");
+    }
+
+    // Verify driver belongs to institution
+    const driver = await ctx.db.get(args.driverId);
+    if (!driver || driver.institutionId !== route.institutionId) {
+      throw new Error("Conductor no válido para esta institución");
+    }
+
+    // Verify monitor if provided
+    if (args.monitorId) {
+      const monitor = await ctx.db.get(args.monitorId);
+      if (!monitor || monitor.institutionId !== route.institutionId) {
+        throw new Error("Monitor no válido para esta institución");
+      }
+    }
+
+    // Verify all students belong to institution
+    for (const stop of args.stops) {
+      const student = await ctx.db.get(stop.studentId);
+      if (!student || student.institutionId !== route.institutionId) {
+        throw new Error(`Estudiante inválido: ${stop.studentId}`);
+      }
+    }
+
+    const now = Date.now();
+
+    // 1. Delete existing stops
+    const existingStops = await ctx.db
+      .query("routeStops")
+      .withIndex("by_route", (q) => q.eq("routeId", args.routeId))
+      .collect();
+
+    for (const stop of existingStops) {
+      await ctx.db.delete(stop._id);
+    }
+
+    // 2. Delete existing studentRoutes
+    const existingStudentRoutes = await ctx.db
+      .query("studentRoutes")
+      .withIndex("by_route", (q) => q.eq("routeId", args.routeId))
+      .collect();
+
+    for (const sr of existingStudentRoutes) {
+      await ctx.db.delete(sr._id);
+    }
+
+    // 3. Update route metadata
+    await ctx.db.patch(args.routeId, {
+      name: args.name,
+      type: args.type,
+      vehicleId: args.vehicleId,
+      driverId: args.driverId,
+      monitorId: args.monitorId,
+      scheduledStartTime: args.scheduledStartTime,
+      scheduledEndTime: args.scheduledEndTime,
+      schoolArrivalTime: args.schoolArrivalTime,
+      schoolDepartureTime: args.schoolDepartureTime,
+      recurrence: args.recurrence,
+      optimizedPolyline: args.optimizedPolyline,
+      estimatedDuration: args.estimatedDuration,
+      estimatedDistance: args.estimatedDistance,
+      isActive: args.isActive ?? true,
+      updatedAt: now,
+    });
+
+    // 4. Create new route stops
+    const stopIds: Map<number, Id<"routeStops">> = new Map();
+    for (const stop of args.stops) {
+      const stopId = await ctx.db.insert("routeStops", {
+        routeId: args.routeId,
+        name: stop.name,
+        address: stop.address,
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        scheduledTime: stop.scheduledTime,
+        estimatedArrivalTime: stop.estimatedArrivalTime,
+        durationFromPrevious: stop.durationFromPrevious,
+        order: stop.order,
+        geofenceRadius: stop.geofenceRadius ?? 100,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      stopIds.set(stop.order, stopId);
+    }
+
+    // 5. Create new student-route assignments
+    for (const stop of args.stops) {
+      const stopId = stopIds.get(stop.order);
+      if (!stopId) continue;
+
+      await ctx.db.insert("studentRoutes", {
+        studentId: stop.studentId,
+        routeId: args.routeId,
+        stopId,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      success: true,
+      routeId: args.routeId,
+      stopsUpdated: args.stops.length,
+      studentsAssigned: args.stops.length,
+    };
+  },
+});
+
+/**
+ * Delete route completely
+ *
+ * Permanently removes:
+ * - The route record
+ * - All associated routeStops
+ * - All associated studentRoutes
+ *
+ * Does NOT affect existing trips (they have their own data).
+ */
+export const deleteRoute = mutation({
+  args: {
+    userId: v.id("users"),
+    routeId: v.id("routes"),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+
+    const route = await ctx.db.get(args.routeId);
+    if (!route) {
+      throw new Error("Ruta no encontrada");
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+
+    // 1. Delete all stops for this route
+    const stops = await ctx.db
+      .query("routeStops")
+      .withIndex("by_route", (q) => q.eq("routeId", args.routeId))
+      .collect();
+
+    for (const stop of stops) {
+      await ctx.db.delete(stop._id);
+    }
+
+    // 2. Delete all studentRoutes for this route
+    const studentRoutes = await ctx.db
+      .query("studentRoutes")
+      .withIndex("by_route", (q) => q.eq("routeId", args.routeId))
+      .collect();
+
+    for (const sr of studentRoutes) {
+      await ctx.db.delete(sr._id);
+    }
+
+    // 3. Delete the route itself
+    await ctx.db.delete(args.routeId);
+
+    return { success: true };
+  },
+});
+
+/**
  * List all routes for a crew member (driver or monitor) with enriched data
  * Used in the Crew app routes list page
  */

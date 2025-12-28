@@ -5,7 +5,7 @@
  */
 
 export { RouteWizard } from './RouteWizard';
-export type { Step1Data, Step2Data, Step3Data, RecurrenceConfig } from './RouteWizard';
+export type { Step1Data, Step2Data, Step3Data, RecurrenceConfig, RouteWizardInitialData } from './RouteWizard';
 
 export { Step1Planning } from './Step1Planning';
 export { Step2StopAssignment } from './Step2StopAssignment';

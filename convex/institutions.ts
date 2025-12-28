@@ -550,3 +550,102 @@ export const updateSchoolLocation = mutation({
     };
   },
 });
+
+/**
+ * Default grades for new institutions
+ */
+export const DEFAULT_GRADES = [
+  "Prekinder",
+  "Kinder",
+  "1ro Básica",
+  "2do Básica",
+  "3ro Básica",
+  "4to Básica",
+  "5to Básica",
+  "6to Básica",
+  "7mo Básica",
+  "8vo Básica",
+  "9no Básica",
+  "10mo Básica",
+  "1ro Bachillerato",
+  "2do Bachillerato",
+  "3ro Bachillerato",
+];
+
+/**
+ * Get institution grades
+ *
+ * Returns custom grades if configured, otherwise defaults.
+ * Used by student forms to populate grade dropdown.
+ */
+export const getInstitutionGrades = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user has access to this institution
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const institution = await ctx.db.get(args.institutionId);
+    if (!institution) {
+      throw new Error("Institución no encontrada");
+    }
+
+    // Return custom grades or defaults
+    const grades = institution.grades && institution.grades.length > 0
+      ? institution.grades
+      : DEFAULT_GRADES;
+
+    return {
+      grades,
+      isCustom: !!(institution.grades && institution.grades.length > 0),
+    };
+  },
+});
+
+/**
+ * Update institution grades
+ *
+ * Admin configures custom grades for the institution.
+ * Pass empty array to reset to defaults.
+ */
+export const updateInstitutionGrades = mutation({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    grades: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is admin or super_admin
+    await verifyRole(ctx, args.userId, "admin");
+
+    // Verify user has access to this institution
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const institution = await ctx.db.get(args.institutionId);
+    if (!institution) {
+      throw new Error("Institución no encontrada");
+    }
+
+    // Validate grades (non-empty strings, no duplicates)
+    const cleanedGrades = args.grades
+      .map((g) => g.trim())
+      .filter((g) => g.length > 0);
+
+    const uniqueGrades = Array.from(new Set(cleanedGrades));
+
+    await ctx.db.patch(args.institutionId, {
+      grades: uniqueGrades.length > 0 ? uniqueGrades : undefined,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      success: true,
+      message: uniqueGrades.length > 0
+        ? `${uniqueGrades.length} grados configurados`
+        : "Grados restaurados a valores predeterminados",
+      grades: uniqueGrades.length > 0 ? uniqueGrades : DEFAULT_GRADES,
+    };
+  },
+});

@@ -32,6 +32,28 @@ import {
 import { createSession, invalidateSession, invalidateAllSessions } from "./auth";
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Get app URL based on user role for email verification links
+ */
+function getAppUrlByRole(role: string): string {
+  switch (role) {
+    case "super_admin":
+    case "admin":
+      return process.env.ADMIN_APP_URL || "https://admin.altaviapp.com";
+    case "parent":
+      return process.env.PARENT_APP_URL || "https://padres.altaviapp.com";
+    case "driver":
+    case "monitor":
+      return process.env.CREW_APP_URL || "https://crew.altaviapp.com";
+    default:
+      return process.env.PARENT_APP_URL || "https://padres.altaviapp.com";
+  }
+}
+
+// ============================================================================
 // REGISTER
 // ============================================================================
 
@@ -115,10 +137,12 @@ export const register = mutation({
     const user = await ctx.db.get(userId);
 
     // Schedule verification email to be sent via Resend
+    const userRole = args.role || "parent";
     await ctx.scheduler.runAfter(0, api.email.sendVerificationEmail, {
       to: args.email.toLowerCase(),
       firstName: args.name.split(" ")[0] ?? args.name,
       verificationCode: emailVerificationToken,
+      appUrl: getAppUrlByRole(userRole),
     });
 
     return {
@@ -332,17 +356,17 @@ export const logoutAll = mutation({
 // ============================================================================
 
 /**
- * Verify email with 8-digit code
+ * Verify email with 6-digit code (requires session)
  */
 export const verifyEmail = mutation({
   args: {
     token: v.string(), // Session token
-    verificationCode: v.string(), // 8-digit code
+    verificationCode: v.string(), // 6-digit code
   },
   handler: async (ctx, args) => {
     // Validate code format
     if (!isValidCodeFormat(args.verificationCode)) {
-      throw new Error("Código inválido. Debe tener 8 dígitos.");
+      throw new Error("Código inválido. Debe tener 6 dígitos.");
     }
 
     // Get user from session
@@ -434,11 +458,68 @@ export const resendVerificationEmail = mutation({
       to: user.email,
       firstName: user.firstName ?? user.name.split(" ")[0] ?? user.name,
       verificationCode: verificationToken,
+      appUrl: getAppUrlByRole(user.role),
     });
 
     return {
       success: true,
       emailSent: true,
+    };
+  },
+});
+
+/**
+ * Verify email via URL (no session required)
+ * Used when user clicks verification button in email
+ */
+export const verifyEmailByUrl = mutation({
+  args: {
+    email: v.string(),
+    code: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Validate code format
+    if (!isValidCodeFormat(args.code)) {
+      throw new Error("Código inválido. Debe tener 6 dígitos.");
+    }
+
+    // Find user by email
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .first();
+
+    if (!user) {
+      throw new Error("Usuario no encontrado");
+    }
+
+    // Check if already verified
+    if (user.emailVerified) {
+      return { success: true, message: "Email ya verificado" };
+    }
+
+    // Check verification code
+    if (user.emailVerificationToken !== args.code) {
+      throw new Error("Código de verificación incorrecto");
+    }
+
+    // Check expiration
+    if (user.tokenExpiresAt && isTokenExpired(user.tokenExpiresAt)) {
+      throw new Error("Código expirado. Solicita uno nuevo.");
+    }
+
+    // Mark as verified
+    await ctx.db.patch(user._id, {
+      emailVerified: true,
+      emailVerifiedAt: Date.now(),
+      emailVerificationToken: undefined,
+      tokenExpiresAt: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      success: true,
+      message: "Email verificado exitosamente",
     };
   },
 });
@@ -511,7 +592,7 @@ export const resetPassword = mutation({
   handler: async (ctx, args) => {
     // Validate code format
     if (!isValidCodeFormat(args.resetCode)) {
-      throw new Error("Código inválido. Debe tener 8 dígitos.");
+      throw new Error("Código inválido. Debe tener 6 dígitos.");
     }
 
     // Validate password
@@ -640,6 +721,8 @@ export const registerInstitution = mutation({
     institutionType: v.union(v.literal("school"), v.literal("corporate")),
     institutionAddress: v.string(),
     institutionCity: v.string(),
+    institutionCountry: v.optional(v.string()), // 'EC' | 'CO' - default 'EC'
+    institutionDepartment: v.optional(v.string()), // Province/Department code
     // Subscription plan
     plan: v.union(
       v.literal("basic"),
@@ -679,14 +762,17 @@ export const registerInstitution = mutation({
 
     const limits = planLimits[args.plan];
 
+    const country = args.institutionCountry || "EC";
+    const department = args.institutionDepartment || "";
+
     const clientId = await ctx.db.insert("clients", {
       name: args.institutionName,
       contactPerson: `${args.firstName} ${args.lastName}`,
       contactEmail: args.email.toLowerCase(),
       address: args.institutionAddress,
       city: args.institutionCity,
-      province: args.institutionCity, // Default to city for now
-      country: "EC",
+      province: department || args.institutionCity, // Use department if provided
+      country,
       subscriptionPlan: args.plan,
       subscriptionStatus: "active",
       maxInstitutions: limits.maxInstitutions,
@@ -703,6 +789,8 @@ export const registerInstitution = mutation({
       type: args.institutionType,
       address: args.institutionAddress,
       city: args.institutionCity,
+      country,
+      department,
       email: args.email.toLowerCase(),
       contactPerson: `${args.firstName} ${args.lastName}`,
       isActive: true,
@@ -743,6 +831,7 @@ export const registerInstitution = mutation({
       to: args.email.toLowerCase(),
       firstName: args.firstName,
       verificationCode: emailVerificationToken,
+      appUrl: getAppUrlByRole("admin"),
     });
 
     return {

@@ -78,10 +78,12 @@ export const sendVerificationEmail = action({
     to: v.string(),
     firstName: v.string(),
     verificationCode: v.string(),
+    appUrl: v.string(), // URL base de la app para el botón de auto-verificación
   },
   handler: async (_, args) => {
-    const html = generateVerificationEmailHtml(args.firstName, args.verificationCode);
-    const text = generateVerificationEmailText(args.firstName, args.verificationCode);
+    const verifyUrl = `${args.appUrl}/verify?code=${args.verificationCode}&email=${encodeURIComponent(args.to)}`;
+    const html = generateVerificationEmailHtml(args.firstName, args.verificationCode, verifyUrl);
+    const text = generateVerificationEmailText(args.firstName, args.verificationCode, verifyUrl);
 
     return sendEmailWithResend({
       to: args.to,
@@ -152,7 +154,7 @@ export const sendInvitationEmail = action({
 // Email Templates
 // ============================================
 
-function generateVerificationEmailHtml(firstName: string, code: string): string {
+function generateVerificationEmailHtml(firstName: string, code: string, verifyUrl: string): string {
   return `
 <!DOCTYPE html>
 <html lang="es">
@@ -179,7 +181,19 @@ function generateVerificationEmailHtml(firstName: string, code: string): string 
             <td style="padding: 40px;">
               <h2 style="margin: 0 0 16px 0; color: #042940; font-size: 24px;">¡Hola ${firstName}!</h2>
               <p style="margin: 0 0 24px 0; color: #555555; font-size: 16px; line-height: 1.6;">
-                Gracias por registrarte en Altaviapp. Para completar tu registro, ingresa el siguiente código de verificación:
+                Gracias por registrarte en Altaviapp. Haz clic en el botón para verificar tu cuenta:
+              </p>
+
+              <!-- Verify Button -->
+              <div style="text-align: center; margin: 24px 0;">
+                <a href="${verifyUrl}" style="display: inline-block; background-color: #042940; color: #DBF227; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+                  Verificar mi cuenta
+                </a>
+              </div>
+
+              <!-- Separator -->
+              <p style="margin: 24px 0; color: #888888; font-size: 14px; text-align: center;">
+                — o ingresa el código manualmente —
               </p>
 
               <!-- Code Box -->
@@ -211,13 +225,16 @@ function generateVerificationEmailHtml(firstName: string, code: string): string 
   `.trim();
 }
 
-function generateVerificationEmailText(firstName: string, code: string): string {
+function generateVerificationEmailText(firstName: string, code: string, verifyUrl: string): string {
   return `
 ¡Hola ${firstName}!
 
 Gracias por registrarte en Altaviapp.
 
-Tu código de verificación es: ${code}
+Haz clic en el siguiente enlace para verificar tu cuenta:
+${verifyUrl}
+
+O ingresa el código de verificación manualmente: ${code}
 
 Este código expira en 24 horas.
 

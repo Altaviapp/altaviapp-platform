@@ -34,6 +34,24 @@ import { generateEmailVerificationEmail } from "./lib/emailTemplates";
 import { verifyRole, verifyInstitutionAccess } from "./lib/simpleAuth";
 
 /**
+ * Get app URL based on user role for email verification links
+ */
+function getAppUrlByRole(role: string): string {
+  switch (role) {
+    case "super_admin":
+    case "admin":
+      return process.env.ADMIN_APP_URL || "https://admin.altaviapp.com";
+    case "parent":
+      return process.env.PARENT_APP_URL || "https://padres.altaviapp.com";
+    case "driver":
+    case "monitor":
+      return process.env.CREW_APP_URL || "https://crew.altaviapp.com";
+    default:
+      return process.env.PARENT_APP_URL || "https://padres.altaviapp.com";
+  }
+}
+
+/**
  * Create individual invitation
  * Admin creates invitation for parent/driver/admin
  */
@@ -489,6 +507,7 @@ export const acceptInvitation = mutation({
       to: invitation.email,
       firstName: invitation.firstName || "Usuario",
       verificationCode: emailVerificationToken,
+      appUrl: getAppUrlByRole(invitation.role),
     });
 
     return {

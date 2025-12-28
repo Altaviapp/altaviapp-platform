@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -17,6 +17,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
+import { LocationSelector, type LocationValue, type CountryCode } from '@altaviapp/ui';
 
 // ============================================
 // STEP 1: ADMIN INFORMATION
@@ -48,7 +49,11 @@ const step2Schema = z.object({
     required_error: 'Selecciona un tipo de institucion',
   }),
   address: z.string().min(10, 'Direccion muy corta'),
-  city: z.string().min(2, 'Ciudad requerida'),
+  location: z.object({
+    country: z.string().min(1, 'Selecciona un pais'),
+    department: z.string().min(1, 'Selecciona una provincia/departamento'),
+    city: z.string().min(1, 'Selecciona una ciudad'),
+  }),
   acceptTerms: z.boolean().refine(val => val === true, {
     message: 'Debes aceptar los terminos y condiciones',
   }),
@@ -136,7 +141,11 @@ function SignupContent() {
       institutionName: '',
       institutionType: undefined,
       address: '',
-      city: '',
+      location: {
+        country: 'EC',
+        department: '',
+        city: '',
+      },
       acceptTerms: false,
     },
   });
@@ -166,7 +175,9 @@ function SignupContent() {
       institutionName: data.institutionName,
       institutionType: institutionTypeMap[data.institutionType] ?? 'school',
       institutionAddress: data.address,
-      institutionCity: data.city,
+      institutionCity: data.location.city,
+      institutionCountry: data.location.country,
+      institutionDepartment: data.location.department,
       // Plan
       plan: selectedPlan as 'basic' | 'professional' | 'enterprise',
     });
@@ -525,24 +536,23 @@ function SignupContent() {
               )}
             </div>
 
-            {/* City */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ciudad *
-              </label>
-              <input
-                {...step2Form.register('city')}
-                type="text"
-                autoComplete="address-level2"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors"
-                placeholder="Quito"
-              />
-              {step2Form.formState.errors.city && (
-                <p className="mt-1 text-sm text-red-500">
-                  {step2Form.formState.errors.city.message}
-                </p>
+            {/* Location (Country, Department, City) */}
+            <Controller
+              name="location"
+              control={step2Form.control}
+              render={({ field }) => (
+                <LocationSelector
+                  value={field.value as LocationValue}
+                  onChange={field.onChange}
+                  showCountry={true}
+                  error={
+                    step2Form.formState.errors.location?.city?.message ||
+                    step2Form.formState.errors.location?.department?.message ||
+                    step2Form.formState.errors.location?.country?.message
+                  }
+                />
               )}
-            </div>
+            />
 
             {/* Terms */}
             <div className="flex items-start gap-3">

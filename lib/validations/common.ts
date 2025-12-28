@@ -15,11 +15,21 @@ import { z } from "zod";
 // ============================================================================
 
 /**
- * Ecuador phone number format: +593XXXXXXXXX
+ * International phone number format (Ecuador and Colombia)
+ * Ecuador: +593XXXXXXXXX (9 digits after +593)
+ * Colombia: +57XXXXXXXXXX (10 digits after +57)
  */
-export const ecuadorPhoneSchema = z
+export const phoneSchema = z
   .string()
-  .regex(/^\+593\d{9}$/, "Formato de teléfono inválido. Usa: +593XXXXXXXXX");
+  .refine(
+    (val) => /^\+593\d{9}$/.test(val) || /^\+57\d{10}$/.test(val),
+    "Formato de teléfono inválido. Ecuador: +593XXXXXXXXX, Colombia: +57XXXXXXXXXX"
+  );
+
+/**
+ * @deprecated Use phoneSchema instead
+ */
+export const ecuadorPhoneSchema = phoneSchema;
 
 /**
  * Email validation with normalization
@@ -88,7 +98,7 @@ export const changePasswordSchema = z
 
 export const resetPasswordSchema = z.object({
   email: emailSchema,
-  resetCode: z.string().length(8, "Código debe tener 8 dígitos"),
+  resetCode: z.string().length(6, "Código debe tener 6 dígitos"),
   newPassword: passwordSchema,
 });
 
@@ -121,7 +131,7 @@ export const createBulkInvitationsSchema = z.object({
 });
 
 export const acceptInvitationSchema = z.object({
-  invitationCode: z.string().length(8, "Código debe tener 8 dígitos"),
+  invitationCode: z.string().length(6, "Código debe tener 6 dígitos"),
   password: passwordSchema,
 });
 

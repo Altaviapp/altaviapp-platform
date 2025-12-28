@@ -15,6 +15,7 @@ import {
   BarChart3,
   Building2,
   Bell,
+  Satellite,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +28,7 @@ const navItems = [
   { icon: Navigation, label: 'Viajes', href: '/trips' },
   { icon: Bell, label: 'Solicitudes', href: '/requests' },
   { icon: Bus, label: 'Flota', href: '/fleet' },
+  { icon: Satellite, label: 'GPS Devices', href: '/fleet/gps-devices' },
   { icon: GraduationCap, label: 'Estudiantes', href: '/students' },
   { icon: MapPin, label: 'Rutas', href: '/routes' },
   { icon: Users, label: 'Usuarios', href: '/users' },

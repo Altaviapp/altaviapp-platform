@@ -41,6 +41,8 @@ export default defineSchema({
     type: v.union(v.literal("school"), v.literal("corporate")),
     address: v.string(),
     city: v.string(),
+    country: v.optional(v.string()), // 'EC' | 'CO' - default 'EC'
+    department: v.optional(v.string()), // Province/Department code
     phone: v.optional(v.string()),
     email: v.string(),
     contactPerson: v.string(),
@@ -56,6 +58,9 @@ export default defineSchema({
     // API Token for external GPS device authentication (centralized per institution)
     apiToken: v.optional(v.string()),
     apiTokenCreatedAt: v.optional(v.number()),
+
+    // Custom grades configuration (optional - uses defaults if empty)
+    grades: v.optional(v.array(v.string())),
 
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -75,7 +80,7 @@ export default defineSchema({
     // Email Verification
     emailVerified: v.boolean(),
     emailVerifiedAt: v.optional(v.number()),
-    emailVerificationToken: v.optional(v.string()), // 8-digit code
+    emailVerificationToken: v.optional(v.string()), // 6-digit code
     tokenExpiresAt: v.optional(v.number()),
 
     invitationId: v.optional(v.id("invitations")),
@@ -124,7 +129,7 @@ export default defineSchema({
     lastName: v.optional(v.string()),
     phone: v.optional(v.string()),
 
-    invitationCode: v.string(), // 8-digit code: 12345678
+    invitationCode: v.string(), // 6-digit code: 123456
     codeExpiresAt: v.number(), // 7 days
 
     createdBy: v.id("users"), // Admin who created the invitation
@@ -255,14 +260,20 @@ export default defineSchema({
     grade: v.string(),
     dateOfBirth: v.number(),
     address: v.string(),
+    country: v.optional(v.string()), // 'EC' | 'CO' - for student address
+    department: v.optional(v.string()), // Province/Department code
+    city: v.optional(v.string()), // City name
     // Home coordinates for route optimization
     homeLatitude: v.optional(v.number()),
     homeLongitude: v.optional(v.number()),
     parentPhone: v.string(),
     parentEmail: v.string(),
     parentName: v.string(),
+    secondaryParentEmail: v.optional(v.string()), // Second guardian email
     emergencyContact: v.string(),
     emergencyContactSecondary: v.optional(v.string()), // Secondary emergency contact
+    // Linked guardian user IDs (populated when parents register)
+    guardianUserIds: v.optional(v.array(v.id("users"))),
     // Profile photo (stored in Convex storage)
     photoStorageId: v.optional(v.id("_storage")),
     qrCode: v.string(),
@@ -271,7 +282,9 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_institution", ["institutionId"])
-    .index("by_qr_code", ["qrCode"]),
+    .index("by_qr_code", ["qrCode"])
+    .index("by_parent_email", ["parentEmail"])
+    .index("by_secondary_parent_email", ["secondaryParentEmail"]),
 
   // Routes
   routes: defineTable({
@@ -656,4 +669,93 @@ export default defineSchema({
     .index("by_student", ["studentId"])
     .index("by_status", ["status"])
     .index("by_institution_status", ["institutionId", "status"]),
+
+  // ============================================
+  // GPS EXTERNAL DEVICES SYSTEM
+  // ============================================
+
+  // GPS Devices - Dispositivos GPS externos registrados
+  // Separado de vehículos para permitir reasignación dinámica
+  gpsDevices: defineTable({
+    institutionId: v.id("institutions"),
+
+    // Identificación
+    deviceId: v.string(),           // ID único del dispositivo (IMEI, serial, etc.)
+    name: v.string(),               // Nombre amigable ("GPS Bus Ruta Norte")
+
+    // Configuración de mapeo de campos del webhook
+    fieldMapping: v.optional(v.object({
+      latitude: v.string(),         // Ej: "data.lat" o "position.latitude"
+      longitude: v.string(),        // Ej: "data.lng" o "position.longitude"
+      speed: v.optional(v.string()),
+      heading: v.optional(v.string()),
+      timestamp: v.optional(v.string()),
+      deviceIdField: v.string(),    // Campo que identifica el device en el payload
+    })),
+
+    // Asignación actual a vehículo
+    vehicleId: v.optional(v.id("vehicles")),
+
+    // Estado del dispositivo
+    status: v.union(
+      v.literal("pending_config"),  // Recién creado, sin configurar
+      v.literal("testing"),         // En modo sandbox
+      v.literal("active"),          // Funcionando en producción
+      v.literal("inactive")         // Desactivado
+    ),
+
+    // Monitoreo
+    lastSeen: v.optional(v.number()),           // Última señal recibida (timestamp)
+    lastPayloadSample: v.optional(v.string()),  // Último JSON recibido (para debug)
+
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_institution", ["institutionId"])
+    .index("by_device_id", ["deviceId"])
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_status", ["status"]),
+
+  // GPS Device Assignments - Historial de asignaciones dispositivo-vehículo
+  // Para auditoría: qué dispositivo estuvo en qué vehículo y cuándo
+  gpsDeviceAssignments: defineTable({
+    deviceId: v.id("gpsDevices"),
+    vehicleId: v.id("vehicles"),
+    institutionId: v.id("institutions"),
+
+    assignedAt: v.number(),
+    unassignedAt: v.optional(v.number()),
+    assignedBy: v.id("users"),
+    unassignedBy: v.optional(v.id("users")),
+
+    reason: v.optional(v.string()),  // "Cambio de vehículo", "Mantenimiento", etc.
+  })
+    .index("by_device", ["deviceId"])
+    .index("by_vehicle", ["vehicleId"])
+    .index("by_institution", ["institutionId"]),
+
+  // GPS Webhook Samples - Samples de webhooks para configuración
+  // Usado en el sandbox para analizar payload y configurar mapeo
+  gpsWebhookSamples: defineTable({
+    institutionId: v.id("institutions"),
+    deviceId: v.optional(v.id("gpsDevices")),  // Null si aún no hay device configurado
+
+    rawPayload: v.string(),         // JSON original recibido
+    parsedFields: v.optional(v.object({
+      latitude: v.optional(v.number()),
+      longitude: v.optional(v.number()),
+      speed: v.optional(v.number()),
+      heading: v.optional(v.number()),
+      timestamp: v.optional(v.number()),
+      detectedDeviceId: v.optional(v.string()),
+    })),
+
+    receivedAt: v.number(),
+    sourceIp: v.optional(v.string()),
+    isProcessed: v.boolean(),       // Si ya se usó para configurar un device
+  })
+    .index("by_institution", ["institutionId"])
+    .index("by_device", ["deviceId"])
+    .index("by_received", ["institutionId", "receivedAt"]),
 });

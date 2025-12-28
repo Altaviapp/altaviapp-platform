@@ -68,7 +68,9 @@ export function useRouteMutations() {
   const createRoute = useMutation(api.routes.createRoute);
   const createRouteWithStops = useMutation(api.routes.createRouteWithStops);
   const updateRoute = useMutation(api.routes.updateRoute);
+  const updateRouteWithStops = useMutation(api.routes.updateRouteWithStops);
   const deactivateRoute = useMutation(api.routes.deactivateRoute);
+  const deleteRouteMutation = useMutation(api.routes.deleteRoute);
 
   const createStop = useMutation(api.routeStops.createStop);
   const updateStop = useMutation(api.routeStops.updateStop);
@@ -112,6 +114,11 @@ export function useRouteMutations() {
       return deactivateRoute({ userId, routeId });
     },
 
+    deleteRoute: async (routeId: Id<"routes">) => {
+      if (!userId) throw new Error("Not authenticated");
+      return deleteRouteMutation({ userId, routeId });
+    },
+
     // Create route with stops (from wizard)
     createRouteWithStops: async (data: {
       name: string;
@@ -149,6 +156,48 @@ export function useRouteMutations() {
     }) => {
       if (!userId || !institutionId) throw new Error("Not authenticated");
       return createRouteWithStops({ userId, institutionId, ...data });
+    },
+
+    // Update route with stops (from wizard edit mode)
+    updateRouteWithStops: async (
+      routeId: Id<"routes">,
+      data: {
+        name: string;
+        type: "pickup" | "dropoff";
+        vehicleId: Id<"vehicles">;
+        driverId: Id<"drivers">;
+        monitorId?: Id<"monitors">;
+        scheduledStartTime: string;
+        scheduledEndTime: string;
+        schoolArrivalTime?: string;
+        schoolDepartureTime?: string;
+        recurrence?: {
+          type: "daily" | "weekly" | "monthly" | "one_time";
+          daysOfWeek?: string[];
+          dayOfWeek?: string;
+          dayOfMonth?: number;
+          specificDate?: string;
+        };
+        optimizedPolyline?: string;
+        estimatedDuration?: number;
+        estimatedDistance?: number;
+        stops: Array<{
+          name: string;
+          address: string;
+          latitude: number;
+          longitude: number;
+          scheduledTime: string;
+          estimatedArrivalTime?: string;
+          durationFromPrevious?: number;
+          order: number;
+          geofenceRadius?: number;
+          studentId: Id<"students">;
+        }>;
+        isActive?: boolean;
+      }
+    ) => {
+      if (!userId) throw new Error("Not authenticated");
+      return updateRouteWithStops({ userId, routeId, ...data });
     },
 
     // Stop mutations

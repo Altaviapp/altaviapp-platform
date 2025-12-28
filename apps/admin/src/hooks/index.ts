@@ -12,7 +12,16 @@ export type { ConvexAuthContext } from "./useConvexAuth";
 export { useRoutes, useRoute, useRouteStops, useRouteMutations } from "./useRoutes";
 
 // Students
-export { useStudents, useStudent, useStudentMutations, useStudentRouteAssignments, useStudentsWithRoutes } from "./useStudents";
+export {
+  useStudents,
+  useStudent,
+  useStudentMutations,
+  useStudentRouteAssignments,
+  useStudentsWithRoutes,
+  useValidateStudentImport,
+  useStudentImportMutations,
+} from "./useStudents";
+export type { StudentImportData } from "./useStudents";
 
 // Fleet (Vehicles, Drivers, Monitors)
 export {
@@ -96,4 +105,9 @@ export {
 export type { InvitationRole, InvitationStatus } from "./useInvitations";
 
 // Institution
-export { useInstitution, useSchoolLocationMutation } from "./useInstitution";
+export {
+  useInstitution,
+  useSchoolLocationMutation,
+  useInstitutionGrades,
+  useInstitutionGradesMutation,
+} from "./useInstitution";

@@ -20,9 +20,13 @@ import {
   Camera,
   Clock,
   ChevronRight,
+  UserPlus,
+  Users,
+  CheckCircle,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useStudentWithPhoto } from '@/hooks';
+import { useStudentWithPhoto, useStudentMutations } from '@/hooks';
 import { NovedadContextButton } from '@/components/home/NovedadContextButton';
 import type { Id } from '../../../../../../../convex/_generated/dataModel';
 import QRCode from 'qrcode';
@@ -32,8 +36,19 @@ export default function StudentDetailPage() {
   const router = useRouter();
   const studentId = params.id as Id<"students">;
   const { student, isLoading } = useStudentWithPhoto(studentId);
+  const { inviteSecondaryGuardian } = useStudentMutations();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
+
+  // Secondary guardian invitation state
+  const [showGuardianModal, setShowGuardianModal] = useState(false);
+  const [guardianEmail, setGuardianEmail] = useState('');
+  const [guardianName, setGuardianName] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteResult, setInviteResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   // Generate QR code
   const generateQrCode = async () => {
@@ -62,6 +77,40 @@ export default function StudentDetailPage() {
     link.href = qrDataUrl;
     link.download = `qr-${student.firstName}-${student.lastName}.png`;
     link.click();
+  };
+
+  // Handle guardian invitation
+  const handleInviteGuardian = async () => {
+    if (!guardianEmail.trim() || !guardianName.trim()) {
+      setInviteResult({ success: false, message: 'Por favor complete todos los campos' });
+      return;
+    }
+
+    setInviteLoading(true);
+    setInviteResult(null);
+
+    try {
+      const result = await inviteSecondaryGuardian(studentId, guardianEmail, guardianName);
+      setInviteResult({
+        success: true,
+        message: result.message,
+      });
+      // Reset form after success
+      setTimeout(() => {
+        setShowGuardianModal(false);
+        setGuardianEmail('');
+        setGuardianName('');
+        setInviteResult(null);
+      }, 2000);
+    } catch (error) {
+      console.error('Error inviting guardian:', error);
+      setInviteResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error al enviar invitación',
+      });
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   // Print QR code
@@ -365,6 +414,146 @@ export default function StudentDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Secondary Guardian Card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold text-gray-900">Segundo Tutor</h3>
+          </div>
+        </div>
+
+        {student.secondaryParentEmail ? (
+          <div className="p-3 bg-success/10 rounded-lg">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-success" />
+              <div>
+                <p className="text-sm font-medium text-gray-900">{student.secondaryParentEmail}</p>
+                <p className="text-xs text-success">Segundo tutor configurado</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Agrega un segundo tutor (cónyuge, abuelo, etc.) para que también pueda ver la información y recibir notificaciones.
+            </p>
+            <button
+              onClick={() => setShowGuardianModal(true)}
+              className="w-full flex items-center justify-center gap-2 p-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <UserPlus className="w-5 h-5" />
+              Invitar Segundo Tutor
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Guardian Invitation Modal */}
+      {showGuardianModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Invitar Segundo Tutor</h3>
+              <button
+                onClick={() => {
+                  setShowGuardianModal(false);
+                  setGuardianEmail('');
+                  setGuardianName('');
+                  setInviteResult(null);
+                }}
+                className="p-2 rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600">
+              El segundo tutor recibirá un email con instrucciones para crear su cuenta y acceder a la información de {student.firstName}.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre completo
+                </label>
+                <input
+                  type="text"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  placeholder="Ej: María García"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={guardianEmail}
+                  onChange={(e) => setGuardianEmail(e.target.value)}
+                  placeholder="Ej: maria@email.com"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+
+            {inviteResult && (
+              <div
+                className={cn(
+                  'p-3 rounded-lg flex items-center gap-2',
+                  inviteResult.success ? 'bg-success/10 text-success' : 'bg-error/10 text-error'
+                )}
+              >
+                {inviteResult.success ? (
+                  <CheckCircle className="w-5 h-5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5" />
+                )}
+                <span className="text-sm">{inviteResult.message}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowGuardianModal(false);
+                  setGuardianEmail('');
+                  setGuardianName('');
+                  setInviteResult(null);
+                }}
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleInviteGuardian}
+                disabled={inviteLoading || !guardianEmail.trim() || !guardianName.trim()}
+                className={cn(
+                  'flex-1 px-4 py-2 rounded-lg text-white flex items-center justify-center gap-2',
+                  inviteLoading || !guardianEmail.trim() || !guardianName.trim()
+                    ? 'bg-gray-300 cursor-not-allowed'
+                    : 'bg-primary hover:bg-primary/90'
+                )}
+              >
+                {inviteLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4" />
+                    Enviar Invitación
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QR Code Card */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">

@@ -157,12 +157,25 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
- * Validate phone number (Ecuador format)
- * Format: +593XXXXXXXXX (13 characters)
+ * Validate phone number (Ecuador and Colombia formats)
+ * Ecuador: +593XXXXXXXXX (13 characters, 9 digits after prefix)
+ * Colombia: +57XXXXXXXXXX (13 characters, 10 digits after prefix)
  */
 export function isValidPhone(phone: string): boolean {
-  const phoneRegex = /^\+593\d{9}$/;
-  return phoneRegex.test(phone);
+  // Ecuador: +593 + 9 digits
+  if (/^\+593\d{9}$/.test(phone)) return true;
+  // Colombia: +57 + 10 digits
+  if (/^\+57\d{10}$/.test(phone)) return true;
+  return false;
+}
+
+/**
+ * Get country code from phone number
+ */
+export function getPhoneCountry(phone: string): 'EC' | 'CO' | null {
+  if (phone.startsWith('+593')) return 'EC';
+  if (phone.startsWith('+57')) return 'CO';
+  return null;
 }
 
 /**

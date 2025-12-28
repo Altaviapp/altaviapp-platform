@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Truck, QrCode, History, User, Settings, LogOut, Map, Users, AlertTriangle, Route, Calendar } from 'lucide-react';
+import { Home, Truck, User, LogOut, Route, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConvexAuth } from '@/hooks';
 import type { UserRole } from '@/types';
@@ -11,21 +11,14 @@ interface NavItem {
   icon: typeof Home;
   label: string;
   href: string;
-  roles?: ('driver' | 'monitor' | 'admin')[]; // If undefined, show for all roles
 }
 
-// Navigation items - both drivers and monitors have equal access to core features
-// The only difference is drivers see vehicle management in dashboard
-const allNavItems: NavItem[] = [
-  { icon: Home, label: 'Dashboard', href: '/dashboard' },
-  { icon: Truck, label: 'Mis Viajes', href: '/trips' },
-  { icon: Route, label: 'Rutas', href: '/routes' },
+// Simplified navigation - 4 main items
+// Check-in, Map, Students, Incidents are now within active trip context
+const navItems: NavItem[] = [
+  { icon: Home, label: 'Inicio', href: '/dashboard' },
   { icon: Calendar, label: 'Calendario', href: '/calendar' },
-  { icon: QrCode, label: 'Check-in', href: '/checkin' },
-  { icon: Map, label: 'Mapa', href: '/map' },
-  { icon: Users, label: 'Estudiantes', href: '/students' },
-  { icon: AlertTriangle, label: 'Incidentes', href: '/incidents' },
-  { icon: History, label: 'Historial', href: '/history' },
+  { icon: Route, label: 'Rutas', href: '/routes' },
   { icon: User, label: 'Perfil', href: '/profile' },
 ];
 
@@ -38,22 +31,13 @@ export function Sidebar({ open = true, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Use real auth - no more mock fallback
+  // Use real auth
   const { user, isDriver, isMonitor, logout } = useConvexAuth();
 
-  // Get user role from authenticated user
+  // Get user role display name
   const userRole = (user as { role?: UserRole })?.role ?? 'driver';
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
   const roleDisplayName = isDriver ? 'Conductor' : isMonitor ? 'Monitor' : 'Admin';
-
-  // Filter nav items based on user role
-  const navItems = allNavItems.filter((item) => {
-    if (!item.roles) return true; // Show for all roles
-    if (!userRole) return false;
-    // Admin can see everything, others only see their allowed items
-    if (isAdmin) return true;
-    return item.roles.includes(userRole as 'driver' | 'monitor' | 'admin');
-  });
 
   const handleLogout = async () => {
     try {
@@ -158,23 +142,8 @@ export function Sidebar({ open = true, onClose }: SidebarProps) {
           })}
         </nav>
 
-        {/* Footer Actions */}
-        <div className="px-3 py-4 border-t border-primary-foreground/10 space-y-1 safe-area-pb">
-          <Link
-            href="/settings"
-            onClick={onClose}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-              'text-sm font-medium',
-              pathname === '/settings'
-                ? 'bg-primary-foreground/20 text-white'
-                : 'text-white/80 hover:bg-primary-foreground/10 hover:text-white'
-            )}
-          >
-            <Settings className="w-5 h-5 flex-shrink-0" />
-            <span>Configuración</span>
-          </Link>
-
+        {/* Footer - Logout only (Settings now in Profile) */}
+        <div className="px-3 py-4 border-t border-primary-foreground/10 safe-area-pb">
           <button
             onClick={handleLogout}
             className={cn(

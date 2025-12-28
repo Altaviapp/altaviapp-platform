@@ -3,13 +3,15 @@
 /**
  * RouteWizard Component
  *
- * Multi-step wizard for creating optimized routes:
+ * Multi-step wizard for creating/editing optimized routes:
  * 1. Planning - Basic info (type, time, vehicle, driver)
  * 2. Stop Assignment - Select students, calculate route
  * 3. Confirmation - Recurrence, review, save
+ *
+ * Supports both create and edit modes.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, CheckCircle, Loader2,
@@ -25,7 +27,29 @@ import type { RecurrenceConfig } from './RecurrenceSelector';
 // Re-export types for external use
 export type { Step1Data, Step2Data, Step3Data, RecurrenceConfig };
 
+export interface RouteWizardInitialData {
+  routeId: string;
+  name: string;
+  type: 'pickup' | 'dropoff';
+  scheduledStartTime: string;
+  scheduledEndTime: string;
+  vehicleId: string;
+  driverId: string;
+  monitorId?: string;
+  schoolArrivalTime?: string;
+  schoolDepartureTime?: string;
+  recurrence?: RecurrenceConfig;
+  optimizedPolyline?: string;
+  estimatedDuration?: number;
+  estimatedDistance?: number;
+  isActive: boolean;
+  // Students currently assigned to this route (from studentRoutes)
+  assignedStudentIds: string[];
+}
+
 interface RouteWizardProps {
+  mode?: 'create' | 'edit';
+  initialData?: RouteWizardInitialData;
   onSave: (data: {
     step1: Step1Data;
     step2: Step2Data;
@@ -39,18 +63,19 @@ const steps = [
   { id: 3, title: 'Confirmación', icon: Calendar, description: 'Frecuencia y revisión final' },
 ];
 
-export function RouteWizard({ onSave }: RouteWizardProps) {
+export function RouteWizard({ mode = 'create', initialData, onSave }: RouteWizardProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Step validity
   const [step1Valid, setStep1Valid] = useState(false);
   const [step2Valid, setStep2Valid] = useState(false);
   const [step3Valid, setStep3Valid] = useState(false);
 
-  // Step data
+  // Step data - initialize with defaults or from initialData
   const [step1Data, setStep1Data] = useState<Step1Data>({
     routeType: '',
     targetTime: '',
@@ -74,6 +99,42 @@ export function RouteWizard({ onSave }: RouteWizardProps) {
     },
     isActive: true,
   });
+
+  // Initialize from initialData when in edit mode
+  useEffect(() => {
+    if (mode === 'edit' && initialData && !isInitialized) {
+      // Step 1: Basic route info
+      setStep1Data({
+        routeType: initialData.type,
+        targetTime: initialData.type === 'pickup'
+          ? initialData.schoolArrivalTime || initialData.scheduledEndTime
+          : initialData.schoolDepartureTime || initialData.scheduledStartTime,
+        vehicleId: initialData.vehicleId,
+        driverId: initialData.driverId,
+        monitorId: initialData.monitorId || '',
+        routeName: initialData.name,
+        useAutoName: false, // When editing, don't auto-generate name
+      });
+
+      // Step 2: Selected students (optimization will be recalculated)
+      setStep2Data({
+        selectedStudentIds: initialData.assignedStudentIds,
+        optimizationResult: null, // Will need to recalculate
+        isOptimizing: false,
+      });
+
+      // Step 3: Recurrence and active status
+      setStep3Data({
+        recurrence: initialData.recurrence || {
+          type: 'daily',
+          daysOfWeek: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+        },
+        isActive: initialData.isActive,
+      });
+
+      setIsInitialized(true);
+    }
+  }, [mode, initialData, isInitialized]);
 
   // Navigation
   const canGoNext = () => {
@@ -114,11 +175,15 @@ export function RouteWizard({ onSave }: RouteWizardProps) {
         step3: step3Data,
       });
 
-      // Success - redirect to routes page
-      router.push('/routes');
+      // Success - redirect to route detail or routes list
+      if (mode === 'edit' && initialData) {
+        router.push(`/routes/${initialData.routeId}`);
+      } else {
+        router.push('/routes');
+      }
     } catch (err) {
-      console.error('Error creating route:', err);
-      setError(err instanceof Error ? err.message : 'Error al crear la ruta');
+      console.error(`Error ${mode === 'edit' ? 'updating' : 'creating'} route:`, err);
+      setError(err instanceof Error ? err.message : `Error al ${mode === 'edit' ? 'actualizar' : 'crear'} la ruta`);
       setIsSubmitting(false);
     }
   };
@@ -259,7 +324,7 @@ export function RouteWizard({ onSave }: RouteWizardProps) {
 
         <div className="flex items-center gap-3">
           <a
-            href="/routes"
+            href={mode === 'edit' && initialData ? `/routes/${initialData.routeId}` : '/routes'}
             className="px-4 py-2.5 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors"
           >
             Cancelar
@@ -300,7 +365,7 @@ export function RouteWizard({ onSave }: RouteWizardProps) {
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4" />
-                  Crear Ruta
+                  {mode === 'edit' ? 'Guardar Cambios' : 'Crear Ruta'}
                 </>
               )}
             </button>

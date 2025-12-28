@@ -1,19 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
-import { useStudentMutations } from '@/hooks';
-
-const grades = [
-  { value: '1ro', label: '1ro Básica' },
-  { value: '2do', label: '2do Básica' },
-  { value: '3ro', label: '3ro Básica' },
-  { value: '4to', label: '4to Básica' },
-  { value: '5to', label: '5to Básica' },
-  { value: '6to', label: '6to Básica' },
-];
+import { useStudentMutations, useInstitutionGrades } from '@/hooks';
 
 /**
  * New Student Page
@@ -25,6 +16,13 @@ export default function NewStudentPage() {
   const [error, setError] = useState<string | null>(null);
 
   const { createStudent } = useStudentMutations();
+  const { grades: institutionGrades } = useInstitutionGrades();
+
+  // Convert grades array to select options
+  const gradeOptions = useMemo(
+    () => institutionGrades.map((g) => ({ value: g, label: g })),
+    [institutionGrades]
+  );
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -127,7 +125,7 @@ export default function NewStudentPage() {
               type="select"
               value={formData.grade}
               onChange={handleChange('grade')}
-              options={grades}
+              options={gradeOptions}
               placeholder="Seleccionar grado"
               required
             />

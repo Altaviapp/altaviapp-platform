@@ -214,6 +214,7 @@ export function useStudentMutations() {
   const generateUploadUrlMutation = useMutation(api.students.generatePhotoUploadUrl);
   const savePhotoMutation = useMutation(api.students.saveStudentPhoto);
   const deletePhotoMutation = useMutation(api.students.deleteStudentPhoto);
+  const inviteSecondaryGuardianMutation = useMutation(api.students.inviteSecondaryGuardian);
 
   const updateStudent = async (
     studentId: Id<"students">,
@@ -279,9 +280,27 @@ export function useStudentMutations() {
     });
   };
 
+  const inviteSecondaryGuardian = async (
+    studentId: Id<"students">,
+    email: string,
+    name: string
+  ) => {
+    if (!userId) {
+      throw new Error("Usuario no autenticado");
+    }
+
+    return await inviteSecondaryGuardianMutation({
+      userId,
+      studentId,
+      email,
+      name,
+    });
+  };
+
   return {
     updateStudent,
     uploadPhoto,
     deletePhoto,
+    inviteSecondaryGuardian,
   };
 }

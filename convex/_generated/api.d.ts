@@ -31,6 +31,7 @@ import type * as monitors from "../monitors.js";
 import type * as notifications from "../notifications.js";
 import type * as novedadTypes from "../novedadTypes.js";
 import type * as novedades from "../novedades.js";
+import type * as projectedTrips from "../projectedTrips.js";
 import type * as reports from "../reports.js";
 import type * as routeStops from "../routeStops.js";
 import type * as routes from "../routes.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   novedadTypes: typeof novedadTypes;
   novedades: typeof novedades;
+  projectedTrips: typeof projectedTrips;
   reports: typeof reports;
   routeStops: typeof routeStops;
   routes: typeof routes;

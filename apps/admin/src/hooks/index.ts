@@ -48,6 +48,17 @@ export {
   useDriverTrips,
 } from "./useTrips";
 
+// Projected Trips (Calendar views)
+export {
+  useProjectedTrips,
+  useProjectedTripsCount,
+  useActiveAndUpcomingTrips,
+  getDateRange,
+  formatDateDisplay,
+  formatShortDate,
+  isToday,
+} from "./useProjectedTrips";
+
 // Incidents
 export {
   useIncidents,

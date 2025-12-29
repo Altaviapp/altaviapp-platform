@@ -9,10 +9,10 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { StatsGrid, type StatItem } from '@/components/shared';
-import { ActiveTripsCard, RecentAlertsCard } from '@/components/modules/dashboard';
+import { UpcomingTripsCard, RecentAlertsCard } from '@/components/modules/dashboard';
 import {
   useConvexAuth,
-  useActiveTrips,
+  useActiveAndUpcomingTrips,
   useVehicles,
   useStudents,
   useDrivers,
@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const { isLoading: authLoading } = useConvexAuth();
 
   // Real data from Convex - all filtered by institution
-  const { trips: activeTrips, isLoading: tripsLoading } = useActiveTrips();
+  const { trips: upcomingTrips, isLoading: tripsLoading } = useActiveAndUpcomingTrips();
   const { vehicles, isLoading: vehiclesLoading } = useVehicles({ status: 'active' });
   const { students, isLoading: studentsLoading } = useStudents();
   const { drivers, isLoading: driversLoading } = useDrivers({ isActive: true });
@@ -54,11 +54,14 @@ export default function DashboardPage() {
   // Calculate open incidents count
   const openIncidentsCount = incidents.filter((i) => i.status === 'open').length;
 
+  // Count active trips from upcoming trips
+  const activeTripsCount = upcomingTrips.filter((t) => t.type === 'active').length;
+
   // Build stats array for StatsGrid
   const stats: StatItem[] = [
     {
       label: 'Viajes Activos',
-      value: activeTrips.length,
+      value: activeTripsCount,
       icon: Navigation,
       color: 'info',
     },
@@ -101,8 +104,8 @@ export default function DashboardPage() {
 
       {/* Two column layout for cards */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Real-time Trips Section */}
-        <ActiveTripsCard trips={activeTrips} isLoading={tripsLoading} />
+        {/* Active and Upcoming Trips Section */}
+        <UpcomingTripsCard trips={upcomingTrips} isLoading={tripsLoading} />
 
         {/* Recent Alerts Section */}
         <RecentAlertsCard incidents={incidents} isLoading={incidentsLoading} />

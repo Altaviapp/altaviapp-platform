@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,7 +17,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
-import { LocationSelector, type LocationValue, type CountryCode } from '@altaviapp/ui';
+import { LocationSelector, type LocationValue } from '@altaviapp/ui';
 
 // ============================================
 // STEP 1: ADMIN INFORMATION
@@ -79,12 +79,7 @@ const institutionTypes = [
 
 function SignupContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { registerInstitution } = useAuth();
-
-  const selectedPlan = searchParams?.get('plan') || 'professional';
-  const planName = selectedPlan === 'basic' ? 'Basico' : 'Profesional';
-  const planPrice = selectedPlan === 'basic' ? 49 : 99;
 
   const [step, setStep] = useState<1 | 2 | 'success'>(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -178,8 +173,8 @@ function SignupContent() {
       institutionCity: data.location.city,
       institutionCountry: data.location.country,
       institutionDepartment: data.location.department,
-      // Plan
-      plan: selectedPlan as 'basic' | 'professional' | 'enterprise',
+      // Plan (default to professional)
+      plan: 'professional',
     });
 
     if (result.success) {
@@ -207,18 +202,14 @@ function SignupContent() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           {/* Header */}
-          <div className="flex justify-between items-start mb-6">
+          <div className="mb-6">
             <button
-              onClick={() => router.push('/plans')}
+              onClick={() => router.push('/login')}
               className="text-gray-600 hover:text-primary transition-colors inline-flex items-center gap-1 text-sm"
             >
               <ArrowLeft className="w-4 h-4" />
-              Volver a planes
+              Volver al inicio
             </button>
-            <div className="text-right text-sm">
-              <p className="text-gray-600">Plan seleccionado:</p>
-              <p className="font-semibold text-primary">{planName} - ${planPrice}/mes</p>
-            </div>
           </div>
 
           {/* Title */}
@@ -437,7 +428,7 @@ function SignupContent() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           {/* Header */}
-          <div className="flex justify-between items-start mb-6">
+          <div className="mb-6">
             <button
               onClick={goBackToStep1}
               className="text-gray-600 hover:text-primary transition-colors inline-flex items-center gap-1 text-sm"
@@ -445,10 +436,6 @@ function SignupContent() {
               <ArrowLeft className="w-4 h-4" />
               Paso anterior
             </button>
-            <div className="text-right text-sm">
-              <p className="text-gray-600">Plan seleccionado:</p>
-              <p className="font-semibold text-primary">{planName} - ${planPrice}/mes</p>
-            </div>
           </div>
 
           {/* Title */}
@@ -627,22 +614,7 @@ function SignupContent() {
   return null;
 }
 
-// Loading fallback
-function LoadingFallback() {
-  return (
-    <div className="w-full max-w-md">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 flex items-center justify-center min-h-[300px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    </div>
-  );
-}
-
-// Main export with Suspense boundary
+// Main export
 export default function SignupPage() {
-  return (
-    <Suspense fallback={<LoadingFallback />}>
-      <SignupContent />
-    </Suspense>
-  );
+  return <SignupContent />;
 }

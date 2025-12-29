@@ -193,7 +193,7 @@ export default function LoginPage() {
         {/* Register Link */}
         <p className="text-center text-sm text-gray-600 mt-6">
           No tienes cuenta?{' '}
-          <Link href="/plans" className="text-primary font-semibold hover:underline">
+          <Link href="/signup" className="text-primary font-semibold hover:underline">
             Registrar institucion
           </Link>
         </p>

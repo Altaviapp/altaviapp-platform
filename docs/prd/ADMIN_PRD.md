@@ -722,12 +722,11 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 | `/verify` | ✅ | Verificación alternativa |
 | `/forgot-password` | ✅ | Solicitud de reset |
 | `/reset-password` | ✅ | Reset de contraseña |
-| `/plans` | ✅ | Planes de suscripción |
 | `/` | ✅ | Landing page |
 
 **Funcionalidades**:
 - [x] Login con email/contraseña
-- [x] Registro de institución con plan
+- [x] Registro de institución
 - [x] Verificación de email (código 6 dígitos, 24h expiración)
 - [x] Botón de verificación con un clic
 - [x] Reset de contraseña (código 6 dígitos, 1h expiración)

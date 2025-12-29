@@ -61,10 +61,10 @@ export default function LandingPage() {
                 Características
               </a>
               <button
-                onClick={() => router.push('/plans')}
+                onClick={() => router.push('/signup')}
                 className="text-gray-600 hover:text-primary transition-colors"
               >
-                Precios
+                Registrarse
               </button>
               <button
                 onClick={() => router.push('/login')}
@@ -97,11 +97,11 @@ export default function LandingPage() {
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    router.push('/plans');
+                    router.push('/signup');
                   }}
                   className="text-left text-gray-600 hover:text-primary transition-colors py-2"
                 >
-                  Precios
+                  Registrarse
                 </button>
                 <button
                   onClick={() => {
@@ -133,7 +133,7 @@ export default function LandingPage() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <button
-                  onClick={() => router.push('/plans')}
+                  onClick={() => router.push('/signup')}
                   className="bg-accent hover:bg-accent/90 text-primary font-bold px-8 py-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   Comenzar Ahora

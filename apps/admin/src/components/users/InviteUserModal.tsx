@@ -144,7 +144,7 @@ export function InviteUserModal({ isOpen, onClose, onSuccess, defaultRole, hideR
       />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+      <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-3">

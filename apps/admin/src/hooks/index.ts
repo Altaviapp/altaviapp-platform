@@ -140,3 +140,13 @@ export {
   useNotificationMutations,
   useUnreadNotifications,
 } from "./useNotifications";
+
+// Trip Events (Timeline)
+export {
+  useTripTimeline,
+  useLatestTripEvents,
+  useTripEventMutations,
+  getEventConfig,
+  EVENT_TYPE_CONFIG,
+} from "./useTripEvents";
+export type { TripEventType, ActorRole } from "./useTripEvents";

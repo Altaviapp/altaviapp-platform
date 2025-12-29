@@ -15,3 +15,13 @@ export { TripMonthView } from './TripMonthView';
 
 export { TripCalendarTabs } from './TripCalendarTabs';
 export type { CalendarView } from './TripCalendarTabs';
+
+// Trip Detail Components
+export {
+  TripDetailTabs,
+  TripGeneralTab,
+  TripMapTab,
+  TripNovedadesTab,
+  TripHistorialTab,
+} from './detail';
+export type { TripDetailTab } from './detail';

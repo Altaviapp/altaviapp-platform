@@ -467,6 +467,69 @@ export default defineSchema({
     .index("by_performer", ["performedById"])
     .index("by_date", ["timestamp"]),
 
+  // Trip Events (Timeline for real-time history)
+  tripEvents: defineTable({
+    tripId: v.id("trips"),
+    institutionId: v.id("institutions"),
+    type: v.union(
+      // Trip lifecycle events
+      v.literal("trip_started"),
+      v.literal("trip_completed"),
+      v.literal("trip_cancelled"),
+      // Stop events
+      v.literal("arrived_at_stop"),
+      v.literal("departed_from_stop"),
+      // Student events
+      v.literal("student_checkin"),
+      v.literal("student_checkout"),
+      v.literal("student_absent"),
+      // Crew events
+      v.literal("checklist_completed"),
+      v.literal("relay_mode_activated"),
+      v.literal("relay_mode_deactivated"),
+      // Incident events
+      v.literal("incident_reported"),
+      v.literal("incident_resolved"),
+      // Novedad events
+      v.literal("novedad_reported"),
+      v.literal("novedad_approved"),
+      v.literal("novedad_rejected"),
+      // System events
+      v.literal("gps_lost"),
+      v.literal("gps_restored"),
+      v.literal("geofence_entered"),
+      v.literal("geofence_exited")
+    ),
+    // Event details
+    title: v.string(),
+    description: v.optional(v.string()),
+    // Related entities
+    stopId: v.optional(v.id("routeStops")),
+    studentId: v.optional(v.id("students")),
+    incidentId: v.optional(v.id("incidents")),
+    novedadId: v.optional(v.id("novedades")),
+    // Actor who triggered the event
+    actorId: v.optional(v.id("users")),
+    actorRole: v.optional(v.union(
+      v.literal("driver"),
+      v.literal("monitor"),
+      v.literal("admin"),
+      v.literal("parent"),
+      v.literal("system")
+    )),
+    // Location at time of event
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    // Metadata
+    metadata: v.optional(v.any()), // Flexible additional data
+    timestamp: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_trip", ["tripId"])
+    .index("by_trip_timestamp", ["tripId", "timestamp"])
+    .index("by_type", ["type"])
+    .index("by_institution", ["institutionId"]),
+
   // Incidents and Reports
   incidents: defineTable({
     tripId: v.optional(v.id("trips")),

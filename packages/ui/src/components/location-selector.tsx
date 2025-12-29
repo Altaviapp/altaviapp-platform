@@ -255,41 +255,43 @@ const LocationSelector = React.forwardRef<HTMLDivElement, LocationSelectorProps>
     );
 
     return (
-      <div ref={ref} className={cn('space-y-4', className)}>
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-          <MapPin className="w-4 h-4" />
+      <div ref={ref} className={cn('space-y-3', className)}>
+        {/* Header */}
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <MapPin className="w-4 h-4 text-gray-400" />
           <span>Ubicación</span>
         </div>
 
-        <div className={cn('grid gap-4', showCountry ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
-          {/* Country Selector */}
-          {showCountry && (
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">
-                {countryLabel}
-              </label>
-              <div className="relative">
-                <select
-                  value={value.country || defaultCountry}
-                  onChange={handleCountryChange}
-                  disabled={disabled}
-                  className={selectBaseClasses}
-                >
-                  {COUNTRIES.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.flag} {country.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
-              </div>
+        {/* Country - Full width */}
+        {showCountry && (
+          <div className="space-y-1.5">
+            <label className="block text-sm text-gray-600">
+              {countryLabel}
+            </label>
+            <div className="relative">
+              <select
+                value={value.country || defaultCountry}
+                onChange={handleCountryChange}
+                disabled={disabled}
+                className={selectBaseClasses}
+              >
+                {COUNTRIES.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.flag} {country.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
             </div>
-          )}
+          </div>
+        )}
 
+        {/* Department and City - Side by side */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Department Selector */}
-          <div className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700">
-              {value.country === 'EC' ? 'Provincia' : deptLabel}
+          <div className="space-y-1.5">
+            <label className="block text-sm text-gray-600">
+              {value.country === 'EC' ? 'Provincia' : value.country === 'CO' ? 'Departamento' : deptLabel}
             </label>
             <div className="relative">
               <select
@@ -310,8 +312,8 @@ const LocationSelector = React.forwardRef<HTMLDivElement, LocationSelectorProps>
           </div>
 
           {/* City Selector */}
-          <div className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700">
+          <div className="space-y-1.5">
+            <label className="block text-sm text-gray-600">
               {cityLabel}
             </label>
             <div className="relative">
@@ -335,7 +337,7 @@ const LocationSelector = React.forwardRef<HTMLDivElement, LocationSelectorProps>
 
         {/* Error Message */}
         {error && (
-          <p className="text-sm text-red-500">{error}</p>
+          <p className="text-sm text-red-500 mt-1">{error}</p>
         )}
       </div>
     );

@@ -104,7 +104,7 @@ export interface AuthContextType {
   isAuthenticated: boolean;
 
   // Auth actions
-  login: (email: string, password: string) => Promise<LoginResult>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<LoginResult>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<boolean>;
 

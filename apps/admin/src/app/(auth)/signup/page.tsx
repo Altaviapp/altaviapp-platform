@@ -551,11 +551,11 @@ function SignupContent() {
               />
               <label htmlFor="acceptTerms" className="text-sm text-gray-700">
                 Acepto los{' '}
-                <a href="#" className="text-primary hover:underline">
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                   Terminos de Servicio
                 </a>{' '}
                 y la{' '}
-                <a href="#" className="text-primary hover:underline">
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                   Politica de Privacidad
                 </a>
               </label>

@@ -722,16 +722,20 @@ El Admin Dashboard es el panel de administración para coordinadores escolares y
 | `/verify` | ✅ | Verificación alternativa |
 | `/forgot-password` | ✅ | Solicitud de reset |
 | `/reset-password` | ✅ | Reset de contraseña |
+| `/terms` | ✅ | Términos de Servicio |
+| `/privacy` | ✅ | Política de Privacidad |
 | `/` | ✅ | Landing page |
 
 **Funcionalidades**:
 - [x] Login con email/contraseña
+- [x] Opción "Recordarme" (localStorage vs sessionStorage)
 - [x] Registro de institución
+- [x] Aceptación de términos y política de privacidad en registro
 - [x] Verificación de email (código 6 dígitos, 24h expiración)
 - [x] Botón de verificación con un clic
 - [x] Reset de contraseña (código 6 dígitos, 1h expiración)
 - [x] Bloqueo después de 5 intentos fallidos (30 min)
-- [x] Sesiones de 30 días por defecto
+- [x] Sesiones de 30 días por defecto (con "Recordarme"), sesión de navegador sin él
 
 ---
 

@@ -100,24 +100,37 @@ export function AuthProvider({
   // Resolve API base URL
   const API_BASE_URL = apiBaseUrl || getApiBaseUrl();
 
+  // Key for tracking if rememberMe was used
+  const rememberMeKey = `${storageKey}_remember`;
+
   // ============================================
   // TOKEN MANAGEMENT
   // ============================================
 
-  const saveToken = useCallback((newToken: string) => {
+  const saveToken = useCallback((newToken: string, rememberMe: boolean = true) => {
     setToken(newToken);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(storageKey, newToken);
+      if (rememberMe) {
+        // Persist across browser sessions
+        localStorage.setItem(storageKey, newToken);
+        localStorage.setItem(rememberMeKey, 'true');
+      } else {
+        // Session only - expires when browser closes
+        sessionStorage.setItem(storageKey, newToken);
+        localStorage.removeItem(rememberMeKey);
+      }
     }
-  }, [storageKey]);
+  }, [storageKey, rememberMeKey]);
 
   const clearAuth = useCallback(() => {
     setUser(null);
     setToken(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem(storageKey);
+      localStorage.removeItem(rememberMeKey);
+      sessionStorage.removeItem(storageKey);
     }
-  }, [storageKey]);
+  }, [storageKey, rememberMeKey]);
 
   const verifyToken = useCallback(async (authToken: string): Promise<boolean> => {
     try {
@@ -142,14 +155,15 @@ export function AuthProvider({
     }
   }, [API_BASE_URL, clearAuth]);
 
-  // Load token from localStorage on mount
+  // Load token from storage on mount (check both localStorage and sessionStorage)
   useEffect(() => {
     if (typeof window === 'undefined') {
       setIsLoading(false);
       return;
     }
 
-    const savedToken = localStorage.getItem(storageKey);
+    // First check localStorage (rememberMe=true), then sessionStorage (rememberMe=false)
+    const savedToken = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey);
     if (savedToken) {
       verifyToken(savedToken).finally(() => setIsLoading(false));
     } else {
@@ -161,7 +175,7 @@ export function AuthProvider({
   // AUTH ACTIONS
   // ============================================
 
-  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+  const login = useCallback(async (email: string, password: string, rememberMe: boolean = false): Promise<LoginResult> => {
     try {
       const data = await apiRequest<{
         success: boolean;
@@ -175,7 +189,7 @@ export function AuthProvider({
 
       if (data.success && data.token && data.user) {
         setUser(data.user);
-        saveToken(data.token);
+        saveToken(data.token, rememberMe);
 
         // Check if email verification is needed
         if (!data.user.emailVerified) {
@@ -215,7 +229,7 @@ export function AuthProvider({
 
   const refreshSession = useCallback(async (): Promise<boolean> => {
     if (typeof window === 'undefined') return false;
-    const savedToken = localStorage.getItem(storageKey);
+    const savedToken = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey);
     if (!savedToken) return false;
     return verifyToken(savedToken);
   }, [storageKey, verifyToken]);

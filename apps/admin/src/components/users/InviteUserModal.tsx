@@ -181,16 +181,10 @@ export function InviteUserModal({ isOpen, onClose, onSuccess, defaultRole, hideR
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
               <h4 className="text-lg font-medium text-gray-900 mb-2">
-                Invitacion Creada
+                Invitacion Enviada
               </h4>
-              <p className="text-sm text-gray-600 mb-4">
-                El codigo de invitacion es:
-              </p>
-              <div className="bg-gray-100 rounded-lg px-4 py-3 font-mono text-2xl tracking-wider text-primary font-bold mb-4">
-                {invitationCode}
-              </div>
-              <p className="text-xs text-gray-500 mb-6">
-                Comparte este codigo con {email}. El codigo expira en 7 dias.
+              <p className="text-sm text-gray-600 mb-6">
+                Se ha enviado un correo a <strong>{email}</strong> con instrucciones para completar el registro.
               </p>
               <button
                 onClick={onClose}

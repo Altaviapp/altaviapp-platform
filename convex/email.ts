@@ -333,6 +333,16 @@ function generateInvitationEmailHtml(
   };
   const roleLabel = roleLabels[role] || role;
 
+  // Determine signup URL based on role
+  const appUrls: Record<string, string> = {
+    admin: "https://admin.altaviapp.com",
+    driver: "https://crew.altaviapp.com",
+    monitor: "https://crew.altaviapp.com",
+    parent: "https://padres.altaviapp.com",
+  };
+  const baseUrl = appUrls[role] || "https://crew.altaviapp.com";
+  const signupUrl = `${baseUrl}/signup-invitation?code=${code}`;
+
   return `
 <!DOCTYPE html>
 <html lang="es">
@@ -362,21 +372,23 @@ function generateInvitationEmailHtml(
                 Has sido invitado a unirte a <strong>${institutionName}</strong> como <strong>${roleLabel}</strong> en Altaviapp.
               </p>
 
+              <!-- CTA Button -->
+              <div style="text-align: center; margin: 24px 0;">
+                <a href="${signupUrl}" style="display: inline-block; background-color: #042940; color: #DBF227; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+                  Completar Registro
+                </a>
+              </div>
+
+              <!-- Separator -->
+              <p style="margin: 24px 0; color: #888888; font-size: 14px; text-align: center;">
+                — o ingresa el código manualmente —
+              </p>
+
               <!-- Code Box -->
               <div style="background-color: #d4edda; border: 2px dashed #155724; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
                 <p style="margin: 0 0 8px 0; color: #666666; font-size: 14px;">Tu código de invitación:</p>
                 <p style="margin: 0; color: #155724; font-size: 36px; font-weight: bold; letter-spacing: 8px;">${code}</p>
               </div>
-
-              <p style="margin: 0 0 16px 0; color: #555555; font-size: 14px; line-height: 1.5;">
-                <strong>Para completar tu registro:</strong>
-              </p>
-              <ol style="margin: 0 0 24px 0; padding-left: 20px; color: #555555; font-size: 14px; line-height: 1.8;">
-                <li>Descarga la app Altaviapp</li>
-                <li>Selecciona "Tengo un código de invitación"</li>
-                <li>Ingresa el código anterior</li>
-                <li>Completa tus datos</li>
-              </ol>
 
               <p style="margin: 0; color: #888888; font-size: 14px;">
                 Este código expira en <strong>7 días</strong>.
@@ -415,18 +427,25 @@ function generateInvitationEmailText(
   };
   const roleLabel = roleLabels[role] || role;
 
+  // Determine signup URL based on role
+  const appUrls: Record<string, string> = {
+    admin: "https://admin.altaviapp.com",
+    driver: "https://crew.altaviapp.com",
+    monitor: "https://crew.altaviapp.com",
+    parent: "https://padres.altaviapp.com",
+  };
+  const baseUrl = appUrls[role] || "https://crew.altaviapp.com";
+  const signupUrl = `${baseUrl}/signup-invitation?code=${code}`;
+
   return `
 ¡Hola ${firstName}!
 
 Has sido invitado a unirte a ${institutionName} como ${roleLabel} en Altaviapp.
 
-Tu código de invitación es: ${code}
+Para completar tu registro, haz clic en el siguiente enlace:
+${signupUrl}
 
-Para completar tu registro:
-1. Descarga la app Altaviapp
-2. Selecciona "Tengo un código de invitación"
-3. Ingresa el código anterior
-4. Completa tus datos
+O ingresa el código de invitación manualmente: ${code}
 
 Este código expira en 7 días.
 

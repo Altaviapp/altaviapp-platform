@@ -11,8 +11,8 @@ import { useAuth } from '@/providers/AuthProvider';
 const schema = z.object({
   email: z.string().email('Email inválido'),
   resetCode: z.string()
-    .length(8, 'El código debe tener 8 dígitos')
-    .regex(/^\d{8}$/, 'El código debe contener solo números'),
+    .length(6, 'El código debe tener 6 dígitos')
+    .regex(/^\d{6}$/, 'El código debe contener solo números'),
   newPassword: z.string()
     .min(8, 'Mínimo 8 caracteres')
     .regex(/[a-zA-Z]/, 'Debe incluir al menos una letra')

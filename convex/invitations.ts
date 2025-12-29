@@ -315,7 +315,7 @@ export const verifyInvitationCode = query({
       return {
         success: false,
         valid: false,
-        message: "Código inválido. Debe tener 8 dígitos.",
+        message: "Código inválido. Debe tener 6 dígitos.",
       };
     }
 

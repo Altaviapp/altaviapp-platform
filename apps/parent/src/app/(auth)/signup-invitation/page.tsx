@@ -14,8 +14,8 @@ import { useAuth } from '@/providers/AuthProvider';
 
 const codeSchema = z.object({
   invitationCode: z.string()
-    .length(8, 'El código debe tener 8 dígitos')
-    .regex(/^\d{8}$/, 'El código debe contener solo números'),
+    .length(6, 'El código debe tener 6 dígitos')
+    .regex(/^\d{6}$/, 'El código debe contener solo números'),
 });
 
 type CodeFormData = z.infer<typeof codeSchema>;
@@ -64,7 +64,7 @@ function SignupInvitationContent() {
   // Check for code in URL params
   useEffect(() => {
     const codeParam = searchParams?.get('code');
-    if (codeParam && codeParam.length === 8) {
+    if (codeParam && codeParam.length === 6) {
       handleVerifyCode(codeParam);
     }
   }, [searchParams]);
@@ -181,7 +181,7 @@ function SignupInvitationContent() {
             Código de Invitación
           </h1>
           <p className="text-sm text-gray-600">
-            Ingresa el código de 8 dígitos enviado a tu email
+            Ingresa el código de 6 dígitos enviado a tu email
           </p>
         </div>
 

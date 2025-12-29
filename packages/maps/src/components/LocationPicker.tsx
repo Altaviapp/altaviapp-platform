@@ -5,6 +5,7 @@ import { InteractiveMap } from "./InteractiveMap";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { useGoogleMapsContext, MapsLoadingState, MapsErrorState } from "./GoogleMapsProvider";
 import { reverseGeocode } from "../services/geocoding";
+import { useGeolocation } from "../hooks/useGeolocation";
 import { MAPS_CONFIG } from "../config/maps-config";
 import type { LatLng, MarkerInfo } from "../types/maps";
 
@@ -54,6 +55,15 @@ export function LocationPicker({
   const [position, setPosition] = useState<LatLng | undefined>(initialPosition);
   const [address, setAddress] = useState(initialAddress);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+  const { position: gpsPosition, loading: gpsLoading, error: gpsError, getCurrentPosition } = useGeolocation();
+
+  // Handle GPS position when obtained
+  useEffect(() => {
+    if (gpsPosition) {
+      handleMapClick(gpsPosition);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gpsPosition]);
 
   // Update position when initialPosition changes
   useEffect(() => {
@@ -158,19 +168,52 @@ export function LocationPicker({
       )}
 
       {showAddressInput && (
-        <div className="relative">
-          <AddressAutocomplete
-            value={address}
-            onChange={setAddress}
-            onPlaceSelect={handlePlaceSelect}
-            placeholder={placeholder}
-            className={isLoadingAddress ? "pr-10" : ""}
-          />
-          {isLoadingAddress && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <AddressAutocomplete
+              value={address}
+              onChange={setAddress}
+              onPlaceSelect={handlePlaceSelect}
+              placeholder={placeholder}
+              className={isLoadingAddress ? "pr-10" : ""}
+            />
+            {isLoadingAddress && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={getCurrentPosition}
+            disabled={gpsLoading}
+            title={gpsError || "Usar mi ubicación actual"}
+            className={`flex-shrink-0 p-2.5 rounded-lg border transition-colors ${
+              gpsError
+                ? "border-red-300 bg-red-50 text-red-500"
+                : gpsLoading
+                ? "border-gray-300 bg-gray-100 text-gray-400 cursor-wait"
+                : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary"
+            }`}
+          >
+            {gpsLoading ? (
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"
+                />
+              </svg>
+            )}
+          </button>
         </div>
       )}
 

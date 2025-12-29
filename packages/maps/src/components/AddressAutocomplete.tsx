@@ -40,7 +40,7 @@ export function AddressAutocomplete({
     autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
       componentRestrictions: MAPS_CONFIG.countryRestriction,
       fields: ["formatted_address", "geometry", "place_id"],
-      types: ["address"],
+      types: ["geocode", "establishment"],
     });
 
     // Handle place selection

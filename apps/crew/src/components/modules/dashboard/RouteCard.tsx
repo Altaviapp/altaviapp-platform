@@ -1,5 +1,6 @@
 'use client';
 
+import type { MouseEvent } from 'react';
 import Link from 'next/link';
 import { Sunrise, Sunset, Clock, MapPin, Users, Bus, Play, CheckCircle } from 'lucide-react';
 import { Card, Badge, Button } from '@/components/core';
@@ -37,8 +38,19 @@ export function RouteCard({ route, variant = 'secondary' }: RouteCardProps) {
 
   const tripStatusConfig = route.tripStatus ? TRIP_STATUS_CONFIG[route.tripStatus] : null;
 
+  // Navigate to active trip if in progress, otherwise to route detail
+  const cardHref = route.tripStatus === 'in_progress' && route.tripId
+    ? `/trips/${route.tripId}/active`
+    : `/routes/${route._id}`;
+
+  // Prevent card navigation when clicking internal buttons
+  const handleButtonClick = (e: MouseEvent) => {
+    e.stopPropagation();
+  };
+
   return (
-    <Card padding="md" className="space-y-4">
+    <Link href={cardHref} className="block">
+      <Card padding="md" className="space-y-4 hover:shadow-md transition-shadow cursor-pointer">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -109,7 +121,7 @@ export function RouteCard({ route, variant = 'secondary' }: RouteCardProps) {
 
       {/* Action Buttons */}
       {route.canStart && (
-        <Link href={`/routes/${route._id}/start`} className="block">
+        <Link href={`/routes/${route._id}/start`} className="block" onClick={handleButtonClick}>
           <Button variant="primary" size="lg" leftIcon={Play} className="w-full">
             Iniciar Viaje
           </Button>
@@ -117,7 +129,7 @@ export function RouteCard({ route, variant = 'secondary' }: RouteCardProps) {
       )}
 
       {route.tripStatus === 'in_progress' && route.tripId && (
-        <Link href={`/trips/${route.tripId}/active`} className="block">
+        <Link href={`/trips/${route.tripId}/active`} className="block" onClick={handleButtonClick}>
           <Button variant="primary" size="lg" leftIcon={Bus} className="w-full">
             Ver Viaje Activo
           </Button>
@@ -136,6 +148,7 @@ export function RouteCard({ route, variant = 'secondary' }: RouteCardProps) {
           Ruta no disponible
         </p>
       )}
-    </Card>
+      </Card>
+    </Link>
   );
 }

@@ -6,6 +6,7 @@ import { Bus, Users, UserCheck, Plus } from 'lucide-react';
 import { Badge } from '@/components/core';
 import { PageHeader, SearchFilter, DataTable, type Column } from '@/components/shared';
 import { FleetTabs, type FleetTabId } from '@/components/modules/fleet';
+import { InviteUserModal, type InviteRole } from '@/components/users/InviteUserModal';
 import { VEHICLE_STATUS_CONFIG } from '@/lib/constants';
 import { useVehicles, useDrivers, useMonitors } from '@/hooks';
 
@@ -21,6 +22,8 @@ export default function FleetPage() {
   const [activeTab, setActiveTab] = useState<FleetTabId>('vehicles');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteRole, setInviteRole] = useState<InviteRole>('driver');
 
   // Real data from Convex
   const { vehicles, isLoading: vehiclesLoading } = useVehicles();
@@ -72,6 +75,12 @@ export default function FleetPage() {
       : activeTab === 'drivers'
         ? driversLoading
         : monitorsLoading;
+
+  // Open invite modal with specific role
+  const openInviteModal = (role: InviteRole) => {
+    setInviteRole(role);
+    setIsInviteModalOpen(true);
+  };
 
   // Define table columns for each tab
   const vehicleColumns: Column<(typeof vehicles)[0]>[] = [
@@ -198,14 +207,14 @@ export default function FleetPage() {
   ];
 
   // Get current action button config
-  const getActionConfig = () => {
+  const getActionConfig = (): { label: string; href?: string; onClick?: () => void } => {
     switch (activeTab) {
       case 'vehicles':
         return { href: '/fleet/vehicles/new', label: 'Nuevo Vehículo' };
       case 'drivers':
-        return { href: '/fleet/drivers/new', label: 'Nuevo Conductor' };
+        return { label: 'Invitar Conductor', onClick: () => openInviteModal('driver') };
       case 'monitors':
-        return { href: '/fleet/monitors/new', label: 'Nuevo Monitor' };
+        return { label: 'Invitar Monitor', onClick: () => openInviteModal('monitor') };
       default:
         return { href: '/fleet/gps-devices', label: 'Configurar GPS' };
     }
@@ -228,14 +237,14 @@ export default function FleetPage() {
           icon: UserCheck,
           title: 'No hay conductores',
           description: 'Invita conductores para comenzar',
-          action: { label: 'Invitar Conductor', href: '/settings/invitations/new' },
+          action: { label: 'Invitar Conductor', onClick: () => openInviteModal('driver') },
         };
       case 'monitors':
         return {
           icon: Users,
           title: 'No hay monitores',
           description: 'Invita monitores para comenzar',
-          action: { label: 'Invitar Monitor', href: '/settings/invitations/new' },
+          action: { label: 'Invitar Monitor', onClick: () => openInviteModal('monitor') },
         };
       default:
         return {
@@ -255,6 +264,7 @@ export default function FleetPage() {
           {
             label: actionConfig.label,
             href: actionConfig.href,
+            onClick: actionConfig.onClick,
             icon: Plus,
             variant: 'primary',
           },
@@ -340,6 +350,14 @@ export default function FleetPage() {
           </p>
         </div>
       )}
+
+      {/* Invite User Modal */}
+      <InviteUserModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        defaultRole={inviteRole}
+        hideRoleSelector
+      />
     </div>
   );
 }

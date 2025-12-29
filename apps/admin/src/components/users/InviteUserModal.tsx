@@ -6,13 +6,17 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/providers/AuthProvider';
 import { PhoneInput } from '@altaviapp/ui';
 
+export type InviteRole = 'admin' | 'driver' | 'monitor' | 'parent';
+
 interface InviteUserModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /** Pre-selected role (useful when inviting from fleet) */
+  defaultRole?: InviteRole;
+  /** Hide role selector when defaultRole is set */
+  hideRoleSelector?: boolean;
 }
-
-type InviteRole = 'admin' | 'driver' | 'monitor' | 'parent';
 
 const roleOptions: { value: InviteRole; label: string; description: string }[] = [
   { value: 'admin', label: 'Administrador', description: 'Acceso completo al sistema' },
@@ -27,14 +31,14 @@ const roleOptions: { value: InviteRole; label: string; description: string }[] =
  * Modal for sending invitations to new users.
  * Creates an invitation code that the user will use to sign up.
  */
-export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalProps) {
+export function InviteUserModal({ isOpen, onClose, onSuccess, defaultRole, hideRoleSelector }: InviteUserModalProps) {
   const { user, token } = useAuth();
 
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<InviteRole>('parent');
+  const [role, setRole] = useState<InviteRole>(defaultRole || 'parent');
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -48,12 +52,12 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
       setFirstName('');
       setLastName('');
       setPhone('');
-      setRole('parent');
+      setRole(defaultRole || 'parent');
       setError('');
       setSuccess(false);
       setInvitationCode('');
     }
-  }, [isOpen]);
+  }, [isOpen, defaultRole]);
 
   // Handle ESC key
   const handleKeyDown = useCallback(
@@ -149,7 +153,9 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
-                {success ? 'Invitacion Enviada' : 'Invitar Usuario'}
+                {success ? 'Invitacion Enviada' : hideRoleSelector && defaultRole
+                  ? `Invitar ${roleOptions.find(r => r.value === defaultRole)?.label || 'Usuario'}`
+                  : 'Invitar Usuario'}
               </h3>
               {!success && (
                 <p className="text-sm text-gray-500">
@@ -262,37 +268,39 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
               </div>
 
               {/* Role */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rol *
-                </label>
-                <div className="space-y-2">
-                  {roleOptions.map((option) => (
-                    <label
-                      key={option.value}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
-                        role === option.value
-                          ? 'border-primary bg-primary/5'
-                          : 'border-gray-200 hover:border-gray-300'
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name="role"
-                        value={option.value}
-                        checked={role === option.value}
-                        onChange={() => setRole(option.value)}
-                        className="w-4 h-4 text-primary focus:ring-primary"
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{option.label}</p>
-                        <p className="text-xs text-gray-500">{option.description}</p>
-                      </div>
-                    </label>
-                  ))}
+              {!hideRoleSelector && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rol *
+                  </label>
+                  <div className="space-y-2">
+                    {roleOptions.map((option) => (
+                      <label
+                        key={option.value}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
+                          role === option.value
+                            ? 'border-primary bg-primary/5'
+                            : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="role"
+                          value={option.value}
+                          checked={role === option.value}
+                          onChange={() => setRole(option.value)}
+                          className="w-4 h-4 text-primary focus:ring-primary"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{option.label}</p>
+                          <p className="text-xs text-gray-500">{option.description}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Actions */}
               <div className="flex items-center gap-3 pt-2">

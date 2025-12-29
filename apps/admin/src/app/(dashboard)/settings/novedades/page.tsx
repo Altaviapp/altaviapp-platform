@@ -85,7 +85,10 @@ export default function NovedadesSettingsPage() {
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const { types, isLoading } = useNovedadTypes(!showInactive);
+  const { types: allTypes, isLoading } = useNovedadTypes(false);
+
+  // Filter types based on selected tab
+  const types = allTypes.filter(type => showInactive ? !type.isActive : type.isActive);
   const { toggleActive, removeType, reorderTypes } = useNovedadTypeMutations();
 
   const handleToggleActive = async (typeId: Id<"novedadTypes">) => {
@@ -236,17 +239,32 @@ export default function NovedadesSettingsPage() {
         </div>
       )}
 
-      {/* Filter */}
-      <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-          />
-          <span className="text-sm text-gray-600">Mostrar tipos inactivos</span>
-        </label>
+      {/* Tabs */}
+      <div className="flex items-center justify-between">
+        <div className="flex border border-gray-200 rounded-lg p-1 bg-gray-50">
+          <button
+            onClick={() => setShowInactive(false)}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+              !showInactive
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            Activas
+          </button>
+          <button
+            onClick={() => setShowInactive(true)}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+              showInactive
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            Inactivas
+          </button>
+        </div>
         <span className="text-sm text-gray-400">
           {types.length} tipo{types.length !== 1 ? 's' : ''}
         </span>
@@ -272,15 +290,15 @@ export default function NovedadesSettingsPage() {
             return (
               <div
                 key={type._id}
-                className={cn(
-                  'transition-colors',
-                  !type.isActive && 'opacity-60'
-                )}
+                className="transition-colors"
               >
-                {/* Main Row */}
-                <div className="flex items-center gap-3 p-4 hover:bg-gray-50">
+                {/* Main Row - Clickable to expand */}
+                <div
+                  className="flex items-center gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => setExpandedId(isExpanded ? null : type._id)}
+                >
                   {/* Reorder */}
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => handleMoveUp(index)}
                       disabled={index === 0}
@@ -326,11 +344,6 @@ export default function NovedadesSettingsPage() {
                           SISTEMA
                         </span>
                       )}
-                      {!type.isActive && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded">
-                          INACTIVO
-                        </span>
-                      )}
                     </div>
                     <p className="text-sm text-gray-500 truncate">{type.description}</p>
                   </div>
@@ -346,18 +359,7 @@ export default function NovedadesSettingsPage() {
                   </span>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : type._id)}
-                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="Ver detalles"
-                    >
-                      {isExpanded ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </button>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <Link
                       href={`/settings/novedades/${type._id}`}
                       className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"

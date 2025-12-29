@@ -61,7 +61,7 @@ export default function UsersPage() {
   // Stats
   const statItems: StatItem[] = useMemo(() => [
     { label: 'Total Usuarios', value: stats.total, icon: Users, color: 'default' },
-    { label: 'Administradores', value: stats.admins, icon: Shield, color: 'purple' as any },
+    { label: 'Administradores', value: stats.admins, icon: Shield, color: 'danger' },
     { label: 'Conductores', value: stats.drivers, icon: Car, color: 'info' },
     { label: 'Padres', value: stats.parents, icon: GraduationCap, color: 'warning' },
   ], [stats]);

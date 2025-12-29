@@ -76,9 +76,30 @@ export function useTripOperations() {
      * Creates the trip on-demand if not already created
      * Returns the tripId to navigate to
      */
-    startTripFromRoute: async (routeId: Id<"routes"> | string, latitude: number, longitude: number) => {
+    startTripFromRoute: async (
+      routeId: Id<"routes"> | string,
+      latitude: number,
+      longitude: number,
+      checklistData?: {
+        completedAt: number;
+        items: Array<{
+          id: string;
+          label: string;
+          category: string;
+          checked: boolean;
+        }>;
+        notes?: string;
+        allPassed: boolean;
+      }
+    ) => {
       if (!userId) throw new Error("Not authenticated");
-      return startTripFromRouteMutation({ userId, routeId: routeId as Id<"routes">, latitude, longitude });
+      return startTripFromRouteMutation({
+        userId,
+        routeId: routeId as Id<"routes">,
+        latitude,
+        longitude,
+        ...(checklistData && { checklistData }),
+      });
     },
 
     completeTrip: async (tripId: Id<"trips">, latitude: number, longitude: number) => {

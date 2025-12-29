@@ -71,3 +71,10 @@ export {
   useNotificationMutations,
   useUnreadNotifications,
 } from './useNotifications';
+
+// Navigation hooks (turn-by-turn)
+export {
+  useNavigation,
+  generateNavigationStepsFromStops,
+} from './useNavigation';
+export type { NavigationStep, Position } from './useNavigation';

@@ -380,6 +380,18 @@ export default defineSchema({
     startTime: v.optional(v.number()),
     endTime: v.optional(v.number()),
     scheduledDate: v.string(),
+    // Pre-trip vehicle checklist data (optional)
+    checklistData: v.optional(v.object({
+      completedAt: v.number(),
+      items: v.array(v.object({
+        id: v.string(),
+        label: v.string(),
+        category: v.string(),
+        checked: v.boolean(),
+      })),
+      notes: v.optional(v.string()),
+      allPassed: v.boolean(),
+    })),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

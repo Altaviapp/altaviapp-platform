@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useCallback, useState, lazy, Suspense } from 'react';
+import { useEffect, useCallback, useState, lazy, Suspense, useMemo } from 'react';
 import {
   ArrowLeft,
   QrCode,
@@ -20,10 +20,11 @@ import {
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip } from '@/hooks';
+import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip, useNavigation, generateNavigationStepsFromStops } from '@/hooks';
 import type { GeofenceAlert, GPSSourceType } from '@/hooks';
 import { RelayModeModal } from '@/components/trip/RelayModeModal';
 import { CheckinSheet } from '@/components/checkin';
+import { NavigationPanel } from '@/components/navigation';
 import { Id } from '../../../../../../../../convex/_generated/dataModel';
 
 // Dynamic import for RouteMap to avoid SSR issues with Leaflet
@@ -303,6 +304,28 @@ export default function ActiveTripPage() {
     accuracy: gpsPosition.accuracy ?? 10,
   } : null;
 
+  // Generate navigation steps from stops
+  const navigationSteps = useMemo(
+    () => generateNavigationStepsFromStops(mapStops),
+    [mapStops]
+  );
+
+  // Navigation hook for turn-by-turn
+  const {
+    currentStep: navCurrentStep,
+    nextStep: navNextStep,
+    distanceToManeuver,
+    allSteps: navAllSteps,
+    isNavigating,
+  } = useNavigation({
+    steps: navigationSteps,
+    currentPosition: gpsPosition ? {
+      latitude: gpsPosition.latitude,
+      longitude: gpsPosition.longitude,
+    } : null,
+    isTracking: gpsIsTracking,
+  });
+
   const TypeIcon = isPickup ? Sunrise : Sunset;
 
   return (
@@ -418,6 +441,17 @@ export default function ActiveTripPage() {
           </div>
         </div>
       </div>
+
+      {/* Turn-by-Turn Navigation Panel */}
+      {isNavigating && navCurrentStep && (
+        <NavigationPanel
+          currentStep={navCurrentStep}
+          nextStep={navNextStep}
+          distanceToManeuver={distanceToManeuver ?? undefined}
+          allSteps={navAllSteps}
+          isTracking={gpsIsTracking}
+        />
+      )}
 
       {/* Next Stop Card - Compact with ETA */}
       {nextStop && (

@@ -1555,6 +1555,17 @@ export const startTripFromRoute = mutation({
     routeId: v.id("routes"),
     latitude: v.number(),
     longitude: v.number(),
+    checklistData: v.optional(v.object({
+      completedAt: v.number(),
+      items: v.array(v.object({
+        id: v.string(),
+        label: v.string(),
+        category: v.string(),
+        checked: v.boolean(),
+      })),
+      notes: v.optional(v.string()),
+      allPassed: v.boolean(),
+    })),
   },
   handler: async (ctx, args) => {
     const currentUser = await verifyUser(ctx, args.userId);
@@ -1620,6 +1631,7 @@ export const startTripFromRoute = mutation({
           status: "in_progress",
           startTime: now,
           updatedAt: now,
+          ...(args.checklistData && { checklistData: args.checklistData }),
         });
 
         // Record initial GPS location
@@ -1649,6 +1661,7 @@ export const startTripFromRoute = mutation({
       startTime: now,
       createdAt: now,
       updatedAt: now,
+      ...(args.checklistData && { checklistData: args.checklistData }),
     });
 
     // 6. Generate tripStudents with excludeDays filtering

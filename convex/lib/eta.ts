@@ -61,6 +61,10 @@ const MAX_VALID_SPEED_KMH = 80;
 // Average time at each stop (minutes) - for student pickup/dropoff
 const AVG_STOP_TIME_MINUTES = 2;
 
+// Colombia/Ecuador timezone offset from UTC (hours)
+// UTC-5 means local time is 5 hours behind UTC
+const LOCAL_TIMEZONE_OFFSET_HOURS = -5;
+
 // ============================================
 // DISTANCE CALCULATIONS
 // ============================================
@@ -351,9 +355,11 @@ export function getDelayStatus(
 
   const now = new Date();
   const scheduledDate = new Date();
-  scheduledDate.setHours(hours, minutes, 0, 0);
+  // Convert local scheduled time (HH:mm) to UTC by subtracting timezone offset
+  // Colombia/Ecuador is UTC-5, so 08:57 local = 13:57 UTC
+  scheduledDate.setUTCHours(hours - LOCAL_TIMEZONE_OFFSET_HOURS, minutes, 0, 0);
 
-  // Calculate when we'll arrive based on ETA
+  // Calculate when we'll arrive based on ETA (now is already UTC)
   const arrivalTime = new Date(now.getTime() + etaMinutes * 60 * 1000);
 
   // Calculate delay in minutes

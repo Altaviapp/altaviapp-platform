@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { Bus, MapPin, Clock, ChevronDown, ChevronUp, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bus, MapPin, Clock, ChevronRight, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudentTracking } from '@/hooks/useMyStudents';
-import { ActiveTripView } from './ActiveTripView';
 import { NovedadContextButton } from './NovedadContextButton';
 import { Id } from '../../../../../convex/_generated/dataModel';
 
@@ -62,7 +61,7 @@ const statusConfigs: Record<TripStatus, StatusConfig> = {
 };
 
 export function ChildTripCard({ student }: ChildTripCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const router = useRouter();
   const { tracking, hasActiveTrip, isLoading, progress, etaMinutes, etaTime, delayStatus } = useStudentTracking(student._id);
 
   // Determine status based on tracking data
@@ -88,10 +87,14 @@ export function ChildTripCard({ student }: ChildTripCardProps) {
       {/* Main card content */}
       <div
         className={cn(
-          "p-4 cursor-pointer transition-colors",
-          hasActiveTrip && "hover:bg-gray-50"
+          "p-4 transition-colors",
+          hasActiveTrip && "cursor-pointer hover:bg-gray-50"
         )}
-        onClick={() => hasActiveTrip && setIsExpanded(!isExpanded)}
+        onClick={() => {
+          if (hasActiveTrip && tracking?.trip?.id) {
+            router.push(`/trips/${tracking.trip.id}`);
+          }
+        }}
       >
         <div className="flex items-start gap-4">
           {/* Avatar */}
@@ -194,28 +197,8 @@ export function ChildTripCard({ student }: ChildTripCardProps) {
                       <span className="text-xs">{tracking.driver.name}</span>
                     </div>
                   )}
+                  <ChevronRight className="w-5 h-5 text-gray-400" />
                 </div>
-
-                {/* Expand button */}
-                <button
-                  className="w-full flex items-center justify-center gap-1 pt-2 text-sm text-primary font-medium"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsExpanded(!isExpanded);
-                  }}
-                >
-                  {isExpanded ? (
-                    <>
-                      <ChevronUp className="w-4 h-4" />
-                      Ocultar mapa
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="w-4 h-4" />
-                      Ver en mapa
-                    </>
-                  )}
-                </button>
               </div>
             )}
 
@@ -232,15 +215,6 @@ export function ChildTripCard({ student }: ChildTripCardProps) {
           </div>
         </div>
       </div>
-
-      {/* Expanded view with map */}
-      {isExpanded && hasActiveTrip && tracking && (
-        <ActiveTripView
-          tracking={tracking}
-          studentId={student._id}
-          studentName={`${student.firstName} ${student.lastName}`}
-        />
-      )}
     </div>
   );
 }

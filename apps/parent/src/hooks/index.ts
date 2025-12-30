@@ -27,6 +27,15 @@ export { useAllChildrenTrips } from "./useAllChildrenTrips";
 // Weekly schedule
 export { useWeeklySchedule } from "./useWeeklySchedule";
 
+// Projected Trips
+export {
+  useAllChildrenProjectedTrips,
+  useMyChildrenUpcomingTrips,
+  getWeekRange,
+  formatWeekRange,
+} from "./useProjectedTrips";
+export type { ProjectedTrip, UpcomingTrip } from "./useProjectedTrips";
+
 // Notifications
 export {
   useNotifications,
@@ -51,3 +60,18 @@ export type {
   NovedadCategory,
   DurationType,
 } from "./useNovedades";
+
+// Trip Events (Timeline)
+export {
+  useStudentTripTimeline,
+  useLatestTripEvents,
+  getEventConfig,
+  EVENT_TYPE_CONFIG,
+} from "./useTripEvents";
+export type { TripEventType } from "./useTripEvents";
+
+// Trips
+export {
+  useTrip,
+  useActiveTripForStudent,
+} from "./useTrips";

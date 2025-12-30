@@ -1,10 +1,10 @@
 'use client';
 
-import { Phone, MessageCircle, MapPin, Clock, User, Car, AlertTriangle } from 'lucide-react';
+import Link from 'next/link';
+import { Phone, MessageCircle, MapPin, Clock, User, Car, AlertTriangle, ExternalLink } from 'lucide-react';
 import { LiveTrackingMap, RouteStop } from '@/components/tracking/LiveTrackingMap';
 import { NovedadContextButton } from './NovedadContextButton';
 import { Id } from '../../../../../convex/_generated/dataModel';
-import { formatTime } from '@/lib/utils';
 
 interface ActiveTripViewProps {
   tracking: {
@@ -284,6 +284,17 @@ export function ActiveTripView({ tracking, studentId, studentName }: ActiveTripV
           variant="full"
           label="Reportar novedad de este viaje"
         />
+
+        {/* View full trip detail link */}
+        {tracking.trip?.id && (
+          <Link
+            href={`/trips/${tracking.trip.id}/active?studentId=${studentId}`}
+            className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-medium text-primary bg-primary/5 rounded-lg hover:bg-primary/10 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Ver viaje en pantalla completa
+          </Link>
+        )}
       </div>
     </div>
   );

@@ -412,7 +412,7 @@ export default function ActiveTripPage() {
         <div className="px-4 -mt-4 relative z-10">
           <NextStopCard
             stop={{
-              _id: nextStopRaw._id,
+              _id: nextStopRaw._id as string,
               name: nextStopRaw.name,
               address: nextStopRaw.address,
               latitude: nextStopRaw.latitude,

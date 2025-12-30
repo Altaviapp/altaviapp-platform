@@ -55,6 +55,7 @@ export default function ActiveTripPage() {
   // Directions polyline state
   const [directionsPolyline, setDirectionsPolyline] = useState<LatLng[]>([]);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+  const [initialBoundsFit, setInitialBoundsFit] = useState(false);
 
   // Get real trip data from Convex
   const { trip: convexTrip, isLoading: tripLoading } = useTrip(tripId as Id<"trips"> | null);
@@ -152,23 +153,28 @@ export default function ActiveTripPage() {
     }
   }, [gpsPosition]);
 
-  // Fetch directions route when stops are available
+  // Fetch directions route when stops are available or GPS position changes significantly
   useEffect(() => {
     const fetchRoute = async () => {
-      if (tripStops.length < 2 || isLoadingRoute) return;
+      if (tripStops.length < 1 || isLoadingRoute) return;
 
-      // Only fetch if we don't have a route yet
-      if (directionsPolyline.length > 0) return;
-
-      const firstStop = tripStops[0];
       const lastStop = tripStops[tripStops.length - 1];
-      if (!firstStop || !lastStop) return;
+      if (!lastStop) return;
+
+      // Use current GPS position as origin if available, otherwise use first stop
+      const currentPos = gpsPosition
+        ? { lat: gpsPosition.latitude, lng: gpsPosition.longitude }
+        : tripStops[0] ? { lat: tripStops[0].latitude, lng: tripStops[0].longitude } : null;
+
+      if (!currentPos) return;
 
       setIsLoadingRoute(true);
       try {
-        const origin = { lat: firstStop.latitude, lng: firstStop.longitude };
+        const origin = currentPos;
         const destination = { lat: lastStop.latitude, lng: lastStop.longitude };
-        const waypoints = tripStops.slice(1, -1).map(stop => ({
+
+        // All stops except the last one are waypoints
+        const waypoints = tripStops.slice(0, -1).map(stop => ({
           lat: stop.latitude,
           lng: stop.longitude,
         }));
@@ -180,17 +186,25 @@ export default function ActiveTripPage() {
       } catch (error) {
         console.error('Error fetching route:', error);
         // Fall back to simple polyline if directions fail
-        setDirectionsPolyline(routePolyline);
+        const fallback = gpsPosition
+          ? [{ lat: gpsPosition.latitude, lng: gpsPosition.longitude }, ...routePolyline]
+          : routePolyline;
+        setDirectionsPolyline(fallback);
       } finally {
         setIsLoadingRoute(false);
+        // Mark initial bounds as fit after first route fetch
+        if (!initialBoundsFit) {
+          setInitialBoundsFit(true);
+        }
       }
     };
 
     // Only fetch if Google Maps is loaded (mapRef is set)
-    if (mapRef.current && tripStops.length >= 2) {
+    // Refetch when GPS position changes significantly (but not too often)
+    if (mapRef.current && tripStops.length >= 1 && !directionsPolyline.length) {
       fetchRoute();
     }
-  }, [tripStops, isLoadingRoute, directionsPolyline.length, routePolyline]);
+  }, [tripStops, isLoadingRoute, directionsPolyline.length, routePolyline, gpsPosition, initialBoundsFit]);
 
   // Format elapsed time
   const elapsedFormatted = useMemo(() => {
@@ -451,7 +465,7 @@ export default function ActiveTripPage() {
             polyline={directionsPolyline.length > 0 ? directionsPolyline : routePolyline}
             vehiclePosition={vehiclePosition}
             showVehicle={!!vehiclePosition}
-            autoFitBounds={true}
+            autoFitBounds={!initialBoundsFit}
             showGeofences={false}
             onMapLoad={handleMapLoad}
             style={{ height: '45vh', width: '100%' }}
@@ -477,15 +491,15 @@ export default function ActiveTripPage() {
                   </div>
                 </div>
               ),
-              bottomRight: vehiclePosition ? (
+              bottomLeft: (
                 <button
                   onClick={handleCenterOnMe}
-                  className="bg-white/90 backdrop-blur-sm rounded-lg p-2.5 shadow-lg hover:bg-white transition-colors"
+                  className="bg-white rounded-lg p-2.5 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
                   aria-label="Centrar en mi ubicación"
                 >
                   <Crosshair className="w-5 h-5 text-primary" />
                 </button>
-              ) : undefined,
+              ),
             }}
           />
         </div>

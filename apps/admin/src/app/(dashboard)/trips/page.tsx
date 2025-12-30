@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bus } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/core';
 import { PageHeader, StatsGrid, type StatItem } from '@/components/shared';
@@ -28,6 +29,8 @@ import { Id } from '../../../../../../convex/_generated/dataModel';
  */
 
 export default function TripsPage() {
+  const router = useRouter();
+
   // Calendar state
   const [view, setView] = useState<CalendarView>('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -107,8 +110,17 @@ export default function TripsPage() {
   };
 
   const handleTripClick = (trip: ProjectedTripData) => {
-    // TODO: Open trip detail modal or navigate to trip page
-    console.log('Trip clicked:', trip);
+    if (trip.tripId) {
+      // Real trip exists - navigate to trip detail
+      if (trip.status === 'in_progress') {
+        router.push(`/trips/${trip.tripId}/active`);
+      } else {
+        router.push(`/trips/${trip.tripId}`);
+      }
+    } else {
+      // Projected trip - navigate to route detail
+      router.push(`/routes/${trip.routeId}`);
+    }
   };
 
   // Get week start for week view

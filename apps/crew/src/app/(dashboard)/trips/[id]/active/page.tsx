@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { GoogleMapsProvider, GoogleRouteMap, type RouteStopMarker, type StopStatus } from '@altaviapp/maps';
+import { GoogleMapsProvider, GoogleRouteMap, getRoutePolyline, type RouteStopMarker, type StopStatus, type LatLng } from '@altaviapp/maps';
 
 import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip, useTripStudents } from '@/hooks';
 import type { GeofenceAlert, GPSSourceType } from '@/hooks';
@@ -51,6 +51,10 @@ export default function ActiveTripPage() {
 
   // Map reference for centering
   const mapRef = useRef<google.maps.Map | null>(null);
+
+  // Directions polyline state
+  const [directionsPolyline, setDirectionsPolyline] = useState<LatLng[]>([]);
+  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
 
   // Get real trip data from Convex
   const { trip: convexTrip, isLoading: tripLoading } = useTrip(tripId as Id<"trips"> | null);
@@ -147,6 +151,46 @@ export default function ActiveTripPage() {
       mapRef.current.setZoom(16);
     }
   }, [gpsPosition]);
+
+  // Fetch directions route when stops are available
+  useEffect(() => {
+    const fetchRoute = async () => {
+      if (tripStops.length < 2 || isLoadingRoute) return;
+
+      // Only fetch if we don't have a route yet
+      if (directionsPolyline.length > 0) return;
+
+      const firstStop = tripStops[0];
+      const lastStop = tripStops[tripStops.length - 1];
+      if (!firstStop || !lastStop) return;
+
+      setIsLoadingRoute(true);
+      try {
+        const origin = { lat: firstStop.latitude, lng: firstStop.longitude };
+        const destination = { lat: lastStop.latitude, lng: lastStop.longitude };
+        const waypoints = tripStops.slice(1, -1).map(stop => ({
+          lat: stop.latitude,
+          lng: stop.longitude,
+        }));
+
+        const polyline = await getRoutePolyline(origin, destination, waypoints.length > 0 ? waypoints : undefined);
+        if (polyline && polyline.length > 0) {
+          setDirectionsPolyline(polyline);
+        }
+      } catch (error) {
+        console.error('Error fetching route:', error);
+        // Fall back to simple polyline if directions fail
+        setDirectionsPolyline(routePolyline);
+      } finally {
+        setIsLoadingRoute(false);
+      }
+    };
+
+    // Only fetch if Google Maps is loaded (mapRef is set)
+    if (mapRef.current && tripStops.length >= 2) {
+      fetchRoute();
+    }
+  }, [tripStops, isLoadingRoute, directionsPolyline.length, routePolyline]);
 
   // Format elapsed time
   const elapsedFormatted = useMemo(() => {
@@ -404,7 +448,7 @@ export default function ActiveTripPage() {
           <GoogleRouteMap
             stops={mapStops}
             currentStopIndex={currentStopIndex}
-            polyline={routePolyline}
+            polyline={directionsPolyline.length > 0 ? directionsPolyline : routePolyline}
             vehiclePosition={vehiclePosition}
             showVehicle={!!vehiclePosition}
             autoFitBounds={true}

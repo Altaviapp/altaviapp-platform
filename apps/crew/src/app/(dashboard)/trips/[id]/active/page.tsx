@@ -173,6 +173,59 @@ export default function ActiveTripPage() {
     }
   }, [isActive, gpsIsTracking, stopGPSTracking]);
 
+  // Get next stop with ETA - calculate BEFORE early return to maintain hooks order
+  const stopsWithETA = tripStops as Array<typeof tripStops[0] & {
+    etaMinutes?: number | null;
+    etaTime?: string | null;
+    isCompleted?: boolean;
+    isNext?: boolean;
+  }>;
+
+  const backendNextStop = convexTrip?.nextStop ?? null;
+  const nextStopRaw = backendNextStop
+    ? {
+        ...tripStops.find((s) => s._id.toString() === backendNextStop.id?.toString()) ?? tripStops[0],
+        etaMinutes: backendNextStop.etaMinutes,
+        etaTime: backendNextStop.etaTime,
+        distanceKm: backendNextStop.distanceKm,
+      }
+    : stopsWithETA.find((s) => s.isNext) ?? tripStops[0] ?? null;
+
+  // Calculate progress - BEFORE early return
+  const completedStops = stopsWithETA.filter((s) => s.isCompleted).length;
+  const currentStopIndex = completedStops;
+  const totalStops = tripStops.length;
+
+  // Get speed - BEFORE early return
+  const tripStats = convexTrip?.stats as { currentSpeed?: number | null; avgSpeed?: number } | undefined;
+  const currentSpeed = gpsPosition?.speed
+    ? Math.round(gpsPosition.speed * 3.6)
+    : Math.round(tripStats?.currentSpeed ?? tripStats?.avgSpeed ?? 0);
+
+  // Get students for the next stop - MUST be called before early return
+  const nextStopStudents = useMemo((): StudentWithStatus[] => {
+    if (!nextStopRaw) return [];
+
+    return tripStudents
+      .filter((ts: any) => ts.stop?.id === nextStopRaw._id)
+      .map((ts: any) => {
+        let status: StudentWithStatus['status'] = 'pending';
+        if (ts.status === 'absent') status = 'absent';
+        else if (ts.status === 'parent_pickup') status = 'parent_pickup';
+        else if (ts.checkinStatus === 'pickup' || ts.checkinStatus === 'checked_in') status = 'checked_in';
+        else if (ts.checkinStatus === 'dropoff' || ts.checkinStatus === 'checked_out') status = 'checked_out';
+
+        return {
+          _id: ts.student?.id || '',
+          firstName: ts.student?.firstName || '',
+          lastName: ts.student?.lastName || '',
+          status,
+          novedad: ts.novedad,
+        };
+      })
+      .filter((s: StudentWithStatus) => s._id);
+  }, [tripStudents, nextStopRaw]);
+
   // Handle finish trip
   const handleFinishTrip = async () => {
     if (confirm('Estas seguro de que deseas finalizar el viaje?')) {
@@ -205,59 +258,6 @@ export default function ActiveTripPage() {
       </div>
     );
   }
-
-  // Get next stop with ETA
-  const stopsWithETA = tripStops as Array<typeof tripStops[0] & {
-    etaMinutes?: number | null;
-    etaTime?: string | null;
-    isCompleted?: boolean;
-    isNext?: boolean;
-  }>;
-
-  const backendNextStop = convexTrip?.nextStop ?? null;
-  const nextStopRaw = backendNextStop
-    ? {
-        ...tripStops.find((s) => s._id.toString() === backendNextStop.id?.toString()) ?? tripStops[0],
-        etaMinutes: backendNextStop.etaMinutes,
-        etaTime: backendNextStop.etaTime,
-        distanceKm: backendNextStop.distanceKm,
-      }
-    : stopsWithETA.find((s) => s.isNext) ?? tripStops[0] ?? null;
-
-  // Calculate progress
-  const completedStops = stopsWithETA.filter((s) => s.isCompleted).length;
-  const currentStopIndex = completedStops;
-  const totalStops = tripStops.length;
-
-  // Get speed
-  const tripStats = convexTrip?.stats as { currentSpeed?: number | null; avgSpeed?: number } | undefined;
-  const currentSpeed = gpsPosition?.speed
-    ? Math.round(gpsPosition.speed * 3.6)
-    : Math.round(tripStats?.currentSpeed ?? tripStats?.avgSpeed ?? 0);
-
-  // Get students for the next stop
-  const nextStopStudents = useMemo((): StudentWithStatus[] => {
-    if (!nextStopRaw) return [];
-
-    return tripStudents
-      .filter((ts: any) => ts.stop?.id === nextStopRaw._id)
-      .map((ts: any) => {
-        let status: StudentWithStatus['status'] = 'pending';
-        if (ts.status === 'absent') status = 'absent';
-        else if (ts.status === 'parent_pickup') status = 'parent_pickup';
-        else if (ts.checkinStatus === 'pickup' || ts.checkinStatus === 'checked_in') status = 'checked_in';
-        else if (ts.checkinStatus === 'dropoff' || ts.checkinStatus === 'checked_out') status = 'checked_out';
-
-        return {
-          _id: ts.student?.id || '',
-          firstName: ts.student?.firstName || '',
-          lastName: ts.student?.lastName || '',
-          status,
-          novedad: ts.novedad,
-        };
-      })
-      .filter((s: StudentWithStatus) => s._id);
-  }, [tripStudents, nextStopRaw]);
 
   // Navigate to Google Maps
   const handleNavigate = () => {

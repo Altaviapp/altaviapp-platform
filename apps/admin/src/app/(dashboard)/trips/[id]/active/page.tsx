@@ -145,12 +145,13 @@ export default function ActiveTripPage() {
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Map Section */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative h-full">
             <InteractiveMap
               center={mapCenter}
               zoom={14}
               markers={mapMarkers}
               polyline={routePolyline}
+              className="h-full"
               style={{ height: '100%', width: '100%' }}
               onMapLoad={handleMapLoad}
             />

@@ -406,7 +406,7 @@ export default function ActiveTripPage() {
 
       {/* Prominent Map Section */}
       <GoogleMapsProvider>
-        <div className="flex-1 relative" style={{ minHeight: '50vh' }}>
+        <div className="flex-1 relative min-h-[50vh]">
           <GoogleRouteMap
             stops={mapStops}
             currentStopIndex={currentStopIndex}
@@ -414,7 +414,7 @@ export default function ActiveTripPage() {
             showVehicle={gpsIsTracking}
             autoFitBounds={true}
             showGeofences={false}
-            style={{ height: '100%', width: '100%' }}
+            style={{ height: '50vh', width: '100%' }}
             overlays={{
               topLeft: gpsIsTracking ? (
                 <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">

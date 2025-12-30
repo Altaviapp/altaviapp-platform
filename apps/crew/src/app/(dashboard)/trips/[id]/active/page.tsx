@@ -413,10 +413,10 @@ export default function ActiveTripPage() {
           <NextStopCard
             stop={{
               _id: nextStopRaw._id as string,
-              name: nextStopRaw.name,
-              address: nextStopRaw.address,
-              latitude: nextStopRaw.latitude,
-              longitude: nextStopRaw.longitude,
+              name: nextStopRaw.name ?? '',
+              address: nextStopRaw.address ?? '',
+              latitude: nextStopRaw.latitude ?? 0,
+              longitude: nextStopRaw.longitude ?? 0,
             }}
             stopNumber={currentStopIndex + 1}
             distanceKm={'distanceKm' in nextStopRaw ? (nextStopRaw.distanceKm ?? 0) : 0}

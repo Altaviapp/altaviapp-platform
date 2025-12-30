@@ -78,3 +78,13 @@ export {
   generateNavigationStepsFromStops,
 } from './useNavigation';
 export type { NavigationStep, Position } from './useNavigation';
+
+// Trip Events (Timeline)
+export {
+  useTripTimeline,
+  useLatestTripEvents,
+  useTripEventMutations,
+  getEventConfig,
+  EVENT_TYPE_CONFIG,
+} from './useTripEvents';
+export type { TripEventType, ActorRole } from './useTripEvents';

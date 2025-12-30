@@ -19,3 +19,7 @@ export type { QuickActionsProps } from './QuickActions';
 export type { RouteMapProps } from './RouteMap';
 export type { MapControlsProps } from './MapControls';
 export type { StopMarkerProps } from './StopMarker';
+
+// Trip Detail Components (tabs)
+export { TripDetailTabs, TripHistorialTab } from './detail';
+export type { TripDetailTab } from './detail';

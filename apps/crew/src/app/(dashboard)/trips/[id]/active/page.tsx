@@ -4,14 +4,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useCallback, useState, useMemo } from 'react';
 import {
   ArrowLeft,
-  QrCode,
-  Users,
   Bus,
   MapPin,
   Clock,
-  Navigation,
   AlertTriangle,
-  Loader2,
   Sunrise,
   Sunset,
   FileText,
@@ -21,39 +17,44 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { GoogleMapsProvider, GoogleRouteMap, type RouteStopMarker, type StopStatus } from '@altaviapp/maps';
 
-import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip, useNavigation, generateNavigationStepsFromStops } from '@/hooks';
+import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip, useTripStudents } from '@/hooks';
 import type { GeofenceAlert, GPSSourceType } from '@/hooks';
 import { RelayModeModal } from '@/components/trip/RelayModeModal';
+import { IncidentReportModal } from '@/components/trip/IncidentReportModal';
+import { NextStopCard, type StudentWithStatus } from '@/components/trip/NextStopCard';
+import { QuickActions } from '@/components/trip/QuickActions';
 import { CheckinSheet } from '@/components/checkin';
-import { NavigationPanel } from '@/components/navigation';
 import { Id } from '../../../../../../../../convex/_generated/dataModel';
 
 /**
  * Active Trip Page
  *
- * Redesigned with prominent map view for better navigation experience.
- * Shows real-time bus location, route, and next stop information.
+ * Redesigned with visual map, next stop card with integrated check-in,
+ * and 3 action buttons (incident, relay, details)
  */
 export default function ActiveTripPage() {
   const params = useParams();
   const router = useRouter();
   const tripId = (params?.id as string) || '';
 
-  // Relay Mode state
+  // Modal states
   const [isRelayModalOpen, setIsRelayModalOpen] = useState(false);
+  const [isIncidentModalOpen, setIsIncidentModalOpen] = useState(false);
   const [currentVehiclePlate, setCurrentVehiclePlate] = useState('');
   const [gpsSourceType, setGpsSourceType] = useState<GPSSourceType>('mobile');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Check-in sheet state
   const [isCheckinOpen, setIsCheckinOpen] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   // Get real trip data from Convex
   const { trip: convexTrip, isLoading: tripLoading } = useTrip(tripId as Id<"trips"> | null);
   const { completeTrip } = useTripOperations();
   const { getPosition } = useCurrentPosition();
+  const { students: tripStudents } = useTripStudents(tripId || null);
 
-  // Use real auth with fallback for UI testing
+  // Use real auth
   const { isAuthenticated } = useConvexAuth();
 
   // Get novedades for this trip
@@ -61,10 +62,6 @@ export default function ActiveTripPage() {
   const absentCount = novedades.filter((n: any) =>
     n.type === 'absence' || n.typeCategorySnapshot === 'absence'
   ).length;
-
-  // Both roles (driver and monitor) have full access to trip controls
-  const canControlTrip = true;
-  const canCheckin = true;
 
   // Trip is active if status is in_progress
   const isActive = convexTrip?.status === 'in_progress';
@@ -81,7 +78,7 @@ export default function ActiveTripPage() {
     });
   }, []);
 
-  // GPS Tracking - only for drivers
+  // GPS Tracking
   const {
     position: gpsPosition,
     isTracking: gpsIsTracking,
@@ -96,11 +93,6 @@ export default function ActiveTripPage() {
     onGeofenceAlert: handleGeofenceAlert,
   });
 
-  // Derived state
-  const isLoading = tripLoading;
-  const studentsOnBoard: string[] = [];
-  const totalStudents = 3;
-
   // Trip data for UI
   const tripStartTime = convexTrip?.startTime;
   const routeName = convexTrip?.route?.name ?? 'Ruta';
@@ -109,7 +101,7 @@ export default function ActiveTripPage() {
   const tripStops = convexTrip?.stops ?? [];
   const isPickup = routeType === 'pickup';
 
-  // Prepare stops for map (matching RouteStopMarker type) - memoized and MUST be before early return
+  // Prepare stops for map
   const mapStops = useMemo((): RouteStopMarker[] => tripStops.map((stop, index) => {
     const stopWithMeta = stop as typeof stop & { isCompleted?: boolean; isNext?: boolean };
     let status: StopStatus = 'pending';
@@ -127,38 +119,8 @@ export default function ActiveTripPage() {
     };
   }), [tripStops]);
 
-  // Stops for navigation (different format) - MUST be before early return
-  const navStops = useMemo(() => tripStops.map((stop) => ({
-    name: stop.name,
-    latitude: stop.latitude,
-    longitude: stop.longitude,
-    address: stop.address,
-  })), [tripStops]);
-
-  // Generate navigation steps from stops - MUST be before early return
-  const navigationSteps = useMemo(
-    () => generateNavigationStepsFromStops(navStops),
-    [navStops]
-  );
-
-  // Navigation hook for turn-by-turn - MUST be before early return
-  const {
-    currentStep: navCurrentStep,
-    nextStep: navNextStep,
-    distanceToManeuver,
-    allSteps: navAllSteps,
-    isNavigating,
-  } = useNavigation({
-    steps: navigationSteps,
-    currentPosition: gpsPosition ? {
-      latitude: gpsPosition.latitude,
-      longitude: gpsPosition.longitude,
-    } : null,
-    isTracking: gpsIsTracking,
-  });
-
-  // Format elapsed time (compact)
-  const elapsedFormatted = (() => {
+  // Format elapsed time
+  const elapsedFormatted = useMemo(() => {
     const hours = Math.floor(elapsedSeconds / 3600);
     const minutes = Math.floor((elapsedSeconds % 3600) / 60);
     const secs = elapsedSeconds % 60;
@@ -166,7 +128,7 @@ export default function ActiveTripPage() {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  })();
+  }, [elapsedSeconds]);
 
   // Elapsed time counter
   useEffect(() => {
@@ -207,14 +169,13 @@ export default function ActiveTripPage() {
   // Stop GPS tracking when trip is no longer active
   useEffect(() => {
     if (!isActive && gpsIsTracking) {
-      console.log('[GPS] Trip no longer active, stopping GPS tracking');
       stopGPSTracking();
     }
   }, [isActive, gpsIsTracking, stopGPSTracking]);
 
   // Handle finish trip
   const handleFinishTrip = async () => {
-    if (confirm('¿Estás seguro de que deseas finalizar el viaje?')) {
+    if (confirm('Estas seguro de que deseas finalizar el viaje?')) {
       if (gpsIsTracking) {
         stopGPSTracking();
       }
@@ -234,7 +195,7 @@ export default function ActiveTripPage() {
   };
 
   // Loading state
-  if (isLoading || !convexTrip) {
+  if (tripLoading || !convexTrip) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
@@ -245,10 +206,7 @@ export default function ActiveTripPage() {
     );
   }
 
-  // Get next stop from trip data - use the one from backend with ETA
-  const backendNextStop = convexTrip?.nextStop ?? null;
-
-  // Get stops with ETA data
+  // Get next stop with ETA
   const stopsWithETA = tripStops as Array<typeof tripStops[0] & {
     etaMinutes?: number | null;
     etaTime?: string | null;
@@ -256,8 +214,8 @@ export default function ActiveTripPage() {
     isNext?: boolean;
   }>;
 
-  // Find next stop (prefer backend nextStop, fallback to first non-completed)
-  const nextStop = backendNextStop
+  const backendNextStop = convexTrip?.nextStop ?? null;
+  const nextStopRaw = backendNextStop
     ? {
         ...tripStops.find((s) => s._id.toString() === backendNextStop.id?.toString()) ?? tripStops[0],
         etaMinutes: backendNextStop.etaMinutes,
@@ -266,70 +224,80 @@ export default function ActiveTripPage() {
       }
     : stopsWithETA.find((s) => s.isNext) ?? tripStops[0] ?? null;
 
-  // Calculate current stop index
+  // Calculate progress
   const completedStops = stopsWithETA.filter((s) => s.isCompleted).length;
   const currentStopIndex = completedStops;
   const totalStops = tripStops.length;
 
-  // Get speed from GPS or trip stats
+  // Get speed
   const tripStats = convexTrip?.stats as { currentSpeed?: number | null; avgSpeed?: number } | undefined;
   const currentSpeed = gpsPosition?.speed
     ? Math.round(gpsPosition.speed * 3.6)
     : Math.round(tripStats?.currentSpeed ?? tripStats?.avgSpeed ?? 0);
 
-  // Navigate to next stop in Google Maps
+  // Get students for the next stop
+  const nextStopStudents = useMemo((): StudentWithStatus[] => {
+    if (!nextStopRaw) return [];
+
+    return tripStudents
+      .filter((ts: any) => ts.stop?.id === nextStopRaw._id)
+      .map((ts: any) => {
+        let status: StudentWithStatus['status'] = 'pending';
+        if (ts.status === 'absent') status = 'absent';
+        else if (ts.status === 'parent_pickup') status = 'parent_pickup';
+        else if (ts.checkinStatus === 'pickup' || ts.checkinStatus === 'checked_in') status = 'checked_in';
+        else if (ts.checkinStatus === 'dropoff' || ts.checkinStatus === 'checked_out') status = 'checked_out';
+
+        return {
+          _id: ts.student?.id || '',
+          firstName: ts.student?.firstName || '',
+          lastName: ts.student?.lastName || '',
+          status,
+          novedad: ts.novedad,
+        };
+      })
+      .filter((s: StudentWithStatus) => s._id);
+  }, [tripStudents, nextStopRaw]);
+
+  // Navigate to Google Maps
   const handleNavigate = () => {
-    if (nextStop) {
-      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${nextStop.latitude},${nextStop.longitude}&travelmode=driving`;
+    if (nextStopRaw) {
+      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${nextStopRaw.latitude},${nextStopRaw.longitude}&travelmode=driving`;
       window.open(mapsUrl, '_blank');
     }
   };
 
-  // Quick action handlers
-  const handleCheckIn = () => {
-    if (canCheckin) {
-      setIsCheckinOpen(true);
-    } else {
-      alert('No tienes permiso para realizar check-in en este viaje');
-    }
+  // Handle student check-in from NextStopCard
+  const handleStudentCheckin = (studentId: string) => {
+    setSelectedStudentId(studentId);
+    setIsCheckinOpen(true);
   };
 
-  const handleStudentList = () => {
-    router.push(`/trips/${tripId}/students`);
-  };
-
-  const handleIncident = () => {
-    router.push(`/trips/${tripId}/incidents`);
-  };
-
-  // Handle relay mode
-  const handleOpenRelay = () => {
+  // Action handlers
+  const handleIncident = () => setIsIncidentModalOpen(true);
+  const handleRelay = () => {
     setCurrentVehiclePlate(vehiclePlate);
     setIsRelayModalOpen(true);
   };
+  const handleDetails = () => router.push(`/trips/${tripId}/details`);
 
   const handleRelayComplete = (newVehicle: { gpsSourceType: GPSSourceType }) => {
     setGpsSourceType(newVehicle.gpsSourceType);
-
     if (newVehicle.gpsSourceType === 'mobile') {
       stopGPSTracking();
       if (gpsPermission === 'granted') {
-        startGPSTracking(tripId as unknown as Id<"trips">, {
-          gpsSource: 'mobile',
-        });
+        startGPSTracking(tripId as unknown as Id<"trips">, { gpsSource: 'mobile' });
       }
     } else {
       stopGPSTracking();
     }
-
-    alert(`Vehículo cambiado exitosamente. ${newVehicle.gpsSourceType === 'mobile' ? 'Usando GPS del celular.' : 'Usando GPS externo del vehículo.'}`);
   };
 
-  // Current location for map (matching VehiclePosition type for GoogleRouteMap)
+  // Vehicle position for map
   const vehiclePosition = gpsPosition ? {
     position: { lat: gpsPosition.latitude, lng: gpsPosition.longitude },
     heading: gpsPosition.heading ?? 0,
-    speed: gpsPosition.speed ? gpsPosition.speed * 3.6 : 0, // m/s to km/h
+    speed: gpsPosition.speed ? gpsPosition.speed * 3.6 : 0,
     accuracy: gpsPosition.accuracy ?? 10,
     timestamp: gpsPosition.timestamp,
   } : null;
@@ -344,10 +312,7 @@ export default function ActiveTripPage() {
         isPickup ? 'bg-warning' : 'bg-info'
       )}>
         <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="p-2 -ml-2 rounded-lg hover:bg-white/20"
-          >
+          <Link href="/dashboard" className="p-2 -ml-2 rounded-lg hover:bg-white/20">
             <ArrowLeft className="w-5 h-5 text-white" />
           </Link>
           <div className="flex items-center gap-2">
@@ -396,17 +361,17 @@ export default function ActiveTripPage() {
             {absentCount > 0 && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
                 <UserMinus className="w-3 h-3" />
-                {absentCount} {absentCount === 1 ? 'ausente' : 'ausentes'}
+                {absentCount} ausente{absentCount !== 1 ? 's' : ''}
               </span>
             )}
           </div>
-          <span className="text-xs text-amber-600">Ver lista →</span>
+          <span className="text-xs text-amber-600">Ver lista</span>
         </Link>
       )}
 
-      {/* Prominent Map Section */}
+      {/* Map Section - Visual only, no turn-by-turn */}
       <GoogleMapsProvider>
-        <div className="flex-1 relative min-h-[50vh]">
+        <div className="flex-1 relative" style={{ minHeight: '45vh' }}>
           <GoogleRouteMap
             stops={mapStops}
             currentStopIndex={currentStopIndex}
@@ -414,7 +379,7 @@ export default function ActiveTripPage() {
             showVehicle={gpsIsTracking}
             autoFitBounds={true}
             showGeofences={false}
-            style={{ height: '50vh', width: '100%' }}
+            style={{ height: '45vh', width: '100%' }}
             overlays={{
               topLeft: gpsIsTracking ? (
                 <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
@@ -442,66 +407,35 @@ export default function ActiveTripPage() {
         </div>
       </GoogleMapsProvider>
 
-      {/* Turn-by-Turn Navigation Panel */}
-      {isNavigating && navCurrentStep && (
-        <NavigationPanel
-          currentStep={navCurrentStep}
-          nextStep={navNextStep}
-          distanceToManeuver={distanceToManeuver ?? undefined}
-          allSteps={navAllSteps}
-          isTracking={gpsIsTracking}
-        />
-      )}
-
-      {/* Next Stop Card - Compact with ETA */}
-      {nextStop && (
-        <div className="bg-white border-t border-gray-200 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold">{currentStopIndex + 1}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Siguiente Parada</p>
-                <p className="font-semibold text-gray-900 truncate">{nextStop.name}</p>
-                <div className="flex items-center gap-2 text-xs">
-                  {/* Dynamic ETA */}
-                  {'etaMinutes' in nextStop && nextStop.etaMinutes !== null && nextStop.etaMinutes !== undefined ? (
-                    <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
-                      ~{nextStop.etaMinutes} min
-                      {'etaTime' in nextStop && nextStop.etaTime && (
-                        <span className="opacity-75 ml-1">({nextStop.etaTime})</span>
-                      )}
-                    </span>
-                  ) : nextStop.estimatedArrivalTime ? (
-                    <span className="text-gray-500">
-                      <Clock className="w-3 h-3 inline mr-1" />
-                      {nextStop.estimatedArrivalTime}
-                    </span>
-                  ) : null}
-                  {'distanceKm' in nextStop && nextStop.distanceKm && (
-                    <span className="text-gray-500">
-                      <MapPin className="w-3 h-3 inline mr-0.5" />
-                      {nextStop.distanceKm.toFixed(1)} km
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={handleNavigate}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors"
-            >
-              <Navigation className="w-4 h-4" />
-              IR
-            </button>
-          </div>
+      {/* Next Stop Card with Students and Check-in */}
+      {nextStopRaw && (
+        <div className="px-4 -mt-4 relative z-10">
+          <NextStopCard
+            stop={{
+              _id: nextStopRaw._id,
+              name: nextStopRaw.name,
+              address: nextStopRaw.address,
+              latitude: nextStopRaw.latitude,
+              longitude: nextStopRaw.longitude,
+            }}
+            stopNumber={currentStopIndex + 1}
+            distanceKm={'distanceKm' in nextStopRaw ? (nextStopRaw.distanceKm ?? 0) : 0}
+            eta={
+              'etaMinutes' in nextStopRaw && nextStopRaw.etaMinutes
+                ? `~${nextStopRaw.etaMinutes} min`
+                : nextStopRaw.estimatedArrivalTime ?? '-'
+            }
+            students={nextStopStudents}
+            routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
+            onNavigate={handleNavigate}
+            onCheckin={handleStudentCheckin}
+          />
         </div>
       )}
 
       {/* Geofence Alerts */}
       {geofenceAlerts.length > 0 && (
-        <div className="px-4 py-2 bg-info/10 border-y border-info/20">
+        <div className="px-4 py-2 bg-info/10 border-y border-info/20 mt-3">
           {geofenceAlerts.map((alert, index) => (
             <div key={`${alert.stopId}-${index}`} className="flex items-center gap-2 text-sm">
               <MapPin className="w-4 h-4 text-info" />
@@ -512,53 +446,17 @@ export default function ActiveTripPage() {
         </div>
       )}
 
-      {/* Quick Actions Bar */}
-      <div className="bg-white border-t border-gray-200 px-4 py-3">
-        <div className="flex items-center justify-around">
-          <button
-            onClick={handleCheckIn}
-            className="flex flex-col items-center gap-1 text-gray-600 hover:text-primary transition-colors"
-          >
-            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center hover:bg-primary/10 transition-colors">
-              <QrCode className="w-6 h-6" />
-            </div>
-            <span className="text-xs font-medium">Check-in</span>
-          </button>
-
-          <button
-            onClick={handleStudentList}
-            className="flex flex-col items-center gap-1 text-gray-600 hover:text-primary transition-colors"
-          >
-            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center hover:bg-primary/10 transition-colors">
-              <Users className="w-6 h-6" />
-            </div>
-            <span className="text-xs font-medium">Lista</span>
-          </button>
-
-          <button
-            onClick={handleIncident}
-            className="flex flex-col items-center gap-1 text-gray-600 hover:text-error transition-colors"
-          >
-            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center hover:bg-error/10 transition-colors">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <span className="text-xs font-medium">Incidente</span>
-          </button>
-
-          <button
-            onClick={handleOpenRelay}
-            className="flex flex-col items-center gap-1 text-gray-600 hover:text-warning transition-colors"
-          >
-            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center hover:bg-warning/10 transition-colors">
-              <Bus className="w-6 h-6" />
-            </div>
-            <span className="text-xs font-medium">Relevo</span>
-          </button>
-        </div>
+      {/* Quick Actions - 3 buttons */}
+      <div className="py-3 mt-3">
+        <QuickActions
+          onIncident={handleIncident}
+          onRelay={handleRelay}
+          onDetails={handleDetails}
+        />
       </div>
 
-      {/* Finish Trip Button - Both driver and monitor can finish */}
-      <div className="px-4 py-4 bg-white border-t border-gray-200 safe-area-pb">
+      {/* Finish Trip Button */}
+      <div className="px-4 py-4 bg-white border-t border-gray-200 safe-area-pb mt-auto">
         <button
           onClick={handleFinishTrip}
           className="w-full py-4 bg-success hover:bg-success/90 text-white rounded-xl text-lg font-bold transition-colors shadow-lg"
@@ -576,17 +474,27 @@ export default function ActiveTripPage() {
         onRelayComplete={handleRelayComplete}
       />
 
+      {/* Incident Report Modal */}
+      <IncidentReportModal
+        tripId={tripId}
+        isOpen={isIncidentModalOpen}
+        onClose={() => setIsIncidentModalOpen(false)}
+      />
+
       {/* Check-in Sheet */}
       <CheckinSheet
         tripId={tripId as Id<"trips">}
-        currentStop={nextStop ? {
-          id: nextStop._id as Id<"routeStops">,
-          name: nextStop.name ?? 'Parada',
+        currentStop={nextStopRaw ? {
+          id: nextStopRaw._id as Id<"routeStops">,
+          name: nextStopRaw.name ?? 'Parada',
           order: currentStopIndex,
         } : null}
         routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
         isOpen={isCheckinOpen}
-        onClose={() => setIsCheckinOpen(false)}
+        onClose={() => {
+          setIsCheckinOpen(false);
+          setSelectedStudentId(null);
+        }}
       />
     </div>
   );

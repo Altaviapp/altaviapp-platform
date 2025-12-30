@@ -1,20 +1,18 @@
 /**
  * QuickActions Component
  *
- * Grid of quick action buttons for active trip (check-in, lista, incidente, mensaje)
+ * Row of 3 quick action buttons for active trip (incidente, relevo, detalles)
  */
 
-import { Camera, ClipboardList, AlertTriangle, MessageSquare } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ClipboardList } from 'lucide-react';
 
 export interface QuickActionsProps {
-  /** Handler for check-in button */
-  onCheckIn?: () => void;
-  /** Handler for attendance list button */
-  onAttendance?: () => void;
   /** Handler for incident button */
   onIncident?: () => void;
-  /** Handler for message button */
-  onMessage?: () => void;
+  /** Handler for relay mode button */
+  onRelay?: () => void;
+  /** Handler for details button */
+  onDetails?: () => void;
 }
 
 interface QuickActionButtonProps {
@@ -25,7 +23,7 @@ interface QuickActionButtonProps {
 }
 
 function QuickActionButton({ icon, label, onClick, variant = 'default' }: QuickActionButtonProps) {
-  const baseClasses = "flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[100px]";
+  const baseClasses = "flex-1 flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all";
 
   const variantClasses = {
     default: "bg-white border-gray-200 hover:border-primary hover:bg-primary/5 active:scale-95",
@@ -42,10 +40,10 @@ function QuickActionButton({ icon, label, onClick, variant = 'default' }: QuickA
       onClick={onClick}
       className={`${baseClasses} ${variantClasses[variant]}`}
     >
-      <div className={`w-10 h-10 flex items-center justify-center ${iconVariantClasses[variant]}`}>
+      <div className={`w-8 h-8 flex items-center justify-center ${iconVariantClasses[variant]}`}>
         {icon}
       </div>
-      <span className="text-sm font-semibold text-gray-900 text-center leading-tight">
+      <span className="text-xs font-semibold text-gray-900 text-center">
         {label}
       </span>
     </button>
@@ -53,50 +51,36 @@ function QuickActionButton({ icon, label, onClick, variant = 'default' }: QuickA
 }
 
 /**
- * Quick action buttons grid for active trip
+ * Quick action buttons row for active trip
  */
 export function QuickActions({
-  onCheckIn,
-  onAttendance,
   onIncident,
-  onMessage,
+  onRelay,
+  onDetails,
 }: QuickActionsProps) {
   return (
-    <div className="bg-gray-50 p-4 space-y-3">
-      <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-        Acciones Rápidas
-      </h3>
+    <div className="flex gap-2 px-4">
+      {/* Incident Report */}
+      <QuickActionButton
+        icon={<AlertTriangle className="w-5 h-5" />}
+        label="Incidente"
+        onClick={onIncident}
+        variant="warning"
+      />
 
-      <div className="grid grid-cols-2 gap-3">
-        {/* Check-in */}
-        <QuickActionButton
-          icon={<Camera className="w-6 h-6" />}
-          label="Check-in"
-          onClick={onCheckIn}
-        />
+      {/* Relay Mode */}
+      <QuickActionButton
+        icon={<RefreshCw className="w-5 h-5" />}
+        label="Relevo"
+        onClick={onRelay}
+      />
 
-        {/* Attendance List */}
-        <QuickActionButton
-          icon={<ClipboardList className="w-6 h-6" />}
-          label="Lista"
-          onClick={onAttendance}
-        />
-
-        {/* Incident Report */}
-        <QuickActionButton
-          icon={<AlertTriangle className="w-6 h-6" />}
-          label="Incidente"
-          onClick={onIncident}
-          variant="warning"
-        />
-
-        {/* Message */}
-        <QuickActionButton
-          icon={<MessageSquare className="w-6 h-6" />}
-          label="Mensaje"
-          onClick={onMessage}
-        />
-      </div>
+      {/* Trip Details */}
+      <QuickActionButton
+        icon={<ClipboardList className="w-5 h-5" />}
+        label="Detalles"
+        onClick={onDetails}
+      />
     </div>
   );
 }

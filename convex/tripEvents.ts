@@ -317,6 +317,107 @@ export const getStudentTripTimeline = query({
 });
 
 /**
+ * Get full trip timeline combining tripEvents and studentCheckins
+ * Used for comprehensive trip history view
+ */
+export const getTripFullTimeline = query({
+  args: {
+    tripId: v.id("trips"),
+  },
+  handler: async (ctx, args) => {
+    // Get trip events
+    const events = await ctx.db
+      .query("tripEvents")
+      .withIndex("by_trip_timestamp", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    // Get student checkins for this trip
+    const checkins = await ctx.db
+      .query("studentCheckins")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    // Enrich trip events
+    const enrichedEvents = await Promise.all(
+      events.map(async (event) => {
+        let stopName: string | undefined;
+        let studentName: string | undefined;
+
+        if (event.stopId) {
+          const stop = await ctx.db.get(event.stopId);
+          stopName = stop?.name;
+        }
+
+        if (event.studentId) {
+          const student = await ctx.db.get(event.studentId);
+          if (student) {
+            studentName = `${student.firstName} ${student.lastName}`;
+          }
+        }
+
+        return {
+          id: event._id,
+          type: event.type,
+          title: event.title,
+          description: event.description,
+          timestamp: event.timestamp,
+          stopName,
+          studentName,
+          actorRole: event.actorRole,
+          latitude: event.latitude,
+          longitude: event.longitude,
+          source: "event" as const,
+        };
+      })
+    );
+
+    // Convert checkins to timeline format (only if not already in events)
+    // Since we now record events for checkins, we filter out duplicates
+    const checkinTimestamps = new Set(
+      events
+        .filter((e) => e.type === "student_checkin" || e.type === "student_checkout")
+        .map((e) => e.timestamp)
+    );
+
+    const enrichedCheckins = await Promise.all(
+      checkins
+        .filter((c) => !checkinTimestamps.has(c.timestamp)) // Avoid duplicates
+        .map(async (checkin) => {
+          const student = await ctx.db.get(checkin.studentId);
+          const stop = await ctx.db.get(checkin.stopId);
+
+          return {
+            id: checkin._id,
+            type: checkin.checkinType === "pickup" ? "student_checkin" : "student_checkout",
+            title: student
+              ? checkin.checkinType === "pickup"
+                ? `${student.firstName} ${student.lastName} abordó`
+                : `${student.firstName} ${student.lastName} fue entregado`
+              : checkin.checkinType === "pickup"
+                ? "Estudiante abordó"
+                : "Estudiante entregado",
+            description: stop ? `Check-in en parada: ${stop.name}` : undefined,
+            timestamp: checkin.timestamp,
+            stopName: stop?.name,
+            studentName: student ? `${student.firstName} ${student.lastName}` : undefined,
+            actorRole: checkin.performedByRole,
+            latitude: checkin.latitude,
+            longitude: checkin.longitude,
+            source: "checkin" as const,
+          };
+        })
+    );
+
+    // Combine and sort by timestamp (most recent first)
+    const timeline = [...enrichedEvents, ...enrichedCheckins].sort(
+      (a, b) => b.timestamp - a.timestamp
+    );
+
+    return timeline;
+  },
+});
+
+/**
  * Get latest events for a trip (real-time updates)
  * Used for live timeline that auto-updates
  */

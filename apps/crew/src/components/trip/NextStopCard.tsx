@@ -1,12 +1,22 @@
 /**
  * NextStopCard Component
  *
- * Displays next stop information with students list, distance, ETA, and navigation button
+ * Displays next stop information with students list, distance, ETA, navigation,
+ * and individual check-in buttons per student
  */
 
-import { MapPin, Navigation, Clock, Users } from 'lucide-react';
+import { MapPin, Navigation, Clock, Users, Camera, CheckCircle, AlertCircle, User } from 'lucide-react';
 import type { Stop } from '@/types';
 import { formatDistance } from '@/lib/utils/tripCalculations';
+import { cn } from '@/lib/utils';
+
+export interface StudentWithStatus {
+  _id: string;
+  firstName: string;
+  lastName: string;
+  status: 'pending' | 'checked_in' | 'checked_out' | 'absent' | 'parent_pickup';
+  novedad?: { typeCategory: string } | null;
+}
 
 export interface NextStopCardProps {
   /** Next stop details */
@@ -17,14 +27,27 @@ export interface NextStopCardProps {
   distanceKm: number;
   /** Estimated time of arrival string */
   eta: string;
-  /** Students at this stop */
-  students?: Array<{ _id: string; firstName: string; lastName: string }>;
+  /** Students at this stop with status */
+  students?: StudentWithStatus[];
+  /** Route type (pickup or dropoff) */
+  routeType?: 'pickup' | 'dropoff';
   /** Handler for navigate button click */
   onNavigate?: () => void;
+  /** Handler for student check-in */
+  onCheckin?: (studentId: string) => void;
 }
 
+// Status configuration
+const statusConfig = {
+  pending: { icon: Clock, color: 'text-gray-400', bgColor: 'bg-gray-100', label: 'Pendiente' },
+  checked_in: { icon: CheckCircle, color: 'text-primary', bgColor: 'bg-primary/10', label: 'A bordo' },
+  checked_out: { icon: CheckCircle, color: 'text-success', bgColor: 'bg-success/10', label: 'Entregado' },
+  absent: { icon: AlertCircle, color: 'text-error', bgColor: 'bg-error/10', label: 'Ausente' },
+  parent_pickup: { icon: User, color: 'text-warning', bgColor: 'bg-warning/10', label: 'Recoge padre' },
+};
+
 /**
- * Card displaying next stop information
+ * Card displaying next stop information with check-in functionality
  */
 export function NextStopCard({
   stop,
@@ -32,10 +55,20 @@ export function NextStopCard({
   distanceKm,
   eta,
   students = [],
+  routeType = 'pickup',
   onNavigate,
+  onCheckin,
 }: NextStopCardProps) {
+  // Filter out absent and parent_pickup students for check-in
+  const checkableStudents = students.filter(
+    (s) => s.status !== 'absent' && s.status !== 'parent_pickup'
+  );
+  const nonCheckableStudents = students.filter(
+    (s) => s.status === 'absent' || s.status === 'parent_pickup'
+  );
+
   return (
-    <div className="bg-white border-2 border-primary/20 rounded-xl p-4 space-y-4 shadow-sm">
+    <div className="bg-white border-2 border-primary/20 rounded-xl p-4 space-y-3 shadow-sm">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -48,12 +81,12 @@ export function NextStopCard({
           </div>
 
           {/* Stop Name */}
-          <h3 className="text-lg font-bold text-gray-900 mb-1">
+          <h3 className="text-base font-bold text-gray-900 mb-0.5">
             {stop.name}
           </h3>
 
           {/* Address */}
-          <p className="text-sm text-gray-600 line-clamp-2">
+          <p className="text-sm text-gray-600 line-clamp-1">
             {stop.address}
           </p>
         </div>
@@ -62,7 +95,7 @@ export function NextStopCard({
         {onNavigate && (
           <button
             onClick={onNavigate}
-            className="flex-shrink-0 w-12 h-12 bg-primary hover:bg-primary/90 rounded-lg flex items-center justify-center transition-colors shadow-sm"
+            className="flex-shrink-0 w-11 h-11 bg-primary hover:bg-primary/90 rounded-lg flex items-center justify-center transition-colors shadow-sm"
             aria-label="Navegar"
           >
             <Navigation className="w-5 h-5 text-white" />
@@ -71,52 +104,90 @@ export function NextStopCard({
       </div>
 
       {/* Distance & ETA */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Distance */}
-        <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg">
-          <MapPin className="w-4 h-4 text-gray-600 flex-shrink-0" />
-          <div className="min-w-0">
-            <p className="text-xs text-gray-600">Distancia</p>
-            <p className="text-sm font-bold text-gray-900">
-              {formatDistance(distanceKm)}
-            </p>
-          </div>
+      <div className="flex gap-3 text-sm">
+        <div className="flex items-center gap-1.5 text-gray-600">
+          <MapPin className="w-4 h-4" />
+          <span className="font-medium">{formatDistance(distanceKm)}</span>
         </div>
-
-        {/* ETA */}
-        <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg">
-          <Clock className="w-4 h-4 text-gray-600 flex-shrink-0" />
-          <div className="min-w-0">
-            <p className="text-xs text-gray-600">Llegada en</p>
-            <p className="text-sm font-bold text-gray-900">{eta}</p>
-          </div>
+        <div className="flex items-center gap-1.5 text-gray-600">
+          <Clock className="w-4 h-4" />
+          <span className="font-medium">{eta}</span>
         </div>
       </div>
 
-      {/* Students List */}
+      {/* Students List with Check-in */}
       {students.length > 0 && (
         <div className="border-t border-gray-200 pt-3 space-y-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <Users className="w-4 h-4 text-gray-600" />
-            <span>Estudiantes en esta parada ({students.length})</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <Users className="w-4 h-4 text-gray-600" />
+              <span>Estudiantes ({students.length})</span>
+            </div>
           </div>
 
-          <div className="space-y-1 max-h-32 overflow-y-auto">
-            {students.map((student) => (
-              <div
-                key={student._id}
-                className="flex items-center gap-2 py-1.5 px-2 bg-gray-50 rounded text-sm"
-              >
-                <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-primary">
-                    {student.firstName[0]}{student.lastName[0]}
+          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+            {/* Checkable students */}
+            {checkableStudents.map((student) => {
+              const config = statusConfig[student.status] || statusConfig.pending;
+              const StatusIcon = config.icon;
+              const isCheckable = student.status === 'pending' ||
+                (routeType === 'dropoff' && student.status === 'checked_in');
+
+              return (
+                <div
+                  key={student._id}
+                  className="flex items-center gap-2 py-1.5 px-2 bg-gray-50 rounded-lg"
+                >
+                  {/* Status Icon */}
+                  <div className={cn('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0', config.bgColor)}>
+                    <StatusIcon className={cn('w-3 h-3', config.color)} />
+                  </div>
+
+                  {/* Name */}
+                  <span className="flex-1 text-sm text-gray-900 truncate">
+                    {student.firstName} {student.lastName}
+                  </span>
+
+                  {/* Check-in Button */}
+                  {isCheckable && onCheckin ? (
+                    <button
+                      onClick={() => onCheckin(student._id)}
+                      className="flex items-center gap-1 px-2 py-1 bg-primary text-white text-xs font-medium rounded hover:bg-primary/90 transition-colors"
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>Check-in</span>
+                    </button>
+                  ) : (
+                    <span className={cn('text-xs px-2 py-0.5 rounded-full', config.bgColor, config.color)}>
+                      {config.label}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Non-checkable students (absent, parent pickup) */}
+            {nonCheckableStudents.map((student) => {
+              const config = statusConfig[student.status] || statusConfig.pending;
+              const StatusIcon = config.icon;
+
+              return (
+                <div
+                  key={student._id}
+                  className="flex items-center gap-2 py-1.5 px-2 bg-gray-50/50 rounded-lg opacity-60"
+                >
+                  <div className={cn('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0', config.bgColor)}>
+                    <StatusIcon className={cn('w-3 h-3', config.color)} />
+                  </div>
+                  <span className="flex-1 text-sm text-gray-500 truncate line-through">
+                    {student.firstName} {student.lastName}
+                  </span>
+                  <span className={cn('text-xs px-2 py-0.5 rounded-full', config.bgColor, config.color)}>
+                    {config.label}
                   </span>
                 </div>
-                <span className="text-gray-900 truncate">
-                  {student.firstName} {student.lastName}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

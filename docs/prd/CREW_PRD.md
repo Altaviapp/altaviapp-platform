@@ -39,7 +39,7 @@ La Crew App es la aplicación móvil PWA para conductores y monitores/auxiliares
 - Next.js 14+ PWA (instalable)
 - Convex (real-time database)
 - shadcn/ui + Tailwind CSS
-- Leaflet + OpenStreetMap (mapas)
+- Google Maps (viaje activo) + Leaflet (otros mapas)
 - Geolocation API (GPS)
 - Camera API (QR scanner)
 
@@ -180,9 +180,9 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 | `/trips/[id]` | ✅ | Resumen/detalle del viaje |
 | `/trips/[id]/start` | ✅ | Confirmación de inicio con estado de checklist |
 | `/trips/[id]/checklist` | ✅ | Checklist pre-viaje de inspección |
-| `/trips/[id]/active` | ✅ | Viaje activo (mapa, estudiantes, navegación) |
+| `/trips/[id]/active` | ✅ | Viaje activo (mapa Google Maps, acciones rápidas) |
+| `/trips/[id]/details` | ✅ | Detalles del viaje (tabs: info general, cronología) |
 | `/trips/[id]/students` | ✅ | Lista de estudiantes con check-in |
-| `/trips/[id]/incidents` | ✅ | Formulario de reporte de incidente |
 | `/trips/[id]/map` | ✅ | Mapa a pantalla completa |
 
 **Funcionalidades**:
@@ -226,24 +226,27 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 #### 4.4 Viaje Activo (`/trips/[id]/active`)
 **Funcionalidades principales**:
 
-*Mapa interactivo*:
+*Mapa interactivo (Google Maps)*:
 - [x] Ubicación actual del vehículo con heading
-- [x] Polilínea de ruta
+- [x] Polilínea de ruta calculada (estilo Uber)
 - [x] Marcadores de paradas (completadas, actual, próximas)
-- [x] Marcador de escuela
+- [x] Marcador de escuela (inicio/destino)
 - [x] GPS tracking en background (cada 15 segundos)
+- [x] Overlays: velocidad (izq), progreso (der)
+- [x] Vista visual únicamente (sin turn-by-turn)
 
-*Panel de información*:
-- [x] Progreso de paradas (X de Y completadas)
-- [x] Tiempo transcurrido
-- [x] Velocidad actual
-- [x] Próxima parada con ETA
-
-*Tarjeta de próxima parada*:
-- [x] Nombre de la parada
+*Tarjeta de próxima parada con check-in integrado*:
+- [x] Nombre y dirección de la parada
 - [x] Distancia en metros/km
 - [x] ETA en minutos
-- [x] Link a navegación externa (Google Maps)
+- [x] Botón "IR" para navegación externa (Google Maps)
+- [x] Lista de estudiantes de la parada con estados:
+  - Pendiente (gris)
+  - A bordo (azul)
+  - Entregado (verde)
+  - Ausente por novedad (rojo)
+  - Recoge padre (amarillo)
+- [x] Botón de check-in individual por estudiante
 
 *Indicador de novedades*:
 - [x] Banner compacto debajo del header si hay novedades
@@ -251,19 +254,43 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 - [x] Badge de ausencias si aplica
 - [x] Link directo a lista de estudiantes
 
-*Acciones rápidas*:
-- [x] Check-in de estudiantes (abre `CheckinSheet` con QR scanner)
-- [x] Ver lista de estudiantes
-- [x] Reportar incidente
-- [x] Relevo de vehículo (abre `RelayModeModal`)
-- [x] Terminar viaje
+*Acciones rápidas (3 botones)*:
+- [x] **Incidente**: Abre `IncidentReportModal` (flujo de 3 pasos en modal)
+- [x] **Relevo**: Abre `RelayModeModal` (cambio de vehículo)
+- [x] **Detalles**: Navega a `/trips/[id]/details`
+
+*Botón terminar viaje*:
+- [x] Botón principal al fondo de la pantalla
+- [x] Confirmación antes de terminar
 
 *ETA en tiempo real*:
 - [x] Cálculo basado en distancia Haversine
 - [x] Tracking de velocidad
 - [x] Estado de delay (a tiempo, ligero retraso, retrasado, muy retrasado)
 
-#### 4.5 Estudiantes (`/trips/[id]/students`)
+#### 4.5 Detalles del Viaje (`/trips/[id]/details`)
+**Sub-página con tabs**:
+
+*Tab 1 - Info General*:
+- [x] Información del viaje (ruta, tipo, hora inicio, duración)
+- [x] Información del vehículo y tripulación
+- [x] Lista de paradas con estudiantes agrupados
+- [x] Estados visuales por parada (completada, actual, pendiente)
+- [x] Estados de estudiantes con iconos y colores
+
+*Tab 2 - Cronología*:
+- [x] Timeline de eventos del viaje ordenado cronológicamente
+- [x] Fuentes: `tripEvents` + `studentCheckins`
+- [x] Eventos mostrados:
+  - Viaje iniciado/completado
+  - Llegada/salida de paradas
+  - Check-in/checkout de estudiantes
+  - Incidentes reportados
+  - Cambios de relevo
+- [x] Indicador de tiempo relativo
+- [x] Actor que realizó la acción
+
+#### 4.6 Estudiantes (`/trips/[id]/students`)
 **Funcionalidades**:
 - [x] Lista agrupada por parada
 - [x] Estados de check-in:
@@ -287,7 +314,14 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 - [x] Registro de timestamp y GPS
 - [x] Notificación automática a padres
 
-#### 4.6 Incidentes (`/trips/[id]/incidents`)
+#### 4.7 Incidentes (Modal desde viaje activo)
+**Componente**: `IncidentReportModal` (accesible desde botón "Incidente" en viaje activo)
+
+**Flujo de 3 pasos en modal**:
+1. Selección de tipo de incidente
+2. Formulario con detalles (severidad, descripción, estudiante afectado)
+3. Confirmación de éxito
+
 **Tipos de incidente**:
 - Accidente
 - Médico
@@ -305,14 +339,15 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 **Funcionalidades**:
 - [x] Selección de tipo con iconos
 - [x] Selección de severidad
-- [x] Captura de ubicación GPS
-- [x] Selección de estudiante afectado (opcional)
+- [x] Captura de ubicación GPS automática
+- [x] Selección de estudiante afectado (para incidentes tipo "student")
+- [x] Minutos de retraso (para incidentes tipo "delay")
 - [x] Campo de descripción
-- [x] Upload de fotos (placeholder)
-- [x] Opciones de notificación (admin/padres)
+- [x] Notificación automática a admin
 - [x] Confirmación con ID de incidente
+- [x] Registro de evento en `tripEvents`
 
-#### 4.7 Mapa Completo (`/trips/[id]/map`)
+#### 4.8 Mapa Completo (`/trips/[id]/map`)
 - [x] Mapa a pantalla completa
 - [x] Overlay de próxima parada
 - [x] Controles de zoom
@@ -320,13 +355,16 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 - [x] Link de navegación externa
 
 **Componentes clave**:
-- `RouteMap` - Mapa interactivo (Leaflet)
-- `NextStopCard` - Tarjeta de próxima parada
+- `GoogleRouteMap` - Mapa interactivo (Google Maps, `@altaviapp/maps`)
+- `NextStopCard` - Tarjeta de próxima parada con estudiantes y check-in integrado
+- `QuickActions` - 3 botones de acción (Incidente, Relevo, Detalles)
+- `IncidentReportModal` - Modal de reporte de incidentes (3 pasos)
+- `RelayModeModal` - Modal de cambio de vehículo
+- `TripTimeline` - Cronología de eventos del viaje
+- `StopStudentsList` - Lista de paradas con estudiantes agrupados
+- `ActiveTripFAB` - Botón flotante de viaje activo
 - `GPSStatus` - Indicador de estado GPS
 - `MapControls` - Controles del mapa
-- `QuickActions` - Acciones rápidas flotantes
-- `RelayModeModal` - Modal de cambio de vehículo
-- `ActiveTripFAB` - Botón flotante de viaje activo
 - `StopMarker` - Marcador de parada
 - `ChecklistCategory` - Categoría de checklist
 - `ChecklistItem` - Ítem de checklist
@@ -344,6 +382,10 @@ Este es el módulo más complejo, con múltiples sub-rutas para el flujo complet
 - `useStudentByQR()` - Buscar estudiante por código QR
 - `useNovedadesForTrip()` - Novedades que afectan el viaje
 - `useNovedadTypes()` - Tipos configurables desde backend
+- `useIncidentMutations()` - Mutaciones de incidentes (createIncident)
+
+**Queries Convex relevantes**:
+- `tripEvents.getTripFullTimeline` - Timeline combinado de eventos y check-ins
 
 **Flujo de novedades desde perspectiva del crew**:
 ```

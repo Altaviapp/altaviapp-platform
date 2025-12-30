@@ -6,6 +6,7 @@
 
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { verifyUser, verifyInstitutionAccess } from "./lib/simpleAuth";
 
 /**
@@ -113,6 +114,33 @@ export const recordCheckin = mutation({
         type: "success",
         read: false,
         createdAt: now,
+      });
+    }
+
+    // Get stop name for event description
+    const stop = await ctx.db.get(args.stopId);
+
+    // Record trip event for timeline
+    if (route?.institutionId) {
+      await ctx.runMutation(internal.tripEvents.recordEventInternal, {
+        tripId: args.tripId,
+        institutionId: route.institutionId,
+        type: args.checkinType === "pickup" ? "student_checkin" : "student_checkout",
+        title: args.checkinType === "pickup"
+          ? `${student.firstName} ${student.lastName} abordó`
+          : `${student.firstName} ${student.lastName} fue entregado`,
+        description: stop ? `Check-in en parada: ${stop.name}` : undefined,
+        studentId: args.studentId,
+        stopId: args.stopId,
+        actorId: args.userId,
+        actorRole: performedByRole,
+        latitude: args.latitude,
+        longitude: args.longitude,
+        metadata: {
+          checkinId,
+          qrScanned: args.qrScanned,
+          manualReason: args.manualReason,
+        },
       });
     }
 

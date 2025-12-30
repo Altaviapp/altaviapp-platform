@@ -108,6 +108,17 @@ export function RouteMap({
     setIsClient(true);
   }, []);
 
+  // Route polyline coordinates - MUST be before early returns to maintain hook order
+  const routeCoordinates: [number, number][] = useMemo(() => {
+    if (encodedPolyline) {
+      // Decode the polyline and convert to Leaflet format [lat, lng]
+      const decoded = decodePolyline(encodedPolyline);
+      return decoded.map(point => [point.lat, point.lng] as [number, number]);
+    }
+    // Fallback to simple path from stops
+    return stops.map(stop => [stop.latitude, stop.longitude] as [number, number]);
+  }, [encodedPolyline, stops]);
+
   if (!isClient) {
     return (
       <div
@@ -137,17 +148,6 @@ export function RouteMap({
     : firstStop
       ? [firstStop.latitude, firstStop.longitude]
       : [-2.1894, -79.8891]; // Default: Guayaquil, Ecuador
-
-  // Route polyline coordinates - prefer decoded polyline for real routes
-  const routeCoordinates: [number, number][] = useMemo(() => {
-    if (encodedPolyline) {
-      // Decode the polyline and convert to Leaflet format [lat, lng]
-      const decoded = decodePolyline(encodedPolyline);
-      return decoded.map(point => [point.lat, point.lng] as [number, number]);
-    }
-    // Fallback to simple path from stops
-    return stops.map(stop => [stop.latitude, stop.longitude] as [number, number]);
-  }, [encodedPolyline, stops]);
 
   // Map control handlers
   const handleZoomIn = () => {

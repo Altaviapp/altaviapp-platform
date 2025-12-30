@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useCallback, useState, useMemo } from 'react';
+import { useEffect, useCallback, useState, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
   Bus,
@@ -12,6 +12,7 @@ import {
   Sunset,
   FileText,
   UserMinus,
+  Crosshair,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -47,6 +48,9 @@ export default function ActiveTripPage() {
   // Check-in sheet state
   const [isCheckinOpen, setIsCheckinOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+
+  // Map reference for centering
+  const mapRef = useRef<google.maps.Map | null>(null);
 
   // Get real trip data from Convex
   const { trip: convexTrip, isLoading: tripLoading } = useTrip(tripId as Id<"trips"> | null);
@@ -118,6 +122,31 @@ export default function ActiveTripPage() {
       scheduledTime: stop.estimatedArrivalTime ?? undefined,
     };
   }), [tripStops]);
+
+  // Generate polyline from stops (simple straight-line route)
+  const routePolyline = useMemo(() => {
+    if (tripStops.length < 2) return [];
+    return tripStops.map(stop => ({
+      lat: stop.latitude,
+      lng: stop.longitude,
+    }));
+  }, [tripStops]);
+
+  // Handle map load to store reference
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
+  // Center map on current position
+  const handleCenterOnMe = useCallback(() => {
+    if (mapRef.current && gpsPosition) {
+      mapRef.current.panTo({
+        lat: gpsPosition.latitude,
+        lng: gpsPosition.longitude,
+      });
+      mapRef.current.setZoom(16);
+    }
+  }, [gpsPosition]);
 
   // Format elapsed time
   const elapsedFormatted = useMemo(() => {
@@ -375,10 +404,12 @@ export default function ActiveTripPage() {
           <GoogleRouteMap
             stops={mapStops}
             currentStopIndex={currentStopIndex}
+            polyline={routePolyline}
             vehiclePosition={vehiclePosition}
-            showVehicle={gpsIsTracking}
+            showVehicle={!!vehiclePosition}
             autoFitBounds={true}
             showGeofences={false}
+            onMapLoad={handleMapLoad}
             style={{ height: '45vh', width: '100%' }}
             overlays={{
               topLeft: gpsIsTracking ? (
@@ -402,6 +433,15 @@ export default function ActiveTripPage() {
                   </div>
                 </div>
               ),
+              bottomRight: vehiclePosition ? (
+                <button
+                  onClick={handleCenterOnMe}
+                  className="bg-white/90 backdrop-blur-sm rounded-lg p-2.5 shadow-lg hover:bg-white transition-colors"
+                  aria-label="Centrar en mi ubicación"
+                >
+                  <Crosshair className="w-5 h-5 text-primary" />
+                </button>
+              ) : undefined,
             }}
           />
         </div>

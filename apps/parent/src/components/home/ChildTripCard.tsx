@@ -92,7 +92,7 @@ export function ChildTripCard({ student }: ChildTripCardProps) {
         )}
         onClick={() => {
           if (hasActiveTrip && tracking?.trip?.id) {
-            router.push(`/trips/${tracking.trip.id}`);
+            router.push(`/trips/${tracking.trip.id}?studentId=${student._id}`);
           }
         }}
       >

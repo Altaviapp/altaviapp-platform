@@ -52,6 +52,18 @@ export { LocationPicker } from "./components/LocationPicker";
 export type { LocationPickerProps } from "./components/LocationPicker";
 export { RoutePolyline, fitMapToPolyline } from "./components/RoutePolyline";
 export type { RoutePolylineProps } from "./components/RoutePolyline";
+export {
+  GoogleRouteMap,
+  SpeedOverlay,
+  ProgressOverlay,
+  ETAOverlay,
+} from "./components/GoogleRouteMap";
+export type {
+  GoogleRouteMapProps,
+  RouteStopMarker,
+  VehiclePosition,
+  StopStatus,
+} from "./components/GoogleRouteMap";
 
 // Services
 export { geocodeAddress, reverseGeocode, clearGeocodeCache } from "./services/geocoding";

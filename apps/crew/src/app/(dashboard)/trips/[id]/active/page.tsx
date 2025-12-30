@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useCallback, useState, lazy, Suspense, useMemo } from 'react';
+import { useEffect, useCallback, useState, useMemo } from 'react';
 import {
   ArrowLeft,
   QrCode,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { GoogleMapsProvider, GoogleRouteMap, type RouteStopMarker, type StopStatus } from '@altaviapp/maps';
 
 import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip, useNavigation, generateNavigationStepsFromStops } from '@/hooks';
 import type { GeofenceAlert, GPSSourceType } from '@/hooks';
@@ -26,11 +27,6 @@ import { RelayModeModal } from '@/components/trip/RelayModeModal';
 import { CheckinSheet } from '@/components/checkin';
 import { NavigationPanel } from '@/components/navigation';
 import { Id } from '../../../../../../../../convex/_generated/dataModel';
-
-// Dynamic import for RouteMap to avoid SSR issues with Leaflet
-const RouteMap = lazy(() =>
-  import('@/components/trip/RouteMap').then((mod) => ({ default: mod.RouteMap }))
-);
 
 /**
  * Active Trip Page
@@ -113,23 +109,36 @@ export default function ActiveTripPage() {
   const tripStops = convexTrip?.stops ?? [];
   const isPickup = routeType === 'pickup';
 
-  // Prepare stops for map (matching Stop type) - memoized and MUST be before early return
-  const mapStops = useMemo(() => tripStops.map((stop, index) => ({
-    _id: stop._id,
-    routeId: String(stop.routeId),
+  // Prepare stops for map (matching RouteStopMarker type) - memoized and MUST be before early return
+  const mapStops = useMemo((): RouteStopMarker[] => tripStops.map((stop, index) => {
+    const stopWithMeta = stop as typeof stop & { isCompleted?: boolean; isNext?: boolean };
+    let status: StopStatus = 'pending';
+    if (stopWithMeta.isCompleted) status = 'completed';
+    else if (stopWithMeta.isNext) status = 'current';
+
+    return {
+      id: String(stop._id),
+      name: stop.name,
+      address: stop.address,
+      position: { lat: stop.latitude, lng: stop.longitude },
+      order: index + 1,
+      status,
+      scheduledTime: stop.estimatedArrivalTime ?? undefined,
+    };
+  }), [tripStops]);
+
+  // Stops for navigation (different format) - MUST be before early return
+  const navStops = useMemo(() => tripStops.map((stop) => ({
     name: stop.name,
-    address: stop.address,
     latitude: stop.latitude,
     longitude: stop.longitude,
-    order: index,
-    estimatedArrivalTime: stop.estimatedArrivalTime ?? '',
-    students: [] as string[],
+    address: stop.address,
   })), [tripStops]);
 
   // Generate navigation steps from stops - MUST be before early return
   const navigationSteps = useMemo(
-    () => generateNavigationStepsFromStops(mapStops),
-    [mapStops]
+    () => generateNavigationStepsFromStops(navStops),
+    [navStops]
   );
 
   // Navigation hook for turn-by-turn - MUST be before early return
@@ -316,14 +325,13 @@ export default function ActiveTripPage() {
     alert(`Vehículo cambiado exitosamente. ${newVehicle.gpsSourceType === 'mobile' ? 'Usando GPS del celular.' : 'Usando GPS externo del vehículo.'}`);
   };
 
-  // Current location for map (matching GPSLocation type)
-  const currentLocation = gpsPosition ? {
-    latitude: gpsPosition.latitude,
-    longitude: gpsPosition.longitude,
+  // Current location for map (matching VehiclePosition type for GoogleRouteMap)
+  const vehiclePosition = gpsPosition ? {
+    position: { lat: gpsPosition.latitude, lng: gpsPosition.longitude },
     heading: gpsPosition.heading ?? 0,
-    speed: gpsPosition.speed ?? 0,
-    timestamp: new Date().toISOString(),
+    speed: gpsPosition.speed ? gpsPosition.speed * 3.6 : 0, // m/s to km/h
     accuracy: gpsPosition.accuracy ?? 10,
+    timestamp: gpsPosition.timestamp,
   } : null;
 
   const TypeIcon = isPickup ? Sunrise : Sunset;
@@ -397,50 +405,42 @@ export default function ActiveTripPage() {
       )}
 
       {/* Prominent Map Section */}
-      <div className="flex-1 relative" style={{ minHeight: '50vh' }}>
-        <Suspense
-          fallback={
-            <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
-                <p className="text-gray-600 text-sm">Cargando mapa...</p>
-              </div>
-            </div>
-          }
-        >
-          <RouteMap
+      <GoogleMapsProvider>
+        <div className="flex-1 relative" style={{ minHeight: '50vh' }}>
+          <GoogleRouteMap
             stops={mapStops}
             currentStopIndex={currentStopIndex}
-            currentLocation={currentLocation}
-            height="100%"
-            showControls={true}
-            tripId={tripId}
+            vehiclePosition={vehiclePosition}
+            showVehicle={gpsIsTracking}
+            autoFitBounds={true}
+            showGeofences={false}
+            style={{ height: '100%', width: '100%' }}
+            overlays={{
+              topLeft: gpsIsTracking ? (
+                <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      'w-2 h-2 rounded-full',
+                      gpsIsTracking ? 'bg-success animate-pulse' : 'bg-gray-400'
+                    )} />
+                    <span className="font-bold text-lg">{currentSpeed}</span>
+                    <span className="text-gray-600 text-sm">km/h</span>
+                  </div>
+                </div>
+              ) : undefined,
+              topRight: (
+                <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span className="font-medium">{currentStopIndex}/{totalStops}</span>
+                    <span className="text-gray-500">paradas</span>
+                  </div>
+                </div>
+              ),
+            }}
           />
-        </Suspense>
-
-        {/* Speed indicator overlay */}
-        {gpsIsTracking && (
-          <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
-            <div className="flex items-center gap-2">
-              <div className={cn(
-                'w-2 h-2 rounded-full',
-                gpsIsTracking ? 'bg-success animate-pulse' : 'bg-gray-400'
-              )} />
-              <span className="font-bold text-lg">{currentSpeed}</span>
-              <span className="text-gray-600 text-sm">km/h</span>
-            </div>
-          </div>
-        )}
-
-        {/* Progress overlay */}
-        <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
-          <div className="flex items-center gap-2 text-sm">
-            <MapPin className="w-4 h-4 text-primary" />
-            <span className="font-medium">{currentStopIndex}/{totalStops}</span>
-            <span className="text-gray-500">paradas</span>
-          </div>
         </div>
-      </div>
+      </GoogleMapsProvider>
 
       {/* Turn-by-Turn Navigation Panel */}
       {isNavigating && navCurrentStep && (

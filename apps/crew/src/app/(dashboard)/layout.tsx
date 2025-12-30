@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import 'leaflet/dist/leaflet.css';
-import '@/styles/leaflet-custom.css';
 
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';

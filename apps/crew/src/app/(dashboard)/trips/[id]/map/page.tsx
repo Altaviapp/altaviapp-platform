@@ -2,24 +2,12 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
+import { useMemo } from 'react';
 import { ArrowLeft, Navigation } from 'lucide-react';
+import { GoogleMapsProvider, GoogleRouteMap, type RouteStopMarker, type StopStatus } from '@altaviapp/maps';
 
 import { useActiveTrip } from '@/hooks/useActiveTrip';
 import { formatDistance } from '@/lib/utils/tripCalculations';
-
-// Dynamic import of RouteMap to avoid SSR issues with Leaflet
-const RouteMap = dynamic(
-  () => import('@/components/trip').then(mod => mod.RouteMap),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-600">Cargando mapa...</p>
-      </div>
-    )
-  }
-);
 
 /**
  * Full-Screen Map View Page
@@ -40,6 +28,36 @@ export default function MapViewPage() {
     etaToNextStop,
   } = useActiveTrip(tripId);
 
+  // Convert stops to RouteStopMarker format - MUST be before early return
+  const mapStops = useMemo((): RouteStopMarker[] => {
+    const stops = trip?.stops || [];
+    return stops.map((stop, index) => {
+      const stopWithMeta = stop as typeof stop & { isCompleted?: boolean; isNext?: boolean };
+      let status: StopStatus = 'pending';
+      if (stopWithMeta.isCompleted) status = 'completed';
+      else if (stopWithMeta.isNext) status = 'current';
+
+      return {
+        id: String(stop._id),
+        name: stop.name,
+        address: stop.address,
+        position: { lat: stop.latitude, lng: stop.longitude },
+        order: index + 1,
+        status,
+      };
+    });
+  }, [trip?.stops]);
+
+  // Convert currentLocation to VehiclePosition format - MUST be before early return
+  const vehiclePosition = useMemo(() => {
+    if (!currentLocation) return null;
+    return {
+      position: { lat: currentLocation.latitude, lng: currentLocation.longitude },
+      heading: currentLocation.heading ?? 0,
+      speed: (currentLocation.speed ?? 0) * 3.6, // m/s to km/h
+    };
+  }, [currentLocation]);
+
   if (isLoading || !trip) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -51,8 +69,6 @@ export default function MapViewPage() {
     );
   }
 
-  const stops = trip.stops || [];
-
   const handleNavigate = () => {
     if (nextStop) {
       const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${nextStop.latitude},${nextStop.longitude}`;
@@ -61,16 +77,17 @@ export default function MapViewPage() {
   };
 
   return (
-    <div className="relative h-screen">
-      {/* Full-Screen Map */}
-      <RouteMap
-        stops={stops}
-        currentStopIndex={currentStopIndex}
-        currentLocation={currentLocation}
-        tripId={tripId}
-        height="100vh"
-        showControls={true}
-      />
+    <GoogleMapsProvider>
+      <div className="relative h-screen">
+        {/* Full-Screen Map */}
+        <GoogleRouteMap
+          stops={mapStops}
+          currentStopIndex={currentStopIndex}
+          vehiclePosition={vehiclePosition}
+          showVehicle={!!currentLocation}
+          autoFitBounds={true}
+          style={{ height: '100vh', width: '100%' }}
+        />
 
       {/* Top Header */}
       <div className="absolute top-0 left-0 right-0 z-[1000] bg-gradient-to-b from-black/50 to-transparent p-4">
@@ -135,6 +152,7 @@ export default function MapViewPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </GoogleMapsProvider>
   );
 }

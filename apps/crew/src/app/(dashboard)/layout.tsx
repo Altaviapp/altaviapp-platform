@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
-import { MobileNav } from '@/components/layout/MobileNav';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { ActiveTripFAB } from '@/components/trip/ActiveTripFAB';
 import { useConvexAuth } from '@/hooks';
@@ -70,12 +69,9 @@ export default function DashboardLayout({
         />
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-auto pb-20 lg:pb-6">
+        <main className="flex-1 p-4 lg:p-6 overflow-auto">
           {children}
         </main>
-
-        {/* Mobile Navigation - hidden when sidebar is open */}
-        <MobileNav hidden={sidebarOpen} />
 
         {/* Active Trip FAB */}
         <ActiveTripFAB />

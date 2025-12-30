@@ -491,10 +491,10 @@ export default function ActiveTripPage() {
                   </div>
                 </div>
               ),
-              bottomLeft: (
+              bottomRight: (
                 <button
                   onClick={handleCenterOnMe}
-                  className="bg-white rounded-lg p-2.5 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+                  className="bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
                   aria-label="Centrar en mi ubicación"
                 >
                   <Crosshair className="w-5 h-5 text-primary" />

@@ -357,7 +357,7 @@ export function GoogleRouteMap({
         <div className="absolute bottom-20 left-2 z-10">{overlays.bottomLeft}</div>
       )}
       {overlays?.bottomRight && (
-        <div className="absolute bottom-2 right-2 z-10">{overlays.bottomRight}</div>
+        <div className="absolute bottom-20 right-2 z-10">{overlays.bottomRight}</div>
       )}
     </div>
   );

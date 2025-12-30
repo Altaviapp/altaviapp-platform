@@ -426,10 +426,10 @@ export default function ActiveTripPage() {
         </div>
       </div>
 
-      {/* Map Container - Fixed Height */}
-      <div className="relative flex-shrink-0" style={{ height: '55vh' }}>
+      {/* Map Container - Fixed Height with absolute map inside */}
+      <div className="relative flex-shrink-0 h-[55vh]">
         <GoogleMapsProvider>
-          {/* Map fills container */}
+          {/* Map fills container with absolute positioning */}
           <GoogleRouteMap
             stops={mapStops}
             currentStopIndex={currentStopIndex}
@@ -439,7 +439,7 @@ export default function ActiveTripPage() {
             autoFitBounds={!initialBoundsFit}
             showGeofences={false}
             onMapLoad={handleMapLoad}
-            style={{ height: '100%', width: '100%' }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             overlays={{
               topLeft: gpsIsTracking ? (
                 <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
@@ -507,8 +507,12 @@ export default function ActiveTripPage() {
         </GoogleMapsProvider>
       </div>
 
-      {/* Content Section - Normal page flow (NOT floating) */}
-      <div className="flex-1 bg-white px-4 py-4 space-y-4">
+      {/* Content Section - Floating visual style but in normal page flow */}
+      <div className="relative z-10 -mt-4 bg-white rounded-t-2xl shadow-2xl px-4 pt-2 pb-4 space-y-4">
+        {/* Drag handle visual */}
+        <div className="flex justify-center py-1">
+          <div className="w-10 h-1 bg-gray-300 rounded-full" />
+        </div>
         {/* Geofence Alerts */}
         {geofenceAlerts.length > 0 && (
           <div className="p-2 bg-info/10 rounded-lg">

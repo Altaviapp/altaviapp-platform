@@ -4,3 +4,4 @@ export { GreetingHeader } from './GreetingHeader';
 export { ChildTripCard } from '../../home/ChildTripCard';
 export { ActiveTripView } from '../../home/ActiveTripView';
 export { NovedadContextButton } from '../../home/NovedadContextButton';
+export { UpcomingTripCard } from '../../home/UpcomingTripCard';

@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Edit, Trash2, QrCode, Phone, Mail, MapPin, GraduationCap, Calendar, Loader2, Bus, Clock } from 'lucide-react';
+import { Edit, Trash2, QrCode, Phone, Mail, MapPin, GraduationCap, Calendar, Loader2, Bus, Clock, ChevronRight, Download, Printer, X } from 'lucide-react';
+import QRCodeLib from 'qrcode';
 import { PageHeader, StatusBadge, DetailSection, DetailItem, DetailGrid, ConfirmDialog } from '@/components/shared';
 import Link from 'next/link';
 import { useStudent, useStudentMutations, useStudentRouteAssignments } from '@/hooks';
@@ -23,6 +24,9 @@ export default function StudentDetailPage() {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   // Real data from Convex
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,6 +69,57 @@ export default function StudentDetailPage() {
 
   const studentName = `${student.firstName} ${student.lastName}`;
 
+  // QR Code functions
+  const generateQrCode = async () => {
+    if (!student?.qrCode) return;
+    setQrLoading(true);
+    try {
+      const url = await QRCodeLib.toDataURL(student.qrCode, {
+        width: 256,
+        margin: 2,
+        color: { dark: '#042940', light: '#FFFFFF' },
+      });
+      setQrDataUrl(url);
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+    }
+    setQrLoading(false);
+  };
+
+  const downloadQrCode = () => {
+    if (!qrDataUrl || !student) return;
+    const link = document.createElement('a');
+    link.href = qrDataUrl;
+    link.download = `qr-${student.firstName}-${student.lastName}.png`;
+    link.click();
+  };
+
+  const printQrCode = () => {
+    if (!qrDataUrl || !student) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head><title>QR - ${student.firstName} ${student.lastName}</title></head>
+          <body style="display:flex;flex-direction:column;align-items:center;padding:40px;">
+            <h2>${student.firstName} ${student.lastName}</h2>
+            <p>${student.grade}</p>
+            <img src="${qrDataUrl}" style="width:256px;height:256px;" />
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  const handleOpenQRModal = () => {
+    setShowQRModal(true);
+    if (!qrDataUrl && student?.qrCode) {
+      generateQrCode();
+    }
+  };
+
   // Get all active assignments, grouped by route type
   const activeAssignments = assignments.filter(a => a.isActive);
   const pickupAssignments = activeAssignments.filter(a => a.route?.type === 'pickup');
@@ -87,12 +142,6 @@ export default function StudentDetailPage() {
           />
         }
         actions={[
-          {
-            label: 'Ver QR',
-            href: `/students/${student._id}/qr`,
-            icon: QrCode,
-            variant: 'secondary',
-          },
           {
             label: 'Editar',
             href: `/students/${student._id}/edit`,
@@ -140,17 +189,31 @@ export default function StudentDetailPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <QrCode className="w-5 h-5 text-green-600" />
+            {student.qrCode ? (
+              <button
+                onClick={handleOpenQRModal}
+                className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors w-full text-left"
+              >
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <QrCode className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500">Código QR</p>
+                  <p className="text-sm font-medium text-gray-900">Ver QR</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <QrCode className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Código QR</p>
+                  <p className="text-sm font-medium text-amber-600">Pendiente</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Código QR</p>
-                <p className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
-                  {student.qrCode ? 'Generado' : 'Pendiente'}
-                </p>
-              </div>
-            </div>
+            )}
           </div>
         </DetailSection>
 
@@ -302,6 +365,69 @@ export default function StudentDetailPage() {
         variant="danger"
         isLoading={isDeleting}
       />
+
+      {/* QR Code Modal */}
+      {showQRModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowQRModal(false)}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 p-6">
+            <button
+              onClick={() => setShowQRModal(false)}
+              className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Código QR</h3>
+              <p className="text-sm text-gray-500">{studentName}</p>
+              <p className="text-xs text-gray-400">{student.grade}</p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-6 flex items-center justify-center mb-6">
+              {qrLoading ? (
+                <div className="w-48 h-48 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : qrDataUrl ? (
+                <img src={qrDataUrl} alt="QR Code" className="w-48 h-48" />
+              ) : (
+                <div className="w-48 h-48 flex items-center justify-center text-gray-400">
+                  <QrCode className="w-16 h-16" />
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={downloadQrCode}
+                disabled={!qrDataUrl}
+                className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4" />
+                Descargar
+              </button>
+              <button
+                onClick={printQrCode}
+                disabled={!qrDataUrl}
+                className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Printer className="w-4 h-4" />
+                Imprimir
+              </button>
+            </div>
+
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-xs text-blue-700">
+                <strong>Tip:</strong> Este código QR se usa para check-in/check-out en el bus escolar.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

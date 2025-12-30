@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bus, Clock, MapPin, ChevronDown, ChevronUp, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Bus, Clock, MapPin, ChevronDown, ChevronUp, ArrowRight, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NovedadContextButton } from '@/components/home/NovedadContextButton';
 import { Id } from '../../../../../convex/_generated/dataModel';
@@ -15,6 +15,8 @@ interface TripScheduleItemProps {
   stopName: string;
   scheduledTime: string;
   date?: string; // For future novedades
+  hasNovedad?: boolean;
+  novedadStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 export function TripScheduleItem({
@@ -26,6 +28,8 @@ export function TripScheduleItem({
   stopName,
   scheduledTime,
   date,
+  hasNovedad,
+  novedadStatus,
 }: TripScheduleItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -89,6 +93,33 @@ export function TripScheduleItem({
             <span className="truncate">{routeName}</span>
           </div>
         </div>
+
+        {/* Novedad indicator */}
+        {hasNovedad && (
+          <div
+            className={cn(
+              'flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
+              novedadStatus === 'approved'
+                ? 'bg-green-50 text-green-700'
+                : novedadStatus === 'rejected'
+                  ? 'bg-red-50 text-red-700'
+                  : 'bg-yellow-50 text-yellow-700'
+            )}
+          >
+            {novedadStatus === 'approved' ? (
+              <CheckCircle className="w-3 h-3" />
+            ) : (
+              <AlertTriangle className="w-3 h-3" />
+            )}
+            <span className="hidden sm:inline">
+              {novedadStatus === 'approved'
+                ? 'Aprobada'
+                : novedadStatus === 'rejected'
+                  ? 'Rechazada'
+                  : 'Pendiente'}
+            </span>
+          </div>
+        )}
 
         {/* Expand icon */}
         <div className="flex-shrink-0">

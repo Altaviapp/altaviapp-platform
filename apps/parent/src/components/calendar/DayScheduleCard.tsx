@@ -13,7 +13,9 @@ interface Trip {
   routeType: 'pickup' | 'dropoff';
   stopName: string;
   scheduledTime: string;
-  stopId: Id<"routeStops">;
+  stopId?: Id<"routeStops">;
+  hasNovedad?: boolean;
+  novedadStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 interface DayScheduleCardProps {
@@ -72,6 +74,8 @@ export function DayScheduleCard({
                 stopName={trip.stopName}
                 scheduledTime={trip.scheduledTime}
                 date={date}
+                hasNovedad={trip.hasNovedad}
+                novedadStatus={trip.novedadStatus}
               />
             ))}
           </div>

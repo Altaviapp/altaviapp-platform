@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, MapPin } from 'lucide-react';
+import { Loader2, MapPin, QrCode, Download, Printer } from 'lucide-react';
+import QRCodeLib from 'qrcode';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
 import { useStudent, useStudentMutations, useInstitutionGrades } from '@/hooks';
@@ -39,6 +40,8 @@ export default function EditStudentPage() {
     position: undefined,
     address: '',
   });
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   // Real data from Convex
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,6 +124,50 @@ export default function EditStudentPage() {
 
   const handleCancel = () => {
     router.push(`/students/${studentId}`);
+  };
+
+  // QR Code functions
+  const generateQrCode = async () => {
+    if (!student?.qrCode) return;
+    setQrLoading(true);
+    try {
+      const url = await QRCodeLib.toDataURL(student.qrCode, {
+        width: 256,
+        margin: 2,
+        color: { dark: '#042940', light: '#FFFFFF' },
+      });
+      setQrDataUrl(url);
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+    }
+    setQrLoading(false);
+  };
+
+  const downloadQrCode = () => {
+    if (!qrDataUrl || !student) return;
+    const link = document.createElement('a');
+    link.href = qrDataUrl;
+    link.download = `qr-${student.firstName}-${student.lastName}.png`;
+    link.click();
+  };
+
+  const printQrCode = () => {
+    if (!qrDataUrl || !student) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head><title>QR - ${student.firstName} ${student.lastName}</title></head>
+          <body style="display:flex;flex-direction:column;align-items:center;padding:40px;">
+            <h2>${student.firstName} ${student.lastName}</h2>
+            <p>${student.grade}</p>
+            <img src="${qrDataUrl}" style="width:256px;height:256px;" />
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
   };
 
   if (isLoading) {
@@ -280,6 +327,70 @@ export default function EditStudentPage() {
             ]}
             required
           />
+        </FormSection>
+
+        {/* Código QR */}
+        <FormSection
+          title="Código QR del Estudiante"
+          description="Este código QR se usa para check-in/check-out en el bus escolar."
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <QrCode className="w-5 h-5 text-primary" />
+            <span className="text-sm text-gray-600">
+              {student.qrCode ? 'Código QR generado' : 'Sin código QR - Se generará automáticamente'}
+            </span>
+          </div>
+
+          {student.qrCode && (
+            <div className="bg-gray-50 rounded-lg p-6 flex flex-col items-center">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="QR Code" className="w-48 h-48 mb-4" />
+              ) : (
+                <button
+                  type="button"
+                  onClick={generateQrCode}
+                  disabled={qrLoading}
+                  className="w-48 h-48 bg-white rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center hover:border-primary transition-colors mb-4"
+                >
+                  {qrLoading ? (
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  ) : (
+                    <>
+                      <QrCode className="w-12 h-12 text-gray-300 mb-2" />
+                      <span className="text-sm text-gray-500">Generar QR</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {qrDataUrl && (
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={downloadQrCode}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Descargar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={printQrCode}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Imprimir
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-xs text-blue-700">
+              <strong>Tip:</strong> Descargue o imprima el código QR para que el estudiante lo lleve en su mochila o credencial.
+            </p>
+          </div>
         </FormSection>
 
         {/* Form Actions */}

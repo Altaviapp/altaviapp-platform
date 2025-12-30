@@ -563,3 +563,416 @@ export const getActiveAndUpcomingTrips = query({
     return results;
   },
 });
+
+// ============================================
+// Parent App Queries
+// ============================================
+
+/**
+ * Get projected trips for ALL children of a parent (for calendar view)
+ * Returns trips grouped by date for a date range
+ */
+export const getAllChildrenProjectedTrips = query({
+  args: {
+    userId: v.id("users"),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Get current user to find their email
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return [];
+    }
+
+    // Get students where user is a guardian (either by email or guardianUserIds)
+    const studentsByEmail = await ctx.db
+      .query("students")
+      .withIndex("by_parent_email", (q) => q.eq("parentEmail", user.email))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    const studentsBySecondaryEmail = await ctx.db
+      .query("students")
+      .withIndex("by_secondary_parent_email", (q) => q.eq("secondaryParentEmail", user.email))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Combine and dedupe students
+    const studentMap = new Map<string, (typeof studentsByEmail)[0]>();
+    for (const s of studentsByEmail) {
+      studentMap.set(s._id.toString(), s);
+    }
+    for (const s of studentsBySecondaryEmail) {
+      studentMap.set(s._id.toString(), s);
+    }
+    const students = Array.from(studentMap.values());
+
+    if (students.length === 0) {
+      return [];
+    }
+
+    // Generate date range (max 28 days for 4 weeks)
+    const dates = generateDateRange(args.startDate, args.endDate, 28);
+
+    // Get all student route assignments
+    const studentIds = students.map((s) => s._id);
+    const allStudentRoutes = await Promise.all(
+      studentIds.map((studentId) =>
+        ctx.db
+          .query("studentRoutes")
+          .withIndex("by_student", (q) => q.eq("studentId", studentId))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect()
+      )
+    );
+
+    // Flatten and create lookup
+    const studentRoutesFlat = allStudentRoutes.flat();
+    const routeIds = Array.from(new Set(studentRoutesFlat.map((sr) => sr.routeId)));
+
+    // Get all routes - query directly to maintain proper typing
+    const allRoutes = await ctx.db.query("routes").collect();
+    const routeIdStrings = new Set(routeIds.map((id) => id.toString()));
+    const routes = allRoutes.filter((r) => routeIdStrings.has(r._id.toString()));
+    const routeMap = new Map(routes.map((r) => [r._id.toString(), r]));
+
+    // Get existing trips in date range
+    const existingTrips = await ctx.db
+      .query("trips")
+      .withIndex("by_date")
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("scheduledDate"), args.startDate),
+          q.lte(q.field("scheduledDate"), args.endDate)
+        )
+      )
+      .collect();
+
+    const tripsByRouteDate = new Map<string, (typeof existingTrips)[0]>();
+    for (const trip of existingTrips) {
+      tripsByRouteDate.set(`${trip.routeId}:${trip.scheduledDate}`, trip);
+    }
+
+    // Get all novedades for these students
+    const allNovedades = await Promise.all(
+      studentIds.map((studentId) =>
+        ctx.db
+          .query("novedades")
+          .withIndex("by_student", (q) => q.eq("studentId", studentId))
+          .collect()
+      )
+    );
+    const novedadesFlat = allNovedades.flat();
+
+    // Build projected trips
+    const projectedTrips: {
+      date: string;
+      scheduledTime: string;
+      studentId: Id<"students">;
+      studentName: string;
+      studentPhoto?: string;
+      routeId: Id<"routes">;
+      routeName: string;
+      routeType: "pickup" | "dropoff";
+      stopName: string;
+      status: "projected" | "scheduled" | "in_progress" | "completed";
+      tripId?: Id<"trips">;
+      hasNovedad: boolean;
+      novedadStatus?: "pending" | "approved" | "rejected";
+    }[] = [];
+
+    // Process each student
+    for (const student of students) {
+      const studentRoutes = studentRoutesFlat.filter(
+        (sr) => sr.studentId.toString() === student._id.toString()
+      );
+
+      for (const sr of studentRoutes) {
+        const route = routeMap.get(sr.routeId.toString());
+        if (!route || !route.isActive) continue;
+
+        // Get stop info
+        const stop = sr.stopId ? await ctx.db.get(sr.stopId) : null;
+
+        for (const date of dates) {
+          // Check if route runs on this date
+          const recurrence = route.recurrence as {
+            type: "daily" | "weekly" | "monthly" | "one_time";
+            daysOfWeek?: string[];
+            dayOfWeek?: string;
+            dayOfMonth?: number;
+            specificDate?: string;
+          } | undefined;
+
+          if (!routeRunsOnDate(recurrence, date)) {
+            continue;
+          }
+
+          // Check if student has excludeDays for this day
+          const dayName = getDayName(new Date(date + "T12:00:00"));
+          if (sr.excludeDays && Array.isArray(sr.excludeDays)) {
+            if (sr.excludeDays.includes(dayName)) {
+              continue;
+            }
+          }
+
+          // Check for existing trip
+          const existingTrip = tripsByRouteDate.get(`${route._id}:${date}`);
+
+          // Check for novedades
+          const studentNovedades = novedadesFlat.filter(
+            (n) => n.studentId.toString() === student._id.toString()
+          );
+          let hasNovedad = false;
+          let novedadStatus: "pending" | "approved" | "rejected" | undefined;
+
+          for (const nov of studentNovedades) {
+            if (novedadAppliesToDate(nov, date, route.type)) {
+              hasNovedad = true;
+              novedadStatus = nov.status as "pending" | "approved" | "rejected";
+              break;
+            }
+          }
+
+          projectedTrips.push({
+            date,
+            scheduledTime: stop?.scheduledTime || route.scheduledStartTime,
+            studentId: student._id,
+            studentName: `${student.firstName} ${student.lastName}`,
+            studentPhoto: student.photoStorageId
+              ? await ctx.storage.getUrl(student.photoStorageId) || undefined
+              : undefined,
+            routeId: route._id,
+            routeName: route.name,
+            routeType: route.type,
+            stopName: stop?.name || "Parada no asignada",
+            status: (existingTrip?.status as "projected" | "scheduled" | "in_progress" | "completed") || "projected",
+            tripId: existingTrip?._id,
+            hasNovedad,
+            novedadStatus,
+          });
+        }
+      }
+    }
+
+    // Sort by date, then by time
+    projectedTrips.sort((a, b) => {
+      if (a.date !== b.date) {
+        return a.date.localeCompare(b.date);
+      }
+      return a.scheduledTime.localeCompare(b.scheduledTime);
+    });
+
+    return projectedTrips;
+  },
+});
+
+/**
+ * Get active and upcoming trips for all children of a parent (for dashboard)
+ */
+export const getMyChildrenUpcomingTrips = query({
+  args: {
+    userId: v.id("users"),
+    hoursAhead: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const hours = args.hoursAhead || 12;
+    const now = new Date();
+    const today = now.toISOString().split("T")[0]!;
+
+    // Current time in HH:mm format
+    const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+    // Time N hours from now
+    const futureTime = new Date(now.getTime() + hours * 60 * 60 * 1000);
+    const futureTimeStr = `${String(futureTime.getHours()).padStart(2, "0")}:${String(futureTime.getMinutes()).padStart(2, "0")}`;
+
+    // Get current user to find their email
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return [];
+    }
+
+    // Get students where user is a guardian (either by email or guardianUserIds)
+    const studentsByEmail = await ctx.db
+      .query("students")
+      .withIndex("by_parent_email", (q) => q.eq("parentEmail", user.email))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    const studentsBySecondaryEmail = await ctx.db
+      .query("students")
+      .withIndex("by_secondary_parent_email", (q) => q.eq("secondaryParentEmail", user.email))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Combine and dedupe students
+    const studentMap = new Map<string, (typeof studentsByEmail)[0]>();
+    for (const s of studentsByEmail) {
+      studentMap.set(s._id.toString(), s);
+    }
+    for (const s of studentsBySecondaryEmail) {
+      studentMap.set(s._id.toString(), s);
+    }
+    const students = Array.from(studentMap.values());
+
+    if (students.length === 0) {
+      return [];
+    }
+
+    // Get student route assignments
+    const studentIds = students.map((s) => s._id);
+    const allStudentRoutes = await Promise.all(
+      studentIds.map((studentId) =>
+        ctx.db
+          .query("studentRoutes")
+          .withIndex("by_student", (q) => q.eq("studentId", studentId))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect()
+      )
+    );
+    const studentRoutesFlat = allStudentRoutes.flat();
+
+    // Get unique route IDs and query routes directly for proper typing
+    const routeIds = Array.from(new Set(studentRoutesFlat.map((sr) => sr.routeId)));
+    const allRoutes = await ctx.db.query("routes").collect();
+    const routeIdStrings = new Set(routeIds.map((id) => id.toString()));
+    const routes = allRoutes.filter((r) => routeIdStrings.has(r._id.toString()));
+    const routeMap = new Map(routes.map((r) => [r._id.toString(), r]));
+
+    // Get existing trips for today
+    const todayTrips = await ctx.db
+      .query("trips")
+      .withIndex("by_date", (q) => q.eq("scheduledDate", today))
+      .collect();
+
+    const tripsByRoute = new Map<string, (typeof todayTrips)[0]>();
+    for (const trip of todayTrips) {
+      tripsByRoute.set(trip.routeId.toString(), trip);
+    }
+
+    // Get novedades for students
+    const allNovedades = await Promise.all(
+      studentIds.map((studentId) =>
+        ctx.db
+          .query("novedades")
+          .withIndex("by_student", (q) => q.eq("studentId", studentId))
+          .collect()
+      )
+    );
+    const novedadesFlat = allNovedades.flat();
+
+    // Build results
+    const results: {
+      type: "active" | "upcoming";
+      studentId: Id<"students">;
+      studentName: string;
+      studentPhoto?: string;
+      date: string;
+      scheduledTime: string;
+      routeName: string;
+      routeType: "pickup" | "dropoff";
+      stopName: string;
+      driverName: string;
+      vehiclePlate: string;
+      status: string;
+      hasNovedad: boolean;
+    }[] = [];
+
+    for (const student of students) {
+      const studentRoutes = studentRoutesFlat.filter(
+        (sr) => sr.studentId.toString() === student._id.toString()
+      );
+
+      for (const sr of studentRoutes) {
+        const route = routeMap.get(sr.routeId.toString());
+        if (!route || !route.isActive) continue;
+
+        // Check if route runs today
+        const recurrence = route.recurrence as {
+          type: "daily" | "weekly" | "monthly" | "one_time";
+          daysOfWeek?: string[];
+          dayOfWeek?: string;
+          dayOfMonth?: number;
+          specificDate?: string;
+        } | undefined;
+
+        if (!routeRunsOnDate(recurrence, today)) {
+          continue;
+        }
+
+        // Check excludeDays
+        const dayName = getDayName(new Date(today + "T12:00:00"));
+        if (sr.excludeDays && Array.isArray(sr.excludeDays)) {
+          if (sr.excludeDays.includes(dayName)) {
+            continue;
+          }
+        }
+
+        const existingTrip = tripsByRoute.get(route._id.toString());
+        const stop = sr.stopId ? await ctx.db.get(sr.stopId) : null;
+        const stopTime = stop?.scheduledTime || route.scheduledStartTime;
+
+        // Determine if active or upcoming
+        let type: "active" | "upcoming";
+        if (existingTrip?.status === "in_progress") {
+          type = "active";
+        } else if (existingTrip?.status === "completed") {
+          continue; // Skip completed trips
+        } else if (stopTime < currentTime) {
+          continue; // Skip past trips
+        } else if (stopTime > futureTimeStr) {
+          continue; // Skip trips too far in the future
+        } else {
+          type = "upcoming";
+        }
+
+        // Get vehicle and driver info
+        const vehicle = await ctx.db.get(route.vehicleId);
+        const driver = await ctx.db.get(route.driverId);
+        const driverUser = driver?.userId ? await ctx.db.get(driver.userId) : null;
+
+        // Check for novedades
+        const studentNovedades = novedadesFlat.filter(
+          (n) => n.studentId.toString() === student._id.toString()
+        );
+        let hasNovedad = false;
+        for (const nov of studentNovedades) {
+          if (novedadAppliesToDate(nov, today, route.type)) {
+            hasNovedad = true;
+            break;
+          }
+        }
+
+        results.push({
+          type,
+          studentId: student._id,
+          studentName: `${student.firstName} ${student.lastName}`,
+          studentPhoto: student.photoStorageId
+            ? await ctx.storage.getUrl(student.photoStorageId) || undefined
+            : undefined,
+          date: today,
+          scheduledTime: stopTime,
+          routeName: route.name,
+          routeType: route.type,
+          stopName: stop?.name || "Parada no asignada",
+          driverName: driverUser?.name || "Sin conductor",
+          vehiclePlate: vehicle?.licensePlate || "Sin placa",
+          status: existingTrip?.status || "projected",
+          hasNovedad,
+        });
+      }
+    }
+
+    // Sort by type (active first), then by time
+    results.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "active" ? -1 : 1;
+      }
+      return a.scheduledTime.localeCompare(b.scheduledTime);
+    });
+
+    return results;
+  },
+});

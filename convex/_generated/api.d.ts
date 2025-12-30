@@ -41,6 +41,7 @@ import type * as seed_demoData from "../seed/demoData.js";
 import type * as seed_seedNovedadTypes from "../seed/seedNovedadTypes.js";
 import type * as studentRoutes from "../studentRoutes.js";
 import type * as students from "../students.js";
+import type * as tripEvents from "../tripEvents.js";
 import type * as trips from "../trips.js";
 import type * as users from "../users.js";
 import type * as vehicles from "../vehicles.js";
@@ -85,6 +86,7 @@ declare const fullApi: ApiFromModules<{
   "seed/seedNovedadTypes": typeof seed_seedNovedadTypes;
   studentRoutes: typeof studentRoutes;
   students: typeof students;
+  tripEvents: typeof tripEvents;
   trips: typeof trips;
   users: typeof users;
   vehicles: typeof vehicles;

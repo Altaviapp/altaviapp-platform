@@ -392,10 +392,10 @@ export default function ActiveTripPage() {
   const TypeIcon = isPickup ? Sunrise : Sunset;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="fixed inset-0 flex flex-col">
       {/* Compact Header */}
       <div className={cn(
-        'px-4 py-3 flex items-center justify-between',
+        'px-4 py-3 flex items-center justify-between flex-shrink-0 z-30',
         isPickup ? 'bg-warning' : 'bg-info'
       )}>
         <div className="flex items-center gap-3">
@@ -426,39 +426,10 @@ export default function ActiveTripPage() {
         </div>
       </div>
 
-      {/* GPS Error Alert */}
-      {gpsError && (
-        <div className="mx-4 mt-2 p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          {gpsError.message}
-        </div>
-      )}
-
-      {/* Novedades Indicator */}
-      {hasNovedades && (
-        <Link
-          href={`/trips/${tripId}/students`}
-          className="mx-4 mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between"
-        >
-          <div className="flex items-center gap-2 text-sm">
-            <FileText className="w-4 h-4 text-amber-600" />
-            <span className="font-medium text-amber-800">
-              {novedades.length} {novedades.length === 1 ? 'novedad' : 'novedades'}
-            </span>
-            {absentCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-                <UserMinus className="w-3 h-3" />
-                {absentCount} ausente{absentCount !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-          <span className="text-xs text-amber-600">Ver lista</span>
-        </Link>
-      )}
-
-      {/* Map Section - Visual only, no turn-by-turn */}
-      <GoogleMapsProvider>
-        <div className="flex-1 relative min-h-0" style={{ minHeight: '35vh' }}>
+      {/* Full-screen Map Container */}
+      <div className="flex-1 relative">
+        <GoogleMapsProvider>
+          {/* Map fills entire container */}
           <GoogleRouteMap
             stops={mapStops}
             currentStopIndex={currentStopIndex}
@@ -468,7 +439,7 @@ export default function ActiveTripPage() {
             autoFitBounds={!initialBoundsFit}
             showGeofences={false}
             onMapLoad={handleMapLoad}
-            style={{ height: '100%', width: '100%' }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             overlays={{
               topLeft: gpsIsTracking ? (
                 <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
@@ -493,73 +464,111 @@ export default function ActiveTripPage() {
               ),
             }}
           />
-          {/* Center on me button - positioned above zoom controls */}
+
+          {/* GPS Error Alert - floating on map */}
+          {gpsError && (
+            <div className="absolute top-14 left-2 right-2 z-20 p-2 bg-error/90 backdrop-blur-sm rounded-lg text-sm text-white flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              {gpsError.message}
+            </div>
+          )}
+
+          {/* Novedades Indicator - floating on map */}
+          {hasNovedades && (
+            <Link
+              href={`/trips/${tripId}/students`}
+              className="absolute top-14 left-2 right-2 z-20 p-2 bg-amber-500/90 backdrop-blur-sm rounded-lg flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2 text-sm text-white">
+                <FileText className="w-4 h-4" />
+                <span className="font-medium">
+                  {novedades.length} {novedades.length === 1 ? 'novedad' : 'novedades'}
+                </span>
+                {absentCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                    <UserMinus className="w-3 h-3" />
+                    {absentCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-white/80">Ver</span>
+            </Link>
+          )}
+
+          {/* Center on me button */}
           <button
             onClick={handleCenterOnMe}
-            className="absolute bottom-3 right-3 z-20 bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+            className="absolute bottom-[52%] right-3 z-20 bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
             aria-label="Centrar en mi ubicación"
           >
             <Crosshair className="w-5 h-5 text-primary" />
           </button>
-        </div>
-      </GoogleMapsProvider>
 
-      {/* Next Stop Card with Students and Check-in */}
-      {nextStopRaw && (
-        <div className="px-4 py-3 flex-shrink-0">
-          <NextStopCard
-            stop={{
-              _id: nextStopRaw._id as string,
-              name: nextStopRaw.name ?? '',
-              address: nextStopRaw.address ?? '',
-              latitude: nextStopRaw.latitude ?? 0,
-              longitude: nextStopRaw.longitude ?? 0,
-            }}
-            stopNumber={currentStopIndex + 1}
-            distanceKm={'distanceKm' in nextStopRaw ? (nextStopRaw.distanceKm ?? 0) : 0}
-            eta={
-              'etaMinutes' in nextStopRaw && nextStopRaw.etaMinutes
-                ? `~${nextStopRaw.etaMinutes} min`
-                : nextStopRaw.estimatedArrivalTime ?? '-'
-            }
-            students={nextStopStudents}
-            routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
-            onNavigate={handleNavigate}
-            onCheckin={handleStudentCheckin}
-          />
-        </div>
-      )}
-
-      {/* Geofence Alerts */}
-      {geofenceAlerts.length > 0 && (
-        <div className="px-4 py-2 bg-info/10 border-y border-info/20 mt-3">
-          {geofenceAlerts.map((alert, index) => (
-            <div key={`${alert.stopId}-${index}`} className="flex items-center gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-info" />
-              <span className="font-medium text-info">{alert.stopName}:</span>
-              <span className="text-gray-700">{alert.message}</span>
+          {/* Bottom Floating Panel */}
+          <div className="absolute bottom-0 left-0 right-0 z-20 bg-white rounded-t-2xl shadow-2xl max-h-[50vh] flex flex-col">
+            {/* Drag handle */}
+            <div className="flex justify-center py-2 flex-shrink-0">
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* Quick Actions - 3 buttons */}
-      <div className="py-3 mt-3">
-        <QuickActions
-          onIncident={handleIncident}
-          onRelay={handleRelay}
-          onDetails={handleDetails}
-        />
-      </div>
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto px-4 pb-safe">
+              {/* Geofence Alerts */}
+              {geofenceAlerts.length > 0 && (
+                <div className="mb-3 p-2 bg-info/10 rounded-lg">
+                  {geofenceAlerts.map((alert, index) => (
+                    <div key={`${alert.stopId}-${index}`} className="flex items-center gap-2 text-sm">
+                      <MapPin className="w-4 h-4 text-info" />
+                      <span className="font-medium text-info">{alert.stopName}:</span>
+                      <span className="text-gray-700">{alert.message}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-      {/* Finish Trip Button */}
-      <div className="px-4 py-4 bg-white border-t border-gray-200 safe-area-pb mt-auto">
-        <button
-          onClick={handleFinishTrip}
-          className="w-full py-4 bg-success hover:bg-success/90 text-white rounded-xl text-lg font-bold transition-colors shadow-lg"
-        >
-          FINALIZAR VIAJE
-        </button>
+              {/* Next Stop Card */}
+              {nextStopRaw && (
+                <NextStopCard
+                  stop={{
+                    _id: nextStopRaw._id as string,
+                    name: nextStopRaw.name ?? '',
+                    address: nextStopRaw.address ?? '',
+                    latitude: nextStopRaw.latitude ?? 0,
+                    longitude: nextStopRaw.longitude ?? 0,
+                  }}
+                  stopNumber={currentStopIndex + 1}
+                  distanceKm={'distanceKm' in nextStopRaw ? (nextStopRaw.distanceKm ?? 0) : 0}
+                  eta={
+                    'etaMinutes' in nextStopRaw && nextStopRaw.etaMinutes
+                      ? `~${nextStopRaw.etaMinutes} min`
+                      : nextStopRaw.estimatedArrivalTime ?? '-'
+                  }
+                  students={nextStopStudents}
+                  routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
+                  onNavigate={handleNavigate}
+                  onCheckin={handleStudentCheckin}
+                />
+              )}
+
+              {/* Quick Actions */}
+              <div className="py-3">
+                <QuickActions
+                  onIncident={handleIncident}
+                  onRelay={handleRelay}
+                  onDetails={handleDetails}
+                />
+              </div>
+
+              {/* Finish Trip Button */}
+              <button
+                onClick={handleFinishTrip}
+                className="w-full py-3 mb-4 bg-success hover:bg-success/90 text-white rounded-xl text-base font-bold transition-colors shadow-lg"
+              >
+                FINALIZAR VIAJE
+              </button>
+            </div>
+          </div>
+        </GoogleMapsProvider>
       </div>
 
       {/* Relay Mode Modal */}

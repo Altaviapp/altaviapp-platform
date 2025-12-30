@@ -59,6 +59,10 @@ export type GoogleRouteMapProps = {
   zoom?: number;
   autoFitBounds?: boolean;
 
+  // Native map controls
+  showZoomControl?: boolean;
+  showMyLocationButton?: boolean;
+
   // Callbacks
   onStopClick?: (stopId: string) => void;
   onVehicleClick?: () => void;
@@ -112,6 +116,8 @@ export function GoogleRouteMap({
   center,
   zoom = 14,
   autoFitBounds = true,
+  showZoomControl = true,
+  showMyLocationButton = false,
   onStopClick,
   onVehicleClick,
   onMapLoad,
@@ -136,24 +142,25 @@ export function GoogleRouteMap({
     return [];
   }, [polyline, encodedPolyline, isLoaded]);
 
-  // Calculate center from stops if not provided
+  // Calculate initial center from stops if not provided
+  // NOTE: We intentionally exclude vehiclePosition to prevent auto-panning when GPS updates
   const mapCenter = useMemo(() => {
     if (center) return center;
-    if (vehiclePosition?.position) return vehiclePosition.position;
     if (stops.length > 0) {
       const latSum = stops.reduce((sum, s) => sum + s.position.lat, 0);
       const lngSum = stops.reduce((sum, s) => sum + s.position.lng, 0);
       return { lat: latSum / stops.length, lng: lngSum / stops.length };
     }
     return MAPS_CONFIG.defaultCenter;
-  }, [center, vehiclePosition, stops]);
+  }, [center, stops]);
 
   const containerStyle = useMemo(
     () => ({ ...defaultContainerStyle, ...style }),
     [style]
   );
 
-  // Fit bounds to show all markers
+  // Fit bounds to show all markers (runs once when autoFitBounds is true)
+  // NOTE: We exclude vehiclePosition from deps to prevent re-fitting when GPS updates
   useEffect(() => {
     if (!map || !autoFitBounds || !isLoaded) return;
 
@@ -165,11 +172,6 @@ export function GoogleRouteMap({
       hasPoints = true;
     });
 
-    if (vehiclePosition?.position) {
-      bounds.extend(vehiclePosition.position);
-      hasPoints = true;
-    }
-
     if (schoolPosition) {
       bounds.extend(schoolPosition);
       hasPoints = true;
@@ -178,7 +180,7 @@ export function GoogleRouteMap({
     if (hasPoints) {
       map.fitBounds(bounds, 50);
     }
-  }, [map, stops, vehiclePosition, schoolPosition, autoFitBounds, isLoaded]);
+  }, [map, stops, schoolPosition, autoFitBounds, isLoaded]);
 
   const onLoad = useCallback(
     (map: google.maps.Map) => {
@@ -260,7 +262,7 @@ export function GoogleRouteMap({
         options={{
           styles: MAPS_CONFIG.mapStyles,
           disableDefaultUI: true,
-          zoomControl: true,
+          zoomControl: showZoomControl,
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
@@ -352,7 +354,7 @@ export function GoogleRouteMap({
         <div className="absolute top-2 right-2 z-10">{overlays.topRight}</div>
       )}
       {overlays?.bottomLeft && (
-        <div className="absolute bottom-2 left-2 z-10">{overlays.bottomLeft}</div>
+        <div className="absolute bottom-20 left-2 z-10">{overlays.bottomLeft}</div>
       )}
       {overlays?.bottomRight && (
         <div className="absolute bottom-2 right-2 z-10">{overlays.bottomRight}</div>

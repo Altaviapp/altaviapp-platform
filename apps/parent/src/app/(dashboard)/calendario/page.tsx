@@ -178,6 +178,7 @@ export default function CalendarioPage() {
                   routeType: trip.routeType,
                   stopName: trip.stopName,
                   scheduledTime: trip.scheduledTime,
+                  tripId: trip.tripId,
                   hasNovedad: trip.hasNovedad,
                   novedadStatus: trip.novedadStatus,
                 }))}

@@ -14,6 +14,7 @@ interface Trip {
   stopName: string;
   scheduledTime: string;
   stopId?: Id<"routeStops">;
+  tripId?: Id<"trips">; // Only exists if trip has started
   hasNovedad?: boolean;
   novedadStatus?: 'pending' | 'approved' | 'rejected';
 }
@@ -69,11 +70,13 @@ export function DayScheduleCard({
                 studentId={trip.studentId}
                 studentName={trip.studentName}
                 studentPhoto={trip.studentPhoto}
+                routeId={trip.routeId}
                 routeName={trip.routeName}
                 routeType={trip.routeType}
                 stopName={trip.stopName}
                 scheduledTime={trip.scheduledTime}
-                date={date}
+                date={date!}
+                tripId={trip.tripId}
                 hasNovedad={trip.hasNovedad}
                 novedadStatus={trip.novedadStatus}
               />

@@ -16,6 +16,9 @@ import {
   Calendar,
   Image as ImageIcon,
   File,
+  User,
+  ArrowRight,
+  ArrowLeft,
 } from 'lucide-react';
 import { useMyStudents, useNovedadesMutations, useNovedadTypes, useEvidenceUpload } from '@/hooks';
 import type { AffectedRouteType, NovedadCategory, DurationType } from '@/hooks';
@@ -65,6 +68,10 @@ const DURATION_LABELS: Record<DurationType, string> = {
   recurring: 'Días recurrentes',
 };
 
+// Valid legacy types for backwards compatibility
+const LEGACY_TYPES = ['absence', 'parent_pickup', 'stop_change', 'early_pickup', 'late_arrival'] as const;
+type LegacyNovedadType = typeof LEGACY_TYPES[number];
+
 // File type icons
 const getFileIcon = (type: string): React.ElementType => {
   if (type.startsWith('image/')) return ImageIcon;
@@ -111,6 +118,35 @@ function CreateNovedadForm() {
     if (!selectedTypeId) return null;
     return novedadTypes.find((t) => t._id === selectedTypeId) ?? null;
   }, [selectedTypeId, novedadTypes]);
+
+  // Get pre-selected student info for context display
+  const preselectedStudent = useMemo(() => {
+    if (!preselectedStudentId || students.length === 0) return null;
+    return students.find((s) => s._id === preselectedStudentId) ?? null;
+  }, [preselectedStudentId, students]);
+
+  // Check if we have pre-filled context
+  const hasPrefilledContext = Boolean(preselectedStudentId || preselectedDate || preselectedRouteType);
+  const isStudentLocked = Boolean(preselectedStudentId && preselectedStudent);
+  const isRouteLocked = Boolean(preselectedRouteType && preselectedRouteType !== 'both');
+  const isDateLocked = Boolean(preselectedDate);
+
+  // Route type labels for context badges
+  const routeTypeLabels: Record<AffectedRouteType, string> = {
+    pickup: 'Recogida',
+    dropoff: 'Entrega',
+    both: 'Ambos',
+  };
+
+  // Format date for display
+  const formatDateDisplay = (dateStr: string): string => {
+    const date = new Date(dateStr + 'T12:00:00');
+    return date.toLocaleDateString('es-EC', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
+  };
 
   // Pre-fill form from URL params
   useEffect(() => {
@@ -226,10 +262,15 @@ function CreateNovedadForm() {
     setIsSubmitting(true);
 
     try {
+      // Determine if the type code is a valid legacy type
+      const legacyType = selectedType?.code && LEGACY_TYPES.includes(selectedType.code as LegacyNovedadType)
+        ? (selectedType.code as LegacyNovedadType)
+        : undefined;
+
       // Create the novedad
       const result = await createNovedad({
         studentId: selectedStudent as Id<'students'>,
-        type: selectedType?.code as any, // Legacy field for backwards compatibility
+        type: legacyType, // Only set if it's a valid legacy type
         typeId: selectedTypeId as Id<'novedadTypes'>,
         affectedRouteType: selectedRouteType,
         date: startDate, // Legacy field
@@ -281,40 +322,79 @@ function CreateNovedadForm() {
       />
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Student Selection */}
-        <Card>
-          <CardContent>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Selecciona el estudiante <span className="text-red-500">*</span>
-            </label>
-            <div className="space-y-2">
-              {students.map((student) => (
-                <button
-                  key={student._id}
-                  type="button"
-                  onClick={() => setSelectedStudent(student._id)}
-                  className={cn(
-                    'w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors text-left',
-                    selectedStudent === student._id
-                      ? 'border-primary bg-primary/5'
-                      : 'border-gray-200 hover:border-gray-300'
-                  )}
-                >
-                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-semibold">
-                    {student.firstName[0]}
+        {/* Context Banner - Shows when we have pre-filled data */}
+        {hasPrefilledContext && (isStudentLocked || isDateLocked || isRouteLocked) && (
+          <Card>
+            <CardContent>
+              <p className="text-sm font-medium text-gray-700 mb-3">
+                Reportando novedad para:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {isStudentLocked && preselectedStudent && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 text-primary text-sm">
+                    <User className="w-3.5 h-3.5" />
+                    <span className="font-medium">
+                      {preselectedStudent.firstName} {preselectedStudent.lastName}
+                    </span>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">
-                      {student.firstName} {student.lastName}
-                    </p>
-                    <p className="text-sm text-gray-500">{student.grade || 'Sin grado'}</p>
+                )}
+                {isDateLocked && preselectedDate && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{formatDateDisplay(preselectedDate)}</span>
                   </div>
-                  {selectedStudent === student._id && <Check className="w-5 h-5 text-primary" />}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                )}
+                {isRouteLocked && preselectedRouteType && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm">
+                    {preselectedRouteType === 'pickup' ? (
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    ) : (
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                    )}
+                    <span>{routeTypeLabels[preselectedRouteType]}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Student Selection - Hidden when locked */}
+        {!isStudentLocked && (
+          <Card>
+            <CardContent>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Selecciona el estudiante <span className="text-red-500">*</span>
+              </label>
+              <div className="space-y-2">
+                {students.map((student) => (
+                  <button
+                    key={student._id}
+                    type="button"
+                    onClick={() => setSelectedStudent(student._id)}
+                    className={cn(
+                      'w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors text-left',
+                      selectedStudent === student._id
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                    )}
+                  >
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-semibold">
+                      {student.firstName[0]}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">
+                        {student.firstName} {student.lastName}
+                      </p>
+                      <p className="text-sm text-gray-500">{student.grade || 'Sin grado'}</p>
+                    </div>
+                    {selectedStudent === student._id && <Check className="w-5 h-5 text-primary" />}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Novedad Type Selection - Dynamic */}
         <Card>
@@ -409,32 +489,35 @@ function CreateNovedadForm() {
                 />
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Aplica a</label>
-                <div className="space-y-2">
-                  {routeTypes.map((rt) => (
-                    <label
-                      key={rt.value}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors min-h-[44px]',
-                        selectedRouteType === rt.value
-                          ? 'border-primary bg-primary/5'
-                          : 'border-gray-200 hover:border-gray-300'
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name="routeType"
-                        value={rt.value}
-                        checked={selectedRouteType === rt.value}
-                        onChange={() => setSelectedRouteType(rt.value)}
-                        className="text-primary focus:ring-primary"
-                      />
-                      <span className="text-sm text-gray-900">{rt.label}</span>
-                    </label>
-                  ))}
+              {/* Route Type Selection - Hidden when locked */}
+              {!isRouteLocked && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Aplica a</label>
+                  <div className="space-y-2">
+                    {routeTypes.map((rt) => (
+                      <label
+                        key={rt.value}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors min-h-[44px]',
+                          selectedRouteType === rt.value
+                            ? 'border-primary bg-primary/5'
+                            : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="routeType"
+                          value={rt.value}
+                          checked={selectedRouteType === rt.value}
+                          onChange={() => setSelectedRouteType(rt.value)}
+                          className="text-primary focus:ring-primary"
+                        />
+                        <span className="text-sm text-gray-900">{rt.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         )}

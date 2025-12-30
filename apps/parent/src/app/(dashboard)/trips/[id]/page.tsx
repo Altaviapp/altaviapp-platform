@@ -434,7 +434,10 @@ export default function TripDetailPage() {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 pb-safe">
         <NovedadContextButton
           studentId={studentId as Id<"students">}
+          studentName={student ? `${student.firstName} ${student.lastName}` : undefined}
           tripId={tripId as Id<"trips">}
+          date={trip.scheduledDate}
+          routeType={trip.route?.type as 'pickup' | 'dropoff' | undefined}
           variant="full"
           label="Reportar novedad de este viaje"
         />

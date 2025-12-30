@@ -1,13 +1,21 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ChevronLeft, Loader2, AlertTriangle, MapPin, Clock, User,
-  Phone, MessageCircle, Car, History
+  Phone, MessageCircle, Car, Crosshair, Sunrise, Sunset, Bell
 } from 'lucide-react';
-import { cn, formatTime } from '@/lib/utils';
-import { LiveTrackingMap, RouteStop } from '@/components/tracking/LiveTrackingMap';
+import { cn } from '@/lib/utils';
+import {
+  GoogleMapsProvider,
+  GoogleRouteMap,
+  type RouteStopMarker,
+  type VehiclePosition,
+  type StopStatus,
+  decodePolyline,
+} from '@altaviapp/maps';
 import { NovedadContextButton } from '@/components/home/NovedadContextButton';
 import {
   useStudentTracking,
@@ -19,7 +27,7 @@ import {
 import { Id } from '../../../../../../../../convex/_generated/dataModel';
 
 /**
- * Active Trip Page - Parent
+ * Active Trip Page - Parent (Crew-style layout)
  *
  * Live tracking view focused on parent's child
  * Shows real-time vehicle position and child's stop ETA
@@ -31,6 +39,9 @@ export default function ActiveTripPage() {
 
   const tripId = params.id as string;
   const studentId = searchParams.get('studentId');
+
+  // Map reference for centering
+  const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
 
   // Fetch student data and tracking info
   const { student, isLoading: studentLoading } = useStudent(
@@ -48,11 +59,11 @@ export default function ActiveTripPage() {
     studentStop,
     vehicle,
     driver,
-    school,
     etaMinutes,
     etaTime,
     delayStatus,
     currentSpeed,
+    progress,
   } = useStudentTracking(studentId ? studentId as Id<"students"> : null);
 
   // Latest trip events
@@ -62,7 +73,82 @@ export default function ActiveTripPage() {
   );
 
   const isLoading = studentLoading || trackingLoading;
+  const isPickup = route?.type === 'pickup';
 
+  // Check if vehicle arrived at student's stop (geofence event)
+  const hasArrived = useMemo(() => {
+    if (!studentStop?.id) return false;
+    return events.some(
+      (e) => e.type === 'geofence_entered' && e.stopId === studentStop.id
+    );
+  }, [events, studentStop?.id]);
+
+  // Transform stops for GoogleRouteMap
+  const mapStops: RouteStopMarker[] = useMemo(() => {
+    return (stops ?? []).map((stop, index) => {
+      let status: StopStatus = 'pending';
+      if (stop.completed) {
+        status = 'completed';
+      } else if (stop.id === studentStop?.id) {
+        status = 'current'; // Highlight child's stop
+      }
+
+      return {
+        id: String(stop.id),
+        name: stop.name,
+        address: stop.address ?? '',
+        position: { lat: stop.lat, lng: stop.lng },
+        order: index + 1,
+        status,
+        scheduledTime: stop.scheduledTime ?? undefined,
+        eta: stop.etaTime ?? undefined,
+      };
+    });
+  }, [stops, studentStop?.id]);
+
+  // Current stop index for map
+  const currentStopIndex = useMemo(() => {
+    if (!studentStop?.id) return 0;
+    return mapStops.findIndex((s) => s.id === String(studentStop.id));
+  }, [mapStops, studentStop?.id]);
+
+  // Vehicle position for map
+  const vehiclePosition: VehiclePosition | null = useMemo(() => {
+    if (!currentLocation) return null;
+    return {
+      position: { lat: currentLocation.latitude, lng: currentLocation.longitude },
+      heading: currentLocation.heading ?? 0,
+      speed: (currentLocation.speed ?? 0) * 3.6, // m/s to km/h
+      accuracy: 10,
+      timestamp: currentLocation.timestamp,
+    };
+  }, [currentLocation]);
+
+  // Route polyline
+  const routePolyline = useMemo(() => {
+    if (route?.optimizedPolyline) {
+      return decodePolyline(route.optimizedPolyline);
+    }
+    // Fallback: simple line through stops
+    return mapStops.map((s) => s.position);
+  }, [route?.optimizedPolyline, mapStops]);
+
+  // Center map on vehicle
+  const handleCenterOnVehicle = () => {
+    if (mapRef && vehiclePosition) {
+      mapRef.panTo(vehiclePosition.position);
+      mapRef.setZoom(16);
+    }
+  };
+
+  // Format phone for WhatsApp
+  const formatWhatsAppLink = (phone?: string) => {
+    if (!phone) return null;
+    const cleanPhone = phone.replace(/\D/g, '');
+    return `https://wa.me/${cleanPhone}`;
+  };
+
+  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -72,6 +158,7 @@ export default function ActiveTripPage() {
     );
   }
 
+  // No student specified
   if (!studentId) {
     return (
       <div className="text-center py-12">
@@ -84,6 +171,7 @@ export default function ActiveTripPage() {
     );
   }
 
+  // No active trip
   if (!hasActiveTrip) {
     return (
       <div className="text-center py-12">
@@ -96,101 +184,105 @@ export default function ActiveTripPage() {
     );
   }
 
-  // Transform stops for map
-  const mapStops: RouteStop[] = (stops ?? []).map((stop) => ({
-    id: stop.id,
-    name: stop.name,
-    lat: stop.lat,
-    lng: stop.lng,
-    scheduledTime: stop.scheduledTime,
-    completed: stop.completed,
-    isSchool: false,
-  }));
-
-  // Vehicle location for map
-  const vehicleLocation = currentLocation ? {
-    lat: currentLocation.latitude,
-    lng: currentLocation.longitude,
-    speed: currentLocation.speed ?? null,
-    heading: currentLocation.heading ?? null,
-    timestamp: currentLocation.timestamp,
-  } : null;
-
-  // School location
-  const schoolLocation = school?.lat && school?.lng ? {
-    lat: school.lat,
-    lng: school.lng,
-    name: school.name,
-  } : undefined;
-
-  // Format phone for WhatsApp
-  const formatWhatsAppLink = (phone?: string) => {
-    if (!phone) return null;
-    const cleanPhone = phone.replace(/\D/g, '');
-    return `https://wa.me/${cleanPhone}`;
-  };
-
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col bg-gray-100">
+      {/* Sticky Header - colored based on route type */}
+      <div className={cn(
+        'px-4 py-3 flex items-center justify-between flex-shrink-0 z-30 sticky top-0',
+        isPickup ? 'bg-warning' : 'bg-info'
+      )}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+            <ChevronLeft className="w-5 h-5 text-white" />
           </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold text-gray-900">
-                Viaje de {student?.firstName || 'Estudiante'}
+          <div className="flex items-center gap-2">
+            {isPickup ? (
+              <Sunrise className="w-5 h-5 text-white" />
+            ) : (
+              <Sunset className="w-5 h-5 text-white" />
+            )}
+            <div>
+              <h1 className="text-base font-semibold text-white">
+                {student?.firstName || 'Estudiante'}
               </h1>
+              <p className="text-xs text-white/80">
+                {route?.name} - {isPickup ? 'Recogida' : 'Entrega'}
+              </p>
             </div>
-            <p className="text-sm text-gray-500">
-              {route?.name} - {route?.type === 'pickup' ? 'Recogida' : 'Entrega'}
-            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-sm font-medium text-green-600">En Vivo</span>
+        <div className="flex items-center gap-2 bg-white/20 px-2 py-1 rounded-full">
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <span className="text-xs font-medium text-white">En Vivo</span>
         </div>
       </div>
 
-      {/* Map - Full width, takes most of the screen */}
-      <div className="flex-1 relative min-h-[300px]">
-        <LiveTrackingMap
-          vehicleLocation={vehicleLocation}
-          stops={mapStops}
-          schoolLocation={schoolLocation}
-          studentStopId={studentStop?.id}
-          height="100%"
-          autoCenter={true}
-          encodedPolyline={route?.optimizedPolyline ?? undefined}
-          vehicleInfo={vehicle && driver ? {
-            plate: vehicle.licensePlate,
-            driverName: driver.name,
-          } : undefined}
-        />
+      {/* Map Container - 60vh */}
+      <div className="relative flex-shrink-0" style={{ height: '60vh' }}>
+        <GoogleMapsProvider>
+          <GoogleRouteMap
+            stops={mapStops}
+            currentStopIndex={currentStopIndex}
+            polyline={routePolyline}
+            vehiclePosition={vehiclePosition}
+            showVehicle={!!vehiclePosition}
+            autoFitBounds={true}
+            showGeofences={false}
+            onMapLoad={setMapRef}
+            style={{ width: '100%', height: '60vh' }}
+            overlays={{
+              topLeft: currentSpeed !== null && currentSpeed !== undefined && currentSpeed > 0 ? (
+                <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                    <span className="font-bold text-lg">{Math.round(currentSpeed)}</span>
+                    <span className="text-gray-600 text-sm">km/h</span>
+                  </div>
+                </div>
+              ) : undefined,
+              topRight: (
+                <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span className="font-medium">{Math.round(progress ?? 0)}%</span>
+                    <span className="text-gray-500">completado</span>
+                  </div>
+                </div>
+              ),
+            }}
+          />
 
-        {/* Speed overlay */}
-        {currentSpeed !== null && currentSpeed !== undefined && currentSpeed > 0 && (
-          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-md">
-            <div className="flex items-center gap-1.5">
-              <span className="text-lg font-bold text-gray-900">{Math.round(currentSpeed)}</span>
-              <span className="text-xs text-gray-500">km/h</span>
+          {/* Center on vehicle button - LEFT side */}
+          <button
+            onClick={handleCenterOnVehicle}
+            className="absolute bottom-4 left-3 z-20 bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+            aria-label="Centrar en vehículo"
+          >
+            <Crosshair className="w-5 h-5 text-primary" />
+          </button>
+        </GoogleMapsProvider>
+      </div>
+
+      {/* Content Section - normal page flow */}
+      <div className="bg-white px-4 py-4 space-y-4">
+        {/* Arrival Alert Banner */}
+        {hasArrived && (
+          <div className="p-3 bg-success text-white rounded-lg flex items-center gap-3 animate-pulse">
+            <Bell className="w-5 h-5 flex-shrink-0" />
+            <div>
+              <p className="font-semibold">¡El vehículo ha llegado!</p>
+              <p className="text-sm text-white/90">{studentStop?.name}</p>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Bottom Panel */}
-      <div className="bg-white border-t border-gray-200 rounded-t-2xl shadow-lg">
-        {/* Student's Stop ETA */}
-        {studentStop && (
+        {/* Student's Stop ETA Card */}
+        {studentStop && !hasArrived && (
           <div className={cn(
-            'p-4 border-b',
+            'p-4 rounded-lg border',
             !delayStatus || delayStatus.status === 'on_time'
               ? 'bg-green-50 border-green-200'
               : delayStatus.status === 'slight_delay'
@@ -214,7 +306,7 @@ export default function ActiveTripPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900">
-                  Proxima parada: {studentStop.name}
+                  Próxima parada: {studentStop.name}
                 </p>
                 {etaMinutes !== null && etaMinutes !== undefined && (
                   <div className="mt-1 flex items-center gap-2">
@@ -240,11 +332,11 @@ export default function ActiveTripPage() {
 
         {/* Driver & Vehicle */}
         {(driver || vehicle) && (
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="p-4 bg-gray-50 rounded-lg flex items-center justify-between">
             <div className="flex items-center gap-3">
               {driver && (
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center">
                     <User className="w-4 h-4 text-gray-600" />
                   </div>
                   <div>
@@ -289,9 +381,9 @@ export default function ActiveTripPage() {
 
         {/* Recent Events */}
         {events.length > 0 && (
-          <div className="p-4 border-b border-gray-100">
+          <div className="p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-gray-900">Ultimos eventos</p>
+              <p className="text-sm font-medium text-gray-900">Últimos eventos</p>
               <Link
                 href={`/trips/${tripId}?studentId=${studentId}`}
                 className="text-xs text-primary hover:underline"
@@ -322,7 +414,7 @@ export default function ActiveTripPage() {
         )}
 
         {/* Report Novedad Button */}
-        <div className="p-4 pb-safe">
+        <div className="pb-safe">
           <NovedadContextButton
             studentId={studentId as Id<"students">}
             tripId={trip?.id}

@@ -429,17 +429,18 @@ export default function ActiveTripPage() {
       {/* Map Container - 70vh height */}
       <div className="relative flex-shrink-0 h-[70vh]">
         <GoogleMapsProvider>
-          {/* Map fills container with absolute positioning */}
-          <GoogleRouteMap
-            stops={mapStops}
-            currentStopIndex={currentStopIndex}
-            polyline={directionsPolyline.length > 0 ? directionsPolyline : routePolyline}
-            vehiclePosition={vehiclePosition}
-            showVehicle={!!vehiclePosition}
-            autoFitBounds={!initialBoundsFit}
-            showGeofences={false}
-            onMapLoad={handleMapLoad}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          {/* Map wrapper with absolute positioning to fill container */}
+          <div className="absolute inset-0">
+            <GoogleRouteMap
+              stops={mapStops}
+              currentStopIndex={currentStopIndex}
+              polyline={directionsPolyline.length > 0 ? directionsPolyline : routePolyline}
+              vehiclePosition={vehiclePosition}
+              showVehicle={!!vehiclePosition}
+              autoFitBounds={!initialBoundsFit}
+              showGeofences={false}
+              onMapLoad={handleMapLoad}
+              style={{ width: '100%', height: '100%' }}
             overlays={{
               topLeft: gpsIsTracking ? (
                 <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
@@ -463,7 +464,8 @@ export default function ActiveTripPage() {
                 </div>
               ),
             }}
-          />
+            />
+          </div>
 
           {/* GPS Error Alert - floating on map */}
           {gpsError && (

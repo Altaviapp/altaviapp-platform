@@ -113,6 +113,41 @@ export default function ActiveTripPage() {
   const tripStops = convexTrip?.stops ?? [];
   const isPickup = routeType === 'pickup';
 
+  // Prepare stops for map (matching Stop type) - memoized and MUST be before early return
+  const mapStops = useMemo(() => tripStops.map((stop, index) => ({
+    _id: stop._id,
+    routeId: String(stop.routeId),
+    name: stop.name,
+    address: stop.address,
+    latitude: stop.latitude,
+    longitude: stop.longitude,
+    order: index,
+    estimatedArrivalTime: stop.estimatedArrivalTime ?? '',
+    students: [] as string[],
+  })), [tripStops]);
+
+  // Generate navigation steps from stops - MUST be before early return
+  const navigationSteps = useMemo(
+    () => generateNavigationStepsFromStops(mapStops),
+    [mapStops]
+  );
+
+  // Navigation hook for turn-by-turn - MUST be before early return
+  const {
+    currentStep: navCurrentStep,
+    nextStep: navNextStep,
+    distanceToManeuver,
+    allSteps: navAllSteps,
+    isNavigating,
+  } = useNavigation({
+    steps: navigationSteps,
+    currentPosition: gpsPosition ? {
+      latitude: gpsPosition.latitude,
+      longitude: gpsPosition.longitude,
+    } : null,
+    isTracking: gpsIsTracking,
+  });
+
   // Format elapsed time (compact)
   const elapsedFormatted = (() => {
     const hours = Math.floor(elapsedSeconds / 3600);
@@ -281,19 +316,6 @@ export default function ActiveTripPage() {
     alert(`Vehículo cambiado exitosamente. ${newVehicle.gpsSourceType === 'mobile' ? 'Usando GPS del celular.' : 'Usando GPS externo del vehículo.'}`);
   };
 
-  // Prepare stops for map (matching Stop type)
-  const mapStops = tripStops.map((stop, index) => ({
-    _id: stop._id,
-    routeId: String(stop.routeId),
-    name: stop.name,
-    address: stop.address,
-    latitude: stop.latitude,
-    longitude: stop.longitude,
-    order: index,
-    estimatedArrivalTime: stop.estimatedArrivalTime ?? '',
-    students: [] as string[],
-  }));
-
   // Current location for map (matching GPSLocation type)
   const currentLocation = gpsPosition ? {
     latitude: gpsPosition.latitude,
@@ -303,28 +325,6 @@ export default function ActiveTripPage() {
     timestamp: new Date().toISOString(),
     accuracy: gpsPosition.accuracy ?? 10,
   } : null;
-
-  // Generate navigation steps from stops
-  const navigationSteps = useMemo(
-    () => generateNavigationStepsFromStops(mapStops),
-    [mapStops]
-  );
-
-  // Navigation hook for turn-by-turn
-  const {
-    currentStep: navCurrentStep,
-    nextStep: navNextStep,
-    distanceToManeuver,
-    allSteps: navAllSteps,
-    isNavigating,
-  } = useNavigation({
-    steps: navigationSteps,
-    currentPosition: gpsPosition ? {
-      latitude: gpsPosition.latitude,
-      longitude: gpsPosition.longitude,
-    } : null,
-    isTracking: gpsIsTracking,
-  });
 
   const TypeIcon = isPickup ? Sunrise : Sunset;
 

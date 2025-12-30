@@ -6,7 +6,6 @@ import { ArrowLeft, Bus, Clock, MapPin, Users, History, Info } from 'lucide-reac
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useTrip, useTripStudents, useConvexAuth } from '@/hooks';
-import { Id } from '../../../../../../convex/_generated/dataModel';
 import { LoadingState } from '@/components/core';
 import { TripTimeline } from '@/components/trip/TripTimeline';
 import { StopStudentsList } from '@/components/trip/StopStudentsList';
@@ -19,7 +18,7 @@ export default function TripDetailsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('info');
 
   const { isLoading: authLoading } = useConvexAuth();
-  const { trip, isLoading: tripLoading } = useTrip(tripId as Id<'trips'>);
+  const { trip, isLoading: tripLoading } = useTrip(tripId as any);
   const { students: tripStudents, isLoading: studentsLoading } = useTripStudents(tripId);
 
   const isLoading = authLoading || tripLoading;
@@ -157,9 +156,6 @@ export default function TripDetailsPage() {
                   <div>
                     <p className="text-xs text-gray-500">Vehiculo</p>
                     <p className="text-sm text-gray-900">{trip.vehicle?.licensePlate || '-'}</p>
-                    {trip.vehicle?.brand && (
-                      <p className="text-xs text-gray-400">{trip.vehicle.brand} {trip.vehicle.model}</p>
-                    )}
                   </div>
                 </div>
 
@@ -184,26 +180,22 @@ export default function TripDetailsPage() {
                   {trip.driver && (
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-primary font-medium text-sm">
-                          {trip.driver.name?.charAt(0) || 'C'}
-                        </span>
+                        <span className="text-primary font-medium text-sm">C</span>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-900">{trip.driver.name}</p>
-                        <p className="text-xs text-gray-500">Conductor</p>
+                        <p className="text-sm text-gray-900">Conductor</p>
+                        <p className="text-xs text-gray-500">Asignado</p>
                       </div>
                     </div>
                   )}
                   {trip.monitor && (
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-info/10 flex items-center justify-center">
-                        <span className="text-info font-medium text-sm">
-                          {trip.monitor.name?.charAt(0) || 'M'}
-                        </span>
+                        <span className="text-info font-medium text-sm">M</span>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-900">{trip.monitor.name}</p>
-                        <p className="text-xs text-gray-500">Monitor</p>
+                        <p className="text-sm text-gray-900">Monitor</p>
+                        <p className="text-xs text-gray-500">Asignado</p>
                       </div>
                     </div>
                   )}

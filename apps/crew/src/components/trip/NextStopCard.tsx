@@ -6,9 +6,17 @@
  */
 
 import { MapPin, Navigation, Clock, Users, Camera, CheckCircle, AlertCircle, User } from 'lucide-react';
-import type { Stop } from '@/types';
 import { formatDistance } from '@/lib/utils/tripCalculations';
 import { cn } from '@/lib/utils';
+
+/** Minimal stop info needed for the card */
+interface StopInfo {
+  _id: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
 
 export interface StudentWithStatus {
   _id: string;
@@ -20,7 +28,7 @@ export interface StudentWithStatus {
 
 export interface NextStopCardProps {
   /** Next stop details */
-  stop: Stop;
+  stop: StopInfo;
   /** Stop number in sequence */
   stopNumber: number;
   /** Distance to stop in kilometers */

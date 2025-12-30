@@ -426,8 +426,8 @@ export default function ActiveTripPage() {
         </div>
       </div>
 
-      {/* Map Container - 70vh height */}
-      <div className="relative flex-shrink-0" style={{ height: '70vh' }}>
+      {/* Map Container - 60vh height */}
+      <div className="relative flex-shrink-0" style={{ height: '60vh' }}>
         <GoogleMapsProvider>
           <GoogleRouteMap
             stops={mapStops}
@@ -438,7 +438,7 @@ export default function ActiveTripPage() {
             autoFitBounds={!initialBoundsFit}
             showGeofences={false}
             onMapLoad={handleMapLoad}
-            style={{ width: '100%', height: '70vh' }}
+            style={{ width: '100%', height: '60vh' }}
             overlays={{
               topLeft: gpsIsTracking ? (
                 <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">

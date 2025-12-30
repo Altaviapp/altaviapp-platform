@@ -458,7 +458,7 @@ export default function ActiveTripPage() {
 
       {/* Map Section - Visual only, no turn-by-turn */}
       <GoogleMapsProvider>
-        <div className="flex-1 relative" style={{ minHeight: '45vh' }}>
+        <div className="flex-1 relative min-h-0" style={{ minHeight: '35vh' }}>
           <GoogleRouteMap
             stops={mapStops}
             currentStopIndex={currentStopIndex}
@@ -468,7 +468,7 @@ export default function ActiveTripPage() {
             autoFitBounds={!initialBoundsFit}
             showGeofences={false}
             onMapLoad={handleMapLoad}
-            style={{ height: '45vh', width: '100%' }}
+            style={{ height: '100%', width: '100%' }}
             overlays={{
               topLeft: gpsIsTracking ? (
                 <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
@@ -491,23 +491,22 @@ export default function ActiveTripPage() {
                   </div>
                 </div>
               ),
-              bottomRight: (
-                <button
-                  onClick={handleCenterOnMe}
-                  className="bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
-                  aria-label="Centrar en mi ubicación"
-                >
-                  <Crosshair className="w-5 h-5 text-primary" />
-                </button>
-              ),
             }}
           />
+          {/* Center on me button - positioned above zoom controls */}
+          <button
+            onClick={handleCenterOnMe}
+            className="absolute bottom-3 right-3 z-20 bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+            aria-label="Centrar en mi ubicación"
+          >
+            <Crosshair className="w-5 h-5 text-primary" />
+          </button>
         </div>
       </GoogleMapsProvider>
 
       {/* Next Stop Card with Students and Check-in */}
       {nextStopRaw && (
-        <div className="px-4 -mt-4 relative z-10">
+        <div className="px-4 py-3 flex-shrink-0">
           <NextStopCard
             stop={{
               _id: nextStopRaw._id as string,

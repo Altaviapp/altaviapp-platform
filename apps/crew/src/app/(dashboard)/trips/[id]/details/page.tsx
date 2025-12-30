@@ -6,7 +6,7 @@ import { ArrowLeft, Bus, Clock, MapPin, Users, History, Info } from 'lucide-reac
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useTrip, useTripStudents, useConvexAuth } from '@/hooks';
-import { Id } from '@workspace/backend/convex/_generated/dataModel';
+import { Id } from '../../../../../../convex/_generated/dataModel';
 import { LoadingState } from '@/components/core';
 import { TripTimeline } from '@/components/trip/TripTimeline';
 import { StopStudentsList } from '@/components/trip/StopStudentsList';

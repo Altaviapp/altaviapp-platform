@@ -35,6 +35,7 @@ export interface UpcomingTrip {
   studentPhoto?: string;
   date: string;
   scheduledTime: string;
+  routeId: Id<"routes">;
   routeName: string;
   routeType: "pickup" | "dropoff";
   stopName: string;

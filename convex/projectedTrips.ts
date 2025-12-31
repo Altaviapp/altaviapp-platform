@@ -871,6 +871,7 @@ export const getMyChildrenUpcomingTrips = query({
       studentPhoto?: string;
       date: string;
       scheduledTime: string;
+      routeId: Id<"routes">;
       routeName: string;
       routeType: "pickup" | "dropoff";
       stopName: string;
@@ -954,6 +955,7 @@ export const getMyChildrenUpcomingTrips = query({
             : undefined,
           date: today,
           scheduledTime: stopTime,
+          routeId: route._id,
           routeName: route.name,
           routeType: route.type,
           stopName: stop?.name || "Parada no asignada",

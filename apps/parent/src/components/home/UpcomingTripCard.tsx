@@ -1,6 +1,7 @@
 'use client';
 
-import { Bus, Clock, AlertTriangle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bus, Clock, AlertTriangle, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UpcomingTrip } from '@/hooks/useProjectedTrips';
 
@@ -18,6 +19,23 @@ interface UpcomingTripCardProps {
  * - Novedad indicator if applicable
  */
 export function UpcomingTripCard({ trip }: UpcomingTripCardProps) {
+  const router = useRouter();
+
+  // Navigate to scheduled trip detail
+  const handleClick = () => {
+    const params = new URLSearchParams({
+      studentId: trip.studentId,
+      routeId: trip.routeId,
+      date: trip.date,
+      routeName: trip.routeName,
+      routeType: trip.routeType,
+      stopName: trip.stopName,
+      scheduledTime: trip.scheduledTime,
+      hasNovedad: String(trip.hasNovedad),
+    });
+    router.push(`/trips/scheduled?${params.toString()}`);
+  };
+
   // Get initials for avatar fallback
   const initials = trip.studentName
     .split(' ')
@@ -57,7 +75,10 @@ export function UpcomingTripCard({ trip }: UpcomingTripCardProps) {
   const relativeTime = formatRelativeTime(trip.scheduledTime);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
+    <div
+      className="bg-white rounded-xl border border-gray-200 p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+      onClick={handleClick}
+    >
       <div className="flex items-start gap-4">
         {/* Avatar */}
         <div className="flex-shrink-0">
@@ -109,14 +130,17 @@ export function UpcomingTripCard({ trip }: UpcomingTripCardProps) {
           </div>
 
           {/* Stop and driver info */}
-          <div className="mt-2 text-sm text-gray-500">
-            <span>{trip.stopName}</span>
-            {trip.driverName && (
-              <>
-                <span className="mx-2 text-gray-300">•</span>
-                <span>{trip.driverName}</span>
-              </>
-            )}
+          <div className="mt-2 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              <span>{trip.stopName}</span>
+              {trip.driverName && (
+                <>
+                  <span className="mx-2 text-gray-300">•</span>
+                  <span>{trip.driverName}</span>
+                </>
+              )}
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-400" />
           </div>
 
           {/* Novedad indicator */}

@@ -2,6 +2,7 @@
 
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Sunrise,
   Sunset,
@@ -11,18 +12,16 @@ import {
   Bus,
   Calendar,
   Play,
+  ChevronLeft,
   ChevronRight,
   AlertTriangle,
   UserX,
   MapPinned,
   UserCheck,
   CheckCircle,
-  Route as RouteIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouteWithStudents, useDriverRoutesToday, useNovedadesForRoute } from '@/hooks';
-import { LoadingState, EmptyState, Card, CardContent, Button, Badge } from '@/components/core';
-import { PageHeader } from '@/components/shared';
 import { StudentListSheet } from '@/components/sheets/StudentListSheet';
 
 interface RouteDetailPageProps {
@@ -30,13 +29,13 @@ interface RouteDetailPageProps {
 }
 
 const dayLabels: Record<string, string> = {
-  monday: 'Lunes',
-  tuesday: 'Martes',
-  wednesday: 'Miércoles',
-  thursday: 'Jueves',
-  friday: 'Viernes',
-  saturday: 'Sábado',
-  sunday: 'Domingo',
+  monday: 'Lun',
+  tuesday: 'Mar',
+  wednesday: 'Mié',
+  thursday: 'Jue',
+  friday: 'Vie',
+  saturday: 'Sáb',
+  sunday: 'Dom',
 };
 
 export default function RouteDetailPage({ params }: RouteDetailPageProps) {
@@ -56,23 +55,23 @@ export default function RouteDetailPage({ params }: RouteDetailPageProps) {
 
   if (isLoading) {
     return (
-      <div className="space-y-4 pb-20">
-        <PageHeader title="Cargando..." backHref="/dashboard" />
-        <LoadingState message="Cargando información de la ruta..." />
+      <div className="fixed inset-0 z-50 bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Cargando ruta...</p>
+        </div>
       </div>
     );
   }
 
   if (!route) {
     return (
-      <div className="space-y-4 pb-20">
-        <PageHeader title="Ruta" backHref="/dashboard" />
-        <EmptyState
-          icon={MapPin}
-          title="Ruta no encontrada"
-          description="La ruta que buscas no existe o no tienes acceso."
-          action={{ label: 'Volver al inicio', onClick: () => router.push('/dashboard') }}
-        />
+      <div className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-4">
+        <MapPin className="w-12 h-12 text-gray-300 mb-4" />
+        <p className="text-gray-600 mb-4">Ruta no encontrada</p>
+        <Link href="/dashboard" className="text-primary font-medium">
+          Volver al inicio
+        </Link>
       </div>
     );
   }
@@ -80,9 +79,9 @@ export default function RouteDetailPage({ params }: RouteDetailPageProps) {
   const isPickup = route.type === 'pickup';
   const Icon = isPickup ? Sunrise : Sunset;
   const typeLabel = isPickup ? 'Recogida' : 'Entrega';
-  const typeColor = isPickup ? 'warning' : 'info';
-  const typeBgColor = isPickup ? 'bg-warning/10' : 'bg-info/10';
-  const typeTextColor = isPickup ? 'text-warning' : 'text-info';
+  const typeBgLight = isPickup ? 'bg-amber-50' : 'bg-sky-50';
+  const typeBgMedium = isPickup ? 'bg-amber-100' : 'bg-sky-100';
+  const typeTextColor = isPickup ? 'text-amber-600' : 'text-sky-600';
 
   // Format recurrence
   let recurrenceText = '';
@@ -96,98 +95,93 @@ export default function RouteDetailPage({ params }: RouteDetailPageProps) {
   const expectedStudents = totalStudents - summary.absences - summary.parentPickups;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
-      {/* Custom Header with Hero */}
-      <div className={cn(
-        'pt-4 pb-6 px-4',
-        isPickup ? 'bg-gradient-to-b from-warning/20 to-gray-50' : 'bg-gradient-to-b from-info/20 to-gray-50'
-      )}>
-        <PageHeader title="" backHref="/dashboard" />
-
-        {/* Hero Content */}
-        <div className="mt-4 flex items-start gap-4">
-          <div className={cn(
-            'w-16 h-16 rounded-2xl flex items-center justify-center',
-            typeBgColor
-          )}>
-            <Icon className={cn('w-8 h-8', typeTextColor)} />
+    <div className="fixed inset-0 z-50 bg-gray-50 flex flex-col overflow-hidden">
+      {/* Header */}
+      <header className={cn('flex-shrink-0 safe-area-pt', typeBgLight)}>
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center flex-shrink-0"
+          >
+            <ChevronLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0', typeBgMedium)}>
+            <Icon className={cn('w-5 h-5', typeTextColor)} />
           </div>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-gray-900">{route.name}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={typeColor}>{typeLabel}</Badge>
-              <span className="text-sm text-gray-500">{route.scheduledStartTime}</span>
-            </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-bold text-gray-900 truncate">{route.name}</h1>
+            <p className="text-sm text-gray-500">{typeLabel} · {route.scheduledStartTime}</p>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="px-4 -mt-2 space-y-4">
-        {/* Today's Status Card - Only show if route is for today */}
-        {(canStartToday || tripInProgress) && (
-          <Card className="border-2 border-primary/20 bg-primary/5">
-            <CardContent className="py-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-primary" />
+      {/* Scrollable Content */}
+      <main className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="p-4 space-y-3">
+          {/* Today's Trip Card */}
+          {(canStartToday || tripInProgress) && (
+            <section className="bg-white rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  <span className="font-semibold text-gray-900 text-sm">Viaje de Hoy</span>
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-900">Viaje de Hoy</p>
-                  <p className="text-sm text-gray-500">
-                    {tripInProgress ? 'En progreso' : 'Listo para iniciar'}
-                  </p>
-                </div>
+                <span className={cn(
+                  'text-xs px-2 py-0.5 rounded-full font-medium',
+                  tripInProgress ? 'bg-green-100 text-green-700' : 'bg-primary/10 text-primary'
+                )}>
+                  {tripInProgress ? 'En progreso' : 'Listo'}
+                </span>
               </div>
 
-              {/* Quick Stats */}
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-white rounded-lg p-2 text-center">
-                  <p className="text-lg font-bold text-primary">{expectedStudents}</p>
-                  <p className="text-xs text-gray-500">Estudiantes</p>
+              {/* Stats Row */}
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="bg-gray-50 rounded-xl py-2 px-3 text-center">
+                  <p className="text-lg font-bold text-gray-900">{expectedStudents}</p>
+                  <p className="text-[11px] text-gray-500">Estudiantes</p>
                 </div>
-                <div className="bg-white rounded-lg p-2 text-center">
-                  <p className="text-lg font-bold text-primary">{route.stops?.length || 0}</p>
-                  <p className="text-xs text-gray-500">Paradas</p>
+                <div className="bg-gray-50 rounded-xl py-2 px-3 text-center">
+                  <p className="text-lg font-bold text-gray-900">{route.stops?.length || 0}</p>
+                  <p className="text-[11px] text-gray-500">Paradas</p>
                 </div>
                 <div className={cn(
-                  'rounded-lg p-2 text-center',
-                  summary.total > 0 ? 'bg-warning/10' : 'bg-white'
+                  'rounded-xl py-2 px-3 text-center',
+                  summary.total > 0 ? 'bg-amber-50' : 'bg-gray-50'
                 )}>
-                  <p className={cn(
-                    'text-lg font-bold',
-                    summary.total > 0 ? 'text-warning' : 'text-primary'
-                  )}>{summary.total}</p>
-                  <p className="text-xs text-gray-500">Novedades</p>
+                  <p className={cn('text-lg font-bold', summary.total > 0 ? 'text-amber-600' : 'text-gray-900')}>
+                    {summary.total}
+                  </p>
+                  <p className="text-[11px] text-gray-500">Novedades</p>
                 </div>
               </div>
 
-              {/* Novedades Banner - Only if there are novedades */}
+              {/* Novedades Alert */}
               {summary.total > 0 && (
-                <div className="bg-warning/10 border border-warning/20 rounded-xl p-3 mb-4">
+                <div className="bg-amber-50 rounded-xl p-3 mb-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="w-4 h-4 text-warning" />
-                    <span className="text-sm font-medium text-warning">
-                      {summary.total} novedad{summary.total !== 1 ? 'es' : ''} para hoy
+                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span className="text-sm font-medium text-amber-700">
+                      {summary.total} novedad{summary.total !== 1 ? 'es' : ''} para revisar
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {summary.absences > 0 && (
-                      <div className="flex items-center gap-1 text-xs bg-white px-2 py-1 rounded-full">
-                        <UserX className="w-3 h-3 text-error" />
-                        <span className="text-gray-600">{summary.absences} ausencia{summary.absences !== 1 ? 's' : ''}</span>
-                      </div>
+                      <span className="inline-flex items-center gap-1 text-xs bg-white px-2 py-1 rounded-full text-gray-600">
+                        <UserX className="w-3 h-3 text-red-500 flex-shrink-0" />
+                        {summary.absences} ausencia{summary.absences !== 1 ? 's' : ''}
+                      </span>
                     )}
                     {summary.parentPickups > 0 && (
-                      <div className="flex items-center gap-1 text-xs bg-white px-2 py-1 rounded-full">
-                        <UserCheck className="w-3 h-3 text-orange-500" />
-                        <span className="text-gray-600">{summary.parentPickups} recoge padre</span>
-                      </div>
+                      <span className="inline-flex items-center gap-1 text-xs bg-white px-2 py-1 rounded-full text-gray-600">
+                        <UserCheck className="w-3 h-3 text-orange-500 flex-shrink-0" />
+                        {summary.parentPickups} padre recoge
+                      </span>
                     )}
                     {summary.stopChanges > 0 && (
-                      <div className="flex items-center gap-1 text-xs bg-white px-2 py-1 rounded-full">
-                        <MapPinned className="w-3 h-3 text-blue-500" />
-                        <span className="text-gray-600">{summary.stopChanges} cambio{summary.stopChanges !== 1 ? 's' : ''} parada</span>
-                      </div>
+                      <span className="inline-flex items-center gap-1 text-xs bg-white px-2 py-1 rounded-full text-gray-600">
+                        <MapPinned className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                        {summary.stopChanges} cambio{summary.stopChanges !== 1 ? 's' : ''}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -195,184 +189,168 @@ export default function RouteDetailPage({ params }: RouteDetailPageProps) {
 
               {/* CTA Button */}
               {tripInProgress && tripId ? (
-                <Button
+                <button
                   onClick={() => router.push(`/trips/${tripId}/active`)}
-                  leftIcon={Bus}
-                  className="w-full"
+                  className="w-full py-3 rounded-xl font-semibold text-white bg-primary active:bg-primary/90 transition-colors flex items-center justify-center gap-2"
                 >
+                  <Bus className="w-5 h-5" />
                   Ver Viaje Activo
-                </Button>
+                </button>
               ) : canStartToday && (
-                <Button
+                <button
                   onClick={() => router.push(`/routes/${id}/start`)}
-                  leftIcon={Play}
-                  className="w-full bg-success hover:bg-success/90"
+                  className="w-full py-3 rounded-xl font-semibold text-white bg-primary active:bg-primary/90 transition-colors flex items-center justify-center gap-2"
                 >
-                  {summary.total > 0
-                    ? `Iniciar Viaje (${summary.total} novedad${summary.total !== 1 ? 'es' : ''})`
-                    : 'Iniciar Viaje'}
-                </Button>
+                  <Play className="w-5 h-5" />
+                  Iniciar Viaje
+                </button>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </section>
+          )}
 
-        {/* Route Info - Compact Version */}
-        <Card>
-          <CardContent>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
-              <RouteIcon className="w-4 h-4" />
-              Información de la Ruta
+          {/* Route not for today message */}
+          {!canStartToday && !tripInProgress && (
+            <section className="bg-white rounded-2xl p-4 text-center shadow-sm">
+              <Calendar className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">Esta ruta no está programada para hoy</p>
+            </section>
+          )}
+
+          {/* Route Info */}
+          <section className="bg-white rounded-2xl p-4 shadow-sm">
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              Información
             </h2>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Schedule */}
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-400" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {route.scheduledStartTime} - {route.scheduledEndTime}
-                  </p>
-                </div>
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-3">
+                <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="text-sm text-gray-700">
+                  {route.scheduledStartTime} - {route.scheduledEndTime}
+                </span>
               </div>
-
-              {/* Vehicle */}
               {route.vehicle && (
-                <div className="flex items-center gap-2">
-                  <Bus className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{route.vehicle.licensePlate}</p>
-                  </div>
+                <div className="flex items-center gap-3">
+                  <Bus className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <span className="text-sm text-gray-700 truncate">
+                    {route.vehicle.licensePlate}
+                    {route.vehicle.brand && ` · ${route.vehicle.brand}`}
+                  </span>
                 </div>
               )}
-
-              {/* Duration */}
               {route.estimatedDuration && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-gray-400" />
-                  <p className="text-sm text-gray-600">
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">
                     {route.estimatedDuration} min
                     {route.estimatedDistance && ` · ${(route.estimatedDistance / 1000).toFixed(1)} km`}
-                  </p>
+                  </span>
                 </div>
               )}
-
-              {/* Recurrence */}
               {recurrenceText && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <p className="text-sm text-gray-600 truncate">{recurrenceText}</p>
+                <div className="flex items-center gap-3">
+                  <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">{recurrenceText}</span>
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </section>
 
-        {/* Stops Timeline */}
-        {route.stops && route.stops.length > 0 && (
-          <Card>
-            <CardContent>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
+          {/* Stops */}
+          {route.stops && route.stops.length > 0 && (
+            <section className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
                 Paradas ({route.stops.length})
               </h2>
-
-              <div className="relative">
+              <div>
                 {route.stops.map((stop: { _id: string; name: string; address: string; scheduledTime: string; order: number }, index: number) => (
-                  <div key={stop._id} className="flex items-start gap-3 pb-4 last:pb-0">
+                  <div key={stop._id} className="flex gap-3">
                     {/* Timeline */}
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center flex-shrink-0">
                       <div className={cn(
-                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
-                        index === 0 ? 'bg-success text-white' :
+                        'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
+                        index === 0 ? 'bg-green-500 text-white' :
                         index === route.stops.length - 1 ? 'bg-primary text-white' :
                         'bg-gray-200 text-gray-600'
                       )}>
                         {stop.order}
                       </div>
                       {index < route.stops.length - 1 && (
-                        <div className="w-0.5 flex-1 bg-gray-200 min-h-[24px] mt-1" />
+                        <div className="w-0.5 h-6 bg-gray-200" />
                       )}
                     </div>
-
-                    {/* Stop Info */}
-                    <div className="flex-1 min-w-0 pt-1">
-                      <div className="flex items-center justify-between">
+                    {/* Info */}
+                    <div className="flex-1 min-w-0 pb-2">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium text-gray-900 truncate">{stop.name}</p>
-                        <span className="text-xs text-gray-400 ml-2">{stop.scheduledTime}</span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">{stop.scheduledTime}</span>
                       </div>
                       <p className="text-xs text-gray-500 truncate">{stop.address}</p>
                     </div>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </section>
+          )}
 
-        {/* Students Section - Clickable */}
-        {route.students && route.students.length > 0 && (
-          <Card
-            className="cursor-pointer hover:bg-gray-50 transition-colors"
-            onClick={() => setShowStudentSheet(true)}
-          >
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                  <Users className="w-4 h-4" />
+          {/* Students */}
+          {route.students && route.students.length > 0 && (
+            <button
+              onClick={() => setShowStudentSheet(true)}
+              className="w-full bg-white rounded-2xl p-4 shadow-sm text-left active:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                   Estudiantes ({totalStudents})
                 </h2>
-                <ChevronRight className="w-5 h-5 text-gray-400" />
+                <ChevronRight className="w-4 h-4 text-gray-400" />
               </div>
 
-              {/* Student Avatars Preview */}
-              <div className="flex items-center mt-3">
+              {/* Avatars */}
+              <div className="flex items-center">
                 <div className="flex -space-x-2">
-                  {route.students.filter(Boolean).slice(0, 5).map((student, index) => {
+                  {route.students.filter(Boolean).slice(0, 4).map((student, index) => {
                     if (!student) return null;
                     const hasNovedad = studentsWithNovedades.has(student.id);
                     return (
                       <div
                         key={String(student.id)}
                         className={cn(
-                          'w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold border-2 border-white',
-                          hasNovedad ? 'bg-warning/20 text-warning' : 'bg-accent text-primary'
+                          'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold border-2 border-white',
+                          hasNovedad ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'
                         )}
-                        style={{ zIndex: 5 - index }}
+                        style={{ zIndex: 4 - index }}
                       >
                         {student.firstName[0]}{student.lastName[0]}
                       </div>
                     );
                   })}
-                  {totalStudents > 5 && (
-                    <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600 border-2 border-white">
-                      +{totalStudents - 5}
+                  {totalStudents > 4 && (
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-500 border-2 border-white">
+                      +{totalStudents - 4}
                     </div>
                   )}
                 </div>
 
-                {/* Status indicators */}
-                <div className="ml-4 flex items-center gap-3 text-xs">
-                  <div className="flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5 text-success" />
-                    <span className="text-gray-600">{totalStudents - studentsWithNovedades.size}</span>
-                  </div>
+                <div className="ml-3 flex items-center gap-2 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-green-500" />
+                    {totalStudents - studentsWithNovedades.size}
+                  </span>
                   {studentsWithNovedades.size > 0 && (
-                    <div className="flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5 text-warning" />
-                      <span className="text-gray-600">{studentsWithNovedades.size}</span>
-                    </div>
+                    <span className="flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-500" />
+                      {studentsWithNovedades.size}
+                    </span>
                   )}
                 </div>
               </div>
+            </button>
+          )}
 
-              <p className="text-xs text-gray-400 mt-3">
-                Toca para ver la lista completa
-              </p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+          {/* Bottom spacing for safe area */}
+          <div className="h-4" />
+        </div>
+      </main>
 
       {/* Student List Sheet */}
       <StudentListSheet
@@ -381,17 +359,6 @@ export default function RouteDetailPage({ params }: RouteDetailPageProps) {
         students={route.students || []}
         novedades={novedades}
       />
-
-      {/* Floating Action Button - Only when not showing today's card */}
-      {!canStartToday && !tripInProgress && (
-        <div className="fixed bottom-20 left-4 right-4">
-          <div className="bg-gray-100 rounded-xl p-4 text-center">
-            <p className="text-sm text-gray-600">
-              Esta ruta no está programada para hoy
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

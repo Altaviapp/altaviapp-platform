@@ -44,25 +44,34 @@ export function ActiveTripsCard({ trips, isLoading }: ActiveTripsCardProps) {
             </Badge>
           )}
         </div>
-        {activeTrips.length > 0 && (
-          <Link
-            href="/dashboard/monitoring"
-            className="text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-medium transition-colors"
-          >
-            <Map className="w-4 h-4" />
-            Monitorear
-          </Link>
-        )}
+        <Link
+          href="/dashboard/monitoring"
+          className="text-sm text-primary hover:text-primary/80 flex items-center gap-1 font-medium transition-colors"
+        >
+          <Map className="w-4 h-4" />
+          Monitorear
+        </Link>
       </div>
 
       {isLoading ? (
         <LoadingState message="Cargando viajes activos..." size="sm" />
       ) : activeTrips.length === 0 ? (
-        <EmptyState
-          icon={Bus}
-          title="Sin viajes activos"
-          description="No hay viajes en curso en este momento"
-        />
+        <div className="py-8">
+          <EmptyState
+            icon={Bus}
+            title="Sin viajes activos"
+            description="No hay viajes en curso en este momento"
+          />
+          <div className="px-4 pb-4">
+            <Link
+              href="/dashboard/monitoring"
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-colors font-medium text-sm"
+            >
+              <Map className="w-4 h-4" />
+              Abrir página de monitoreo
+            </Link>
+          </div>
+        </div>
       ) : (
         <div className="divide-y divide-gray-100">
           {activeTrips.slice(0, 5).map((trip) => (

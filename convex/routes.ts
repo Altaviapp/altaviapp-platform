@@ -882,3 +882,45 @@ export const listRoutesForCrew = query({
     return routes;
   },
 });
+
+/**
+ * Migration: Fix route durations that were stored in seconds instead of minutes
+ * Only run once per institution to correct existing data
+ */
+export const fixRouteDurations = mutation({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const routes = await ctx.db
+      .query("routes")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .collect();
+
+    let fixedCount = 0;
+    const now = Date.now();
+
+    for (const route of routes) {
+      // If duration is > 180 (3 hours in minutes seems excessive for school routes),
+      // it's likely stored in seconds and needs conversion
+      if (route.estimatedDuration && route.estimatedDuration > 180) {
+        const correctedDuration = Math.round(route.estimatedDuration / 60);
+        await ctx.db.patch(route._id, {
+          estimatedDuration: correctedDuration,
+          updatedAt: now,
+        });
+        fixedCount++;
+      }
+    }
+
+    return {
+      success: true,
+      routesChecked: routes.length,
+      routesFixed: fixedCount,
+    };
+  },
+});

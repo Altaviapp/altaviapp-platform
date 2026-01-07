@@ -52,7 +52,7 @@ export default function NewRoutePage() {
       schoolDepartureTime: step1.routeType === 'dropoff' ? step1.targetTime : undefined,
       recurrence: step3.recurrence,
       optimizedPolyline: step2.optimizationResult.encodedPolyline,
-      estimatedDuration: step2.optimizationResult.totalDuration,
+      estimatedDuration: Math.round(step2.optimizationResult.totalDuration / 60), // Convert seconds to minutes
       estimatedDistance: step2.optimizationResult.totalDistance,
       stops,
       isActive: step3.isActive,

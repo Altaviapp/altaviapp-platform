@@ -90,7 +90,9 @@ export function useTripOperations() {
         }>;
         notes?: string;
         allPassed: boolean;
-      }
+      },
+      novedadesConfirmedAt?: number,
+      confirmedNovedadIds?: Id<"novedades">[]
     ) => {
       if (!userId) throw new Error("Not authenticated");
       return startTripFromRouteMutation({
@@ -99,6 +101,8 @@ export function useTripOperations() {
         latitude,
         longitude,
         ...(checklistData && { checklistData }),
+        ...(novedadesConfirmedAt && { novedadesConfirmedAt }),
+        ...(confirmedNovedadIds && confirmedNovedadIds.length > 0 && { confirmedNovedadIds }),
       });
     },
 

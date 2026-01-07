@@ -1566,6 +1566,9 @@ export const startTripFromRoute = mutation({
       notes: v.optional(v.string()),
       allPassed: v.boolean(),
     })),
+    // Novedades confirmation data (from crew review step)
+    novedadesConfirmedAt: v.optional(v.number()),
+    confirmedNovedadIds: v.optional(v.array(v.id("novedades"))),
   },
   handler: async (ctx, args) => {
     const currentUser = await verifyUser(ctx, args.userId);
@@ -1632,6 +1635,8 @@ export const startTripFromRoute = mutation({
           startTime: now,
           updatedAt: now,
           ...(args.checklistData && { checklistData: args.checklistData }),
+          ...(args.novedadesConfirmedAt && { novedadesConfirmedAt: args.novedadesConfirmedAt }),
+          ...(args.confirmedNovedadIds && { confirmedNovedadIds: args.confirmedNovedadIds }),
         });
 
         // Record initial GPS location
@@ -1662,6 +1667,8 @@ export const startTripFromRoute = mutation({
       createdAt: now,
       updatedAt: now,
       ...(args.checklistData && { checklistData: args.checklistData }),
+      ...(args.novedadesConfirmedAt && { novedadesConfirmedAt: args.novedadesConfirmedAt }),
+      ...(args.confirmedNovedadIds && { confirmedNovedadIds: args.confirmedNovedadIds }),
     });
 
     // 6. Generate tripStudents with excludeDays filtering

@@ -22,6 +22,7 @@ interface ConfirmationStepProps {
   vehiclePlate?: string;
   expectedStudents: number;
   totalNovedades: number;
+  novedadesConfirmed?: boolean;
   checklistCompleted: boolean;
   checklistData?: ChecklistData | null;
   isSubmitting: boolean;
@@ -36,6 +37,7 @@ export function ConfirmationStep({
   vehiclePlate,
   expectedStudents,
   totalNovedades,
+  novedadesConfirmed = false,
   checklistCompleted,
   checklistData,
   isSubmitting,
@@ -112,8 +114,17 @@ export function ConfirmationStep({
 
             {totalNovedades > 0 && (
               <div className="flex items-center gap-2 text-sm">
-                <AlertTriangle className="w-4 h-4 text-warning" />
-                <span className="text-warning">{totalNovedades} novedades</span>
+                {novedadesConfirmed ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 text-success" />
+                    <span className="text-success">{totalNovedades} novedades confirmadas</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-4 h-4 text-warning" />
+                    <span className="text-warning">{totalNovedades} novedades</span>
+                  </>
+                )}
               </div>
             )}
           </div>

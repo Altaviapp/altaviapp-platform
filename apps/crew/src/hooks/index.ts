@@ -56,6 +56,9 @@ export {
 } from './useDriverRoutes';
 export type { RouteForToday, NovedadForRoute, NovedadSummary, NovedadForDashboard, CrewRoute } from './useDriverRoutes';
 
+// Novedades Confirmation hook (for trip start flow)
+export { useNovedadesConfirmation } from './useNovedadesConfirmation';
+
 // Incidents hooks (for reporting safety issues)
 export { useIncidentMutations } from './useIncidents';
 export type { IncidentType, IncidentSeverity, ReportIncidentInput } from './useIncidents';

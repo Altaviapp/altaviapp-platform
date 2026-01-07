@@ -5,41 +5,54 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useRouteWithStudents, useNovedadesForRoute, useTripOperations } from '@/hooks';
+import {
+  useRouteWithStudents,
+  useNovedadesForRoute,
+  useTripOperations,
+  useConvexAuth,
+  useNovedadesConfirmation,
+} from '@/hooks';
 import { LoadingState } from '@/components/core';
 import { WizardProgress } from './WizardProgress';
-import { ChecklistDecisionStep } from './steps/ChecklistDecisionStep';
+import { TripStartOverviewStep } from './steps/TripStartOverviewStep';
+import { NovedadesReviewStep } from './steps/NovedadesReviewStep';
 import { ChecklistFormStep } from './steps/ChecklistFormStep';
-import { TripPreviewStep } from './steps/TripPreviewStep';
 import { ConfirmationStep } from './steps/ConfirmationStep';
+import { StudentListSheet } from '@/components/sheets/StudentListSheet';
 import type { ChecklistData } from '@/types';
+import type { Id } from '../../../../../convex/_generated/dataModel';
 
 interface TripStartWizardProps {
   routeId: string;
 }
 
-type WizardStep = 1 | 2 | 3 | 4;
-
-const WIZARD_STEPS = [
-  { id: 1, title: 'Inspección' },
-  { id: 2, title: 'Checklist', isOptional: true },
-  { id: 3, title: 'Resumen' },
-  { id: 4, title: 'Confirmar' },
-];
+type WizardStep = 'overview' | 'novedades' | 'checklist' | 'confirmation';
 
 export function TripStartWizard({ routeId }: TripStartWizardProps) {
   const router = useRouter();
+  const { isDriver } = useConvexAuth();
 
   // Data hooks
   const { route, isLoading: routeLoading } = useRouteWithStudents(routeId);
   const { novedades, summary, isLoading: novedadesLoading } = useNovedadesForRoute(routeId);
   const { startTripFromRoute } = useTripOperations();
 
+  // Novedades confirmation state
+  const {
+    confirmedIds,
+    confirmedAt,
+    isConfirming,
+    allConfirmed,
+    confirmSingle,
+    confirmAll,
+    submitConfirmations,
+    confirmedNovedadIds,
+  } = useNovedadesConfirmation(novedades);
+
   // Wizard state
-  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
-  const [doChecklist, setDoChecklist] = useState<boolean | null>(null);
+  const [currentStep, setCurrentStep] = useState<WizardStep>('overview');
   const [checklistData, setChecklistData] = useState<ChecklistData | null>(null);
-  const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
+  const [showStudentSheet, setShowStudentSheet] = useState(false);
 
   // GPS state
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -47,6 +60,30 @@ export function TripStartWizard({ routeId }: TripStartWizardProps) {
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Calculate which steps are active based on conditions
+  const hasNovedades = summary.total > 0;
+
+  // Build wizard steps dynamically
+  const getWizardSteps = () => {
+    const steps = [
+      { id: 'overview', title: 'Inicio' },
+    ];
+
+    if (hasNovedades) {
+      steps.push({ id: 'novedades', title: 'Novedades' });
+    }
+
+    if (isDriver) {
+      steps.push({ id: 'checklist', title: 'Inspección', isOptional: true } as any);
+    }
+
+    steps.push({ id: 'confirmation', title: 'Confirmar' });
+
+    return steps;
+  };
+
+  const wizardSteps = getWizardSteps();
 
   // Get GPS location on mount
   useEffect(() => {
@@ -70,61 +107,61 @@ export function TripStartWizard({ routeId }: TripStartWizardProps) {
     }
   }, []);
 
-  // Step 1: Handle checklist decision
-  const handleChecklistDecision = useCallback((wantsChecklist: boolean) => {
-    setDoChecklist(wantsChecklist);
-    if (wantsChecklist) {
-      setCurrentStep(2);
+  // Navigation handlers
+  const handleOverviewNext = useCallback(() => {
+    if (hasNovedades) {
+      setCurrentStep('novedades');
+    } else if (isDriver) {
+      setCurrentStep('checklist');
     } else {
-      // Skip step 2 and go to preview
-      setSkippedSteps([2]);
-      setCurrentStep(3);
+      setCurrentStep('confirmation');
     }
+  }, [hasNovedades, isDriver]);
+
+  const handleNovedadesNext = useCallback(async () => {
+    // Submit confirmations to backend
+    await submitConfirmations();
+
+    if (isDriver) {
+      setCurrentStep('checklist');
+    } else {
+      setCurrentStep('confirmation');
+    }
+  }, [isDriver, submitConfirmations]);
+
+  const handleNovedadesBack = useCallback(() => {
+    setCurrentStep('overview');
   }, []);
 
-  // Step 2: Handle checklist completion
   const handleChecklistComplete = useCallback((data: ChecklistData) => {
     setChecklistData(data);
-    setCurrentStep(3);
+    setCurrentStep('confirmation');
   }, []);
 
-  // Step 2: Handle checklist skip (user changed mind)
   const handleChecklistSkip = useCallback(() => {
-    setDoChecklist(false);
     setChecklistData(null);
-    setSkippedSteps((prev) => [...prev, 2]);
-    setCurrentStep(3);
+    setCurrentStep('confirmation');
   }, []);
 
-  // Step 2: Go back to decision
   const handleChecklistBack = useCallback(() => {
-    setDoChecklist(null);
-    setCurrentStep(1);
-  }, []);
-
-  // Step 3: Go to confirmation
-  const handlePreviewNext = useCallback(() => {
-    setCurrentStep(4);
-  }, []);
-
-  // Step 3: Go back
-  const handlePreviewBack = useCallback(() => {
-    if (doChecklist && checklistData) {
-      // Go back to checklist if it was completed
-      setCurrentStep(2);
+    if (hasNovedades) {
+      setCurrentStep('novedades');
     } else {
-      // Go back to decision
-      setSkippedSteps([]);
-      setCurrentStep(1);
+      setCurrentStep('overview');
     }
-  }, [doChecklist, checklistData]);
+  }, [hasNovedades]);
 
-  // Step 4: Go back to preview
   const handleConfirmationBack = useCallback(() => {
-    setCurrentStep(3);
-  }, []);
+    if (isDriver) {
+      setCurrentStep('checklist');
+    } else if (hasNovedades) {
+      setCurrentStep('novedades');
+    } else {
+      setCurrentStep('overview');
+    }
+  }, [isDriver, hasNovedades]);
 
-  // Step 4: Start the trip
+  // Start the trip
   const handleStartTrip = useCallback(async () => {
     if (!routeId || !location) {
       setError('No se pudo obtener la ubicación GPS. Por favor, permite el acceso a tu ubicación.');
@@ -157,7 +194,9 @@ export function TripStartWizard({ routeId }: TripStartWizardProps) {
         routeId,
         location.latitude,
         location.longitude,
-        checklistPayload
+        checklistPayload,
+        confirmedAt || undefined,
+        confirmedNovedadIds.length > 0 ? confirmedNovedadIds as Id<"novedades">[] : undefined
       );
 
       if (result.success && result.tripId) {
@@ -172,7 +211,7 @@ export function TripStartWizard({ routeId }: TripStartWizardProps) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [routeId, location, startTripFromRoute, checklistData, router]);
+  }, [routeId, location, startTripFromRoute, checklistData, confirmedAt, confirmedNovedadIds, router]);
 
   // Loading state
   if (routeLoading) {
@@ -208,6 +247,9 @@ export function TripStartWizard({ routeId }: TripStartWizardProps) {
   // Calculate expected students
   const expectedStudents = (route.students?.length || 0) - summary.absences - summary.parentPickups;
 
+  // Get current step index for progress
+  const currentStepIndex = wizardSteps.findIndex(s => s.id === currentStep);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -230,21 +272,38 @@ export function TripStartWizard({ routeId }: TripStartWizardProps) {
 
       {/* Progress indicator */}
       <WizardProgress
-        steps={WIZARD_STEPS}
-        currentStep={currentStep}
-        skippedSteps={skippedSteps}
+        steps={wizardSteps.map((s, i) => ({ id: i + 1, title: s.title, isOptional: (s as any).isOptional }))}
+        currentStep={currentStepIndex + 1}
+        skippedSteps={[]}
       />
 
       {/* Step content */}
       <div className="pb-safe">
-        {currentStep === 1 && (
-          <ChecklistDecisionStep
-            onDecision={handleChecklistDecision}
-            isLoading={false}
+        {currentStep === 'overview' && (
+          <TripStartOverviewStep
+            route={route}
+            summary={summary}
+            novedadesLoading={novedadesLoading}
+            gpsReady={!!location}
+            onNext={handleOverviewNext}
+            onViewStudents={() => setShowStudentSheet(true)}
           />
         )}
 
-        {currentStep === 2 && (
+        {currentStep === 'novedades' && (
+          <NovedadesReviewStep
+            novedades={novedades}
+            summary={summary}
+            confirmedIds={confirmedIds}
+            isConfirming={isConfirming}
+            onConfirmSingle={confirmSingle}
+            onConfirmAll={confirmAll}
+            onNext={handleNovedadesNext}
+            onBack={handleNovedadesBack}
+          />
+        )}
+
+        {currentStep === 'checklist' && (
           <ChecklistFormStep
             onComplete={handleChecklistComplete}
             onBack={handleChecklistBack}
@@ -252,25 +311,14 @@ export function TripStartWizard({ routeId }: TripStartWizardProps) {
           />
         )}
 
-        {currentStep === 3 && (
-          <TripPreviewStep
-            route={route}
-            novedades={novedades}
-            summary={summary}
-            novedadesLoading={novedadesLoading}
-            gpsReady={!!location}
-            onNext={handlePreviewNext}
-            onBack={handlePreviewBack}
-          />
-        )}
-
-        {currentStep === 4 && (
+        {currentStep === 'confirmation' && (
           <ConfirmationStep
             routeName={route.name}
             routeType={route.type}
             vehiclePlate={route.vehicle?.licensePlate}
             expectedStudents={expectedStudents}
             totalNovedades={summary.total}
+            novedadesConfirmed={allConfirmed || summary.total === 0}
             checklistCompleted={!!checklistData}
             checklistData={checklistData}
             isSubmitting={isSubmitting}
@@ -280,6 +328,14 @@ export function TripStartWizard({ routeId }: TripStartWizardProps) {
           />
         )}
       </div>
+
+      {/* Student List Sheet */}
+      <StudentListSheet
+        isOpen={showStudentSheet}
+        onClose={() => setShowStudentSheet(false)}
+        students={route.students || []}
+        novedades={novedades}
+      />
     </div>
   );
 }

@@ -392,6 +392,9 @@ export default defineSchema({
       notes: v.optional(v.string()),
       allPassed: v.boolean(),
     })),
+    // Novedades confirmation data (from crew review step)
+    novedadesConfirmedAt: v.optional(v.number()),
+    confirmedNovedadIds: v.optional(v.array(v.id("novedades"))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

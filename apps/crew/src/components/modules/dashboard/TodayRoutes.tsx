@@ -31,14 +31,14 @@ export function TodayRoutes({ routes, isLoading }: TodayRoutesProps) {
     <section>
       <div className="flex items-center gap-2 mb-3">
         <Route className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-semibold text-gray-900">Rutas de Hoy</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Viajes Para Hoy</h2>
       </div>
 
       {!routes || routes.length === 0 ? (
         <EmptyState
           icon={Route}
-          title="No hay rutas programadas"
-          description="No tienes rutas asignadas para hoy."
+          title="No hay viajes programados"
+          description="No tienes viajes asignados para hoy."
         />
       ) : (
         <div className="space-y-3">

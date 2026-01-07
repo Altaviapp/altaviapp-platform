@@ -27,6 +27,7 @@ import type * as lib_emailTemplates from "../lib/emailTemplates.js";
 import type * as lib_eta from "../lib/eta.js";
 import type * as lib_simpleAuth from "../lib/simpleAuth.js";
 import type * as lib_tokenUtils from "../lib/tokenUtils.js";
+import type * as monitoring from "../monitoring.js";
 import type * as monitors from "../monitors.js";
 import type * as notifications from "../notifications.js";
 import type * as novedadTypes from "../novedadTypes.js";
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   "lib/eta": typeof lib_eta;
   "lib/simpleAuth": typeof lib_simpleAuth;
   "lib/tokenUtils": typeof lib_tokenUtils;
+  monitoring: typeof monitoring;
   monitors: typeof monitors;
   notifications: typeof notifications;
   novedadTypes: typeof novedadTypes;

@@ -615,6 +615,108 @@ export const acknowledge = mutation({
 });
 
 /**
+ * Acknowledge multiple novedades at once (by crew)
+ * Used for bulk confirmation before starting a trip
+ */
+export const acknowledgeMultiple = mutation({
+  args: {
+    userId: v.id("users"),
+    novedadIds: v.array(v.id("novedades")),
+  },
+  handler: async (ctx, args) => {
+    const user = await verifyUser(ctx, args.userId);
+
+    // Only crew members or admins can acknowledge
+    if (!["driver", "monitor", "admin", "super_admin"].includes(user.role)) {
+      throw new Error("Solo el personal de transporte puede acusar recibo de novedades");
+    }
+
+    const now = Date.now();
+    const results: Array<{ novedadId: string; success: boolean; error?: string }> = [];
+
+    for (const novedadId of args.novedadIds) {
+      const novedad = await ctx.db.get(novedadId);
+
+      if (!novedad) {
+        results.push({ novedadId: novedadId.toString(), success: false, error: "Novedad no encontrada" });
+        continue;
+      }
+
+      // Verify institution access
+      if (user.institutionId !== novedad.institutionId) {
+        results.push({ novedadId: novedadId.toString(), success: false, error: "Sin acceso a esta institución" });
+        continue;
+      }
+
+      // Can only acknowledge approved or pending novedades (pending = auto-approved types)
+      if (novedad.status !== "approved" && novedad.status !== "pending") {
+        // Already acknowledged or other status - skip but mark as success
+        if (novedad.status === "acknowledged") {
+          results.push({ novedadId: novedadId.toString(), success: true });
+          continue;
+        }
+        results.push({ novedadId: novedadId.toString(), success: false, error: `Estado no válido: ${novedad.status}` });
+        continue;
+      }
+
+      // Update novedad
+      await ctx.db.patch(novedadId, {
+        status: "acknowledged",
+        acknowledgedBy: args.userId,
+        acknowledgedAt: now,
+        updatedAt: now,
+      });
+
+      results.push({ novedadId: novedadId.toString(), success: true });
+    }
+
+    // Notify parents (batch - one notification per student)
+    const successfulIds = results.filter(r => r.success).map(r => r.novedadId);
+    const notifiedStudents = new Set<string>();
+
+    for (const novedadIdStr of successfulIds) {
+      const novedad = await ctx.db.get(novedadIdStr as Id<"novedades">);
+      if (!novedad || notifiedStudents.has(novedad.studentId.toString())) continue;
+
+      notifiedStudents.add(novedad.studentId.toString());
+
+      const student = await ctx.db.get(novedad.studentId);
+      if (!student) continue;
+
+      const parentUser = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", student.parentEmail.toLowerCase()))
+        .first();
+
+      if (parentUser) {
+        await ctx.db.insert("notifications", {
+          userId: parentUser._id,
+          title: "Novedades confirmadas",
+          message: `Las novedades de ${student.firstName} para hoy han sido confirmadas por el equipo de transporte.`,
+          type: "success",
+          category: "novedad",
+          relatedEntityType: "novedad",
+          relatedEntityId: novedadIdStr as Id<"novedades">,
+          read: false,
+          createdAt: now,
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    return {
+      success: failCount === 0,
+      confirmedCount: successCount,
+      failedCount: failCount,
+      results,
+      confirmedAt: now,
+    };
+  },
+});
+
+/**
  * Apply a novedad to a trip (internal - called when trip starts or is created)
  */
 export const applyToTrip = mutation({

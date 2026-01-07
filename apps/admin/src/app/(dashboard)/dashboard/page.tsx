@@ -9,7 +9,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { StatsGrid, type StatItem } from '@/components/shared';
-import { UpcomingTripsCard, RecentAlertsCard } from '@/components/modules/dashboard';
+import { ActiveTripsCard, UpcomingTripsCard, RecentAlertsCard } from '@/components/modules/dashboard';
 import {
   useConvexAuth,
   useActiveAndUpcomingTrips,
@@ -102,14 +102,17 @@ export default function DashboardPage() {
       {/* Stats Grid - 6 key metrics */}
       <StatsGrid stats={stats} isLoading={isLoading} columns={6} />
 
-      {/* Two column layout for cards */}
+      {/* Two column layout for trip cards */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Active and Upcoming Trips Section */}
-        <UpcomingTripsCard trips={upcomingTrips} isLoading={tripsLoading} />
+        {/* Active Trips - with monitoring button */}
+        <ActiveTripsCard trips={upcomingTrips} isLoading={tripsLoading} />
 
-        {/* Recent Alerts Section */}
-        <RecentAlertsCard incidents={incidents} isLoading={incidentsLoading} />
+        {/* Upcoming Trips - next 6 hours */}
+        <UpcomingTripsCard trips={upcomingTrips} isLoading={tripsLoading} />
       </div>
+
+      {/* Recent Alerts Section - full width */}
+      <RecentAlertsCard incidents={incidents} isLoading={incidentsLoading} />
     </div>
   );
 }

@@ -150,3 +150,18 @@ export {
   EVENT_TYPE_CONFIG,
 } from "./useTripEvents";
 export type { TripEventType, ActorRole } from "./useTripEvents";
+
+// Real-time Monitoring
+export {
+  useActiveTripsWithGPS,
+  useTripMonitoringDetails,
+  useTripTimeline as useMonitoringTimeline,
+  useTripNovedades,
+  useTripMonitoring,
+} from "./useMonitoring";
+export type {
+  ActiveTripWithPosition,
+  MonitoringStop,
+  TimelineEvent,
+  TripNovedad,
+} from "./useMonitoring";

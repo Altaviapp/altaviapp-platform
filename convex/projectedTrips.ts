@@ -455,6 +455,13 @@ export const getActiveAndUpcomingTrips = query({
       tripsByRoute.set(trip.routeId.toString(), trip);
     }
 
+    // Get all novedades for today
+    const todayNovedades = await ctx.db
+      .query("novedades")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("date"), today))
+      .collect();
+
     // Build results
     const results: {
       type: "active" | "upcoming";
@@ -468,6 +475,8 @@ export const getActiveAndUpcomingTrips = query({
       status: string;
       tripId?: Id<"trips">;
       totalStudents: number;
+      novedadesCount: { total: number; pending: number };
+      studentsSummary: { checkedIn: number; expectedToBoard: number };
     }[] = [];
 
     // Add active trips
@@ -485,6 +494,38 @@ export const getActiveAndUpcomingTrips = query({
         .filter((q) => q.eq(q.field("isActive"), true))
         .collect();
 
+      // Get tripStudents for this trip
+      const tripStudents = await ctx.db
+        .query("tripStudents")
+        .withIndex("by_trip", (q) => q.eq("tripId", trip._id))
+        .collect();
+
+      // Get check-ins for this trip
+      const checkins = await ctx.db
+        .query("studentCheckins")
+        .withIndex("by_trip", (q) => q.eq("tripId", trip._id))
+        .collect();
+
+      const checkedInIds = new Set(checkins.map((c) => c.studentId.toString()));
+
+      // Count novedades for students in this trip
+      const studentIds = new Set(tripStudents.map((ts) => ts.studentId.toString()));
+      let novedadesTotal = 0;
+      let novedadesPending = 0;
+
+      for (const ts of tripStudents) {
+        if (ts.novedadId) {
+          novedadesTotal++;
+        }
+      }
+
+      // Also check pending novedades for students on this route
+      for (const nov of todayNovedades) {
+        if (studentIds.has(nov.studentId.toString()) && nov.status === "pending") {
+          novedadesPending++;
+        }
+      }
+
       results.push({
         type: "active",
         date: today,
@@ -496,7 +537,16 @@ export const getActiveAndUpcomingTrips = query({
         driverName: driverUser?.name || "Sin conductor",
         status: "in_progress",
         tripId: trip._id,
-        totalStudents: studentRoutes.length,
+        totalStudents: tripStudents.length || studentRoutes.length,
+        novedadesCount: { total: novedadesTotal, pending: novedadesPending },
+        studentsSummary: {
+          checkedIn: tripStudents.filter(
+            (ts) => checkedInIds.has(ts.studentId.toString()) && ts.status === "scheduled"
+          ).length,
+          expectedToBoard: tripStudents.filter(
+            (ts) => ts.status === "scheduled" || ts.status === "stop_changed"
+          ).length,
+        },
       });
     }
 
@@ -537,6 +587,23 @@ export const getActiveAndUpcomingTrips = query({
         .filter((q) => q.eq(q.field("isActive"), true))
         .collect();
 
+      // Count novedades for students on this route
+      const studentIds = new Set(studentRoutes.map((sr) => sr.studentId.toString()));
+      let novedadesTotal = 0;
+      let novedadesPending = 0;
+
+      for (const nov of todayNovedades) {
+        if (studentIds.has(nov.studentId.toString())) {
+          // Check if novedad affects this route type
+          if (nov.affectedRouteType === "both" || nov.affectedRouteType === route.type) {
+            novedadesTotal++;
+            if (nov.status === "pending") {
+              novedadesPending++;
+            }
+          }
+        }
+      }
+
       results.push({
         type: "upcoming",
         date: today,
@@ -549,6 +616,11 @@ export const getActiveAndUpcomingTrips = query({
         status: existingTrip?.status || "projected",
         tripId: existingTrip?._id,
         totalStudents: studentRoutes.length,
+        novedadesCount: { total: novedadesTotal, pending: novedadesPending },
+        studentsSummary: {
+          checkedIn: 0, // No check-ins for upcoming trips
+          expectedToBoard: studentRoutes.length, // All students expected to board for upcoming
+        },
       });
     }
 

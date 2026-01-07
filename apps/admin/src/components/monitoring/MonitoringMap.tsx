@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { GoogleMap, Marker, Polyline } from '@react-google-maps/api';
+import { GoogleMap, Marker, Polyline, OverlayView } from '@react-google-maps/api';
 import { ArrowLeft, Bus, Crosshair } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   GoogleMapsProvider,
   useGoogleMapsContext,
@@ -30,21 +31,53 @@ const containerStyle = {
   height: '100%',
 };
 
-// Vehicle icon SVG path (bus-like arrow pointing up, rotates based on heading)
-const vehicleIconPath = 'M12 2l4 6h-2v8h-4v-8h-2l4-6z';
+// School bus marker component with rotation
+interface SchoolBusMarkerProps {
+  position: { lat: number; lng: number };
+  heading: number;
+  isSelected: boolean;
+  onClick: () => void;
+  title: string;
+}
 
-// Generate a vehicle marker icon with heading rotation
-function getVehicleIcon(heading: number = 0, isSelected: boolean = false): google.maps.Symbol {
-  return {
-    path: vehicleIconPath,
-    fillColor: isSelected ? '#DBF227' : '#042940', // accent or primary
-    fillOpacity: 1,
-    strokeColor: isSelected ? '#042940' : '#FFFFFF',
-    strokeWeight: 2,
-    rotation: heading,
-    scale: isSelected ? 2 : 1.5,
-    anchor: new google.maps.Point(12, 12),
-  };
+function SchoolBusMarker({ position, heading, isSelected, onClick, title }: SchoolBusMarkerProps) {
+  // SVG points right (90°), so subtract 90 to align with map heading (0° = north)
+  const rotation = (heading || 0) - 90;
+  const size = isSelected ? 56 : 44;
+
+  return (
+    <OverlayView
+      position={position}
+      mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+      getPixelPositionOffset={() => ({ x: -size / 2, y: -size / 2 })}
+    >
+      <div
+        onClick={onClick}
+        title={title}
+        className={cn(
+          'cursor-pointer transition-transform duration-300',
+          isSelected && 'drop-shadow-lg'
+        )}
+        style={{
+          transform: `rotate(${rotation}deg)`,
+          width: size,
+          height: size,
+        }}
+      >
+        <Image
+          src="/icons/scholarbus.svg"
+          alt="Bus"
+          width={size}
+          height={size}
+          className="w-full h-full"
+          priority
+        />
+        {isSelected && (
+          <div className="absolute inset-0 rounded-full border-4 border-accent animate-pulse" />
+        )}
+      </div>
+    </OverlayView>
+  );
 }
 
 // Stop icon for selected trip route
@@ -181,13 +214,13 @@ function MonitoringMapContent({
           const isSelected = trip.tripId === selectedTripId;
 
           return (
-            <Marker
+            <SchoolBusMarker
               key={trip.tripId}
               position={{ lat: trip.gps.latitude, lng: trip.gps.longitude }}
-              icon={getVehicleIcon(trip.gps.heading || 0, isSelected)}
+              heading={trip.gps.heading || 0}
+              isSelected={isSelected}
               onClick={() => onSelectTrip(trip.tripId)}
               title={`${trip.routeName} - ${trip.vehiclePlate}`}
-              zIndex={isSelected ? 200 : 100}
             />
           );
         })}

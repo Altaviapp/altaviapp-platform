@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useCallback, useRef } from 'react';
-import { GoogleMapsProvider, InteractiveMap } from '@altaviapp/maps';
-import type { MarkerInfo } from '@altaviapp/maps';
+import { useCallback, useRef } from 'react';
+import { GoogleMapsProvider } from '@altaviapp/maps';
 import { MapPin, Navigation, Clock, RefreshCw, CheckCircle, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TripMapView } from './TripMapView';
 
 interface Stop {
   _id: string;
@@ -33,7 +33,9 @@ interface TripMapTabProps {
     longitude: number;
     timestamp: number;
     speed?: number;
-  };
+    heading?: number;
+  } | null;
+  optimizedPolyline?: string | null;
   vehiclePlate?: string;
   tripStatus: string;
   autoRefresh?: boolean;
@@ -46,7 +48,7 @@ interface TripMapTabProps {
 export function TripMapTab({
   stops,
   currentLocation,
-  vehiclePlate,
+  optimizedPolyline,
   tripStatus,
   autoRefresh = true,
   onAutoRefreshChange,
@@ -70,42 +72,12 @@ export function TripMapTab({
     }
   }, [onStopClick]);
 
-  // Prepare map markers
-  const mapMarkers: MarkerInfo[] = useMemo(() => [
-    // Current vehicle location if available
-    ...(currentLocation ? [{
-      id: 'vehicle',
-      position: { lat: currentLocation.latitude, lng: currentLocation.longitude },
-      type: 'vehicle' as const,
-      title: vehiclePlate || 'Vehiculo',
-      label: '',
-    }] : []),
-    // Stop markers
-    ...stops.map((stop) => ({
-      id: `stop-${stop._id}`,
-      position: { lat: stop.latitude, lng: stop.longitude },
-      type: 'stop' as const,
-      title: `${stop.order}. ${stop.name}`,
-      label: stop.order.toString(),
-    })),
-  ], [stops, currentLocation, vehiclePlate]);
-
-  // Create polyline from stops
-  const routePolyline = useMemo(() =>
-    stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude })),
-    [stops]
-  );
-
-  // Calculate map center
-  const mapCenter = useMemo(() => {
-    if (currentLocation) {
-      return { lat: currentLocation.latitude, lng: currentLocation.longitude };
+  const handleStopIdClick = useCallback((stopId: string) => {
+    const stop = stops.find(s => s._id === stopId);
+    if (stop) {
+      handleStopClick(stop);
     }
-    if (stops[0]) {
-      return { lat: stops[0].latitude, lng: stops[0].longitude };
-    }
-    return { lat: -0.1807, lng: -78.4678 }; // Default Quito
-  }, [currentLocation, stops]);
+  }, [stops, handleStopClick]);
 
   const stopsCompleted = stops.filter(s => s.isCompleted).length;
 
@@ -141,27 +113,33 @@ export function TripMapTab({
                 </div>
               </div>
             </div>
-            <InteractiveMap
-              center={mapCenter}
-              zoom={14}
-              markers={mapMarkers}
-              polyline={routePolyline}
+            <TripMapView
+              stops={stops}
+              currentLocation={currentLocation}
+              optimizedPolyline={optimizedPolyline}
+              tripStatus={tripStatus}
+              onStopClick={handleStopIdClick}
+              selectedStopId={selectedStopId}
               style={{ height: '500px' }}
               onMapLoad={handleMapLoad}
             />
             {/* Map Legend */}
             <div className="p-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-4 text-xs">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-gray-600">Vehiculo</span>
+                <span className="w-5 h-3 bg-[url('/icons/scholarbus.svg')] bg-contain bg-no-repeat bg-center" />
+                <span className="text-gray-600">Vehículo</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-primary" />
-                <span className="text-gray-600">Paradas</span>
+                <span className="w-3 h-3 rounded-full bg-gray-400" />
+                <span className="text-gray-600">Pendiente</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-blue-500" />
+                <span className="text-gray-600">Siguiente</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-green-500" />
-                <span className="text-gray-600">Completadas</span>
+                <span className="text-gray-600">Completada</span>
               </div>
             </div>
           </div>

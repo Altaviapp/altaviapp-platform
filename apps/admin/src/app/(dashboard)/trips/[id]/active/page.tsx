@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Bus, MapPin, Users, Clock, AlertTriangle, X, Loader2,
   Navigation, ArrowLeft, ChevronRight, CheckCircle, History
 } from 'lucide-react';
-import { GoogleMapsProvider, InteractiveMap } from '@altaviapp/maps';
-import type { MarkerInfo } from '@altaviapp/maps';
+import { GoogleMapsProvider } from '@altaviapp/maps';
 import { cn } from '@/lib/utils';
 import { useTrip, useLatestTripEvents, getEventConfig, type TripEventType } from '@/hooks';
+import { TripMapView } from '@/components/trips/detail/TripMapView';
 
 type SidePanel = 'students' | 'log';
 
@@ -85,32 +85,6 @@ export default function ActiveTripPage() {
     totalStops: stops.length,
   };
 
-  // Prepare map markers
-  const mapMarkers: MarkerInfo[] = [
-    ...(currentLocation ? [{
-      id: 'vehicle',
-      position: { lat: currentLocation.latitude, lng: currentLocation.longitude },
-      type: 'vehicle' as const,
-      title: `${trip.vehicle?.licensePlate || 'Vehiculo'}`,
-      label: '',
-    }] : []),
-    ...stops.map((stop) => ({
-      id: `stop-${stop._id}`,
-      position: { lat: stop.latitude, lng: stop.longitude },
-      type: 'stop' as const,
-      title: `${stop.order}. ${stop.name}`,
-      label: stop.order.toString(),
-    })),
-  ];
-
-  const routePolyline = stops.map((stop) => ({ lat: stop.latitude, lng: stop.longitude }));
-
-  const mapCenter = currentLocation
-    ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
-    : stops[0]
-      ? { lat: stops[0].latitude, lng: stops[0].longitude }
-      : { lat: -0.1807, lng: -78.4678 };
-
   const nextStop = trip.nextStop;
 
   return (
@@ -146,11 +120,20 @@ export default function ActiveTripPage() {
         <div className="flex-1 flex overflow-hidden">
           {/* Map Section */}
           <div className="flex-1 relative h-full">
-            <InteractiveMap
-              center={mapCenter}
-              zoom={14}
-              markers={mapMarkers}
-              polyline={routePolyline}
+            <TripMapView
+              stops={stops}
+              currentLocation={currentLocation}
+              optimizedPolyline={trip.route?.optimizedPolyline}
+              tripStatus={trip.status}
+              onStopClick={(stopId) => {
+                setSelectedStopId(stopId);
+                const stop = stops.find(s => s._id === stopId);
+                if (stop && mapRef.current) {
+                  mapRef.current.panTo({ lat: stop.latitude, lng: stop.longitude });
+                  mapRef.current.setZoom(16);
+                }
+              }}
+              selectedStopId={selectedStopId}
               className="h-full"
               style={{ height: '100%', width: '100%' }}
               onMapLoad={handleMapLoad}

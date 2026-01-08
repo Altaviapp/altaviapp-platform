@@ -265,13 +265,16 @@ function MonitoringMapContent({
       <div
         className={cn(
           'absolute top-4 z-10 transition-all',
-          sidebarCollapsed ? 'right-16' : 'right-[420px]'
+          // Mobile: always top-right with margin for FAB
+          'right-4 md:right-auto',
+          // Desktop: adjust based on sidebar
+          sidebarCollapsed ? 'md:right-16' : 'md:right-[420px]'
         )}
       >
-        <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-md">
+        <div className="flex items-center gap-2 px-3 py-2 md:px-4 bg-white rounded-lg shadow-md">
           <Bus className="w-4 h-4 text-primary" />
           <span className="font-medium text-sm">
-            {trips.filter((t) => t.gps !== null).length} viajes activos
+            {trips.filter((t) => t.gps !== null).length} activos
           </span>
         </div>
       </div>
@@ -279,13 +282,16 @@ function MonitoringMapContent({
       {/* Overlay: Center on all button */}
       <div
         className={cn(
-          'absolute bottom-6 z-10 transition-all',
-          sidebarCollapsed ? 'right-16' : 'right-[420px]'
+          'absolute z-10 transition-all',
+          // Mobile: bottom-left (FAB is bottom-right)
+          'bottom-6 left-4 md:left-auto',
+          // Desktop: adjust based on sidebar
+          sidebarCollapsed ? 'md:right-16' : 'md:right-[420px]'
         )}
       >
         <button
           onClick={handleCenterOnAll}
-          className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 md:px-4 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
           title="Ver todos los vehículos"
         >
           <Crosshair className="w-4 h-4" />

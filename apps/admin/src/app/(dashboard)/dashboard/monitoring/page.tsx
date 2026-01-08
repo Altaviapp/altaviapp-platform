@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   MonitoringSidebar,
   TripListPanel,
@@ -23,10 +23,29 @@ import {
  * - Click trip in list or marker to view details
  * - Trip details with tabs: Info, Novedades, Timeline
  * - Zoom to vehicle and show route when trip selected
+ * - Responsive: sidebar hidden by default on mobile
  */
 export default function MonitoringPage() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Start collapsed on mobile (< 768px)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile on mount and window resize
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // On desktop, show sidebar by default
+      if (!mobile) {
+        setSidebarCollapsed(false);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Get all active trips with GPS positions
   const { trips, isLoading: tripsLoading } = useActiveTripsWithGPS();
@@ -50,7 +69,11 @@ export default function MonitoringPage() {
 
   const handleSelectTrip = useCallback((tripId: string | null) => {
     setSelectedTripId(tripId);
-  }, []);
+    // On mobile, open sidebar when selecting a trip from map marker
+    if (tripId && isMobile) {
+      setSidebarCollapsed(false);
+    }
+  }, [isMobile]);
 
   const handleBackToList = useCallback(() => {
     setSelectedTripId(null);
@@ -69,9 +92,11 @@ export default function MonitoringPage() {
     <div className="fixed inset-0 bg-gray-100">
       {/* Full-screen Map */}
       <div
-        className="absolute inset-0 transition-all duration-300"
+        className="absolute inset-0 transition-all duration-300 md:transition-[right]"
         style={{
-          right: sidebarCollapsed ? '48px' : '400px',
+          // Mobile: always full screen
+          // Desktop: adjust for sidebar width
+          right: isMobile ? 0 : sidebarCollapsed ? '48px' : '400px',
         }}
       >
         <MonitoringMap

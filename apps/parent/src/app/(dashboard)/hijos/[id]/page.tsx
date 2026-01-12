@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudentWithPhoto, useStudentMutations } from '@/hooks';
-import { NovedadContextButton } from '@/components/home/NovedadContextButton';
 import type { Id } from '../../../../../../../convex/_generated/dataModel';
 import QRCode from 'qrcode';
 import { LoadingState, Card, CardContent, Button, Input, Badge } from '@/components/core';
@@ -274,37 +273,23 @@ export default function StudentDetailPage() {
       </Card>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Trip History */}
-        <Link
-          href={`/hijos/${student._id}/historial`}
-          className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                <Clock className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Historial</p>
-                <p className="text-xs text-gray-500">Ver viajes</p>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
-          </div>
-        </Link>
-
-        {/* Report Novedad */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <Link
+        href={`/hijos/${student._id}/historial`}
+        className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+      >
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <NovedadContextButton
-              studentId={student._id}
-              variant="full"
-              label="Reportar novedad"
-            />
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Historial</p>
+              <p className="text-xs text-gray-500">Ver viajes</p>
+            </div>
           </div>
+          <ChevronRight className="w-5 h-5 text-gray-400" />
         </div>
-      </div>
+      </Link>
 
       {/* Address Card */}
       <Card>

@@ -41,7 +41,6 @@ export default function DashboardLayout({
       'notifications': 'Notificaciones',
       'profile': 'Perfil',
       'settings': 'Configuración',
-      'novedades': 'Novedades',
     };
 
     // Get title from first segment

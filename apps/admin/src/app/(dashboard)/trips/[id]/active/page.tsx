@@ -123,7 +123,7 @@ export default function ActiveTripPage() {
             <TripMapView
               stops={stops}
               currentLocation={currentLocation}
-              optimizedPolyline={trip.route?.optimizedPolyline}
+              optimizedPolyline={(trip.route as { optimizedPolyline?: string } | undefined)?.optimizedPolyline}
               tripStatus={trip.status}
               onStopClick={(stopId) => {
                 setSelectedStopId(stopId);

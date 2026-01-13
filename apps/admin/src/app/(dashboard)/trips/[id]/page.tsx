@@ -248,7 +248,7 @@ export default function TripDetailPage() {
           <TripMapTab
             stops={stops}
             currentLocation={trip.currentLocation}
-            optimizedPolyline={trip.route?.optimizedPolyline}
+            optimizedPolyline={(trip.route as { optimizedPolyline?: string } | undefined)?.optimizedPolyline}
             vehiclePlate={trip.vehicle?.licensePlate}
             tripStatus={trip.status}
           />

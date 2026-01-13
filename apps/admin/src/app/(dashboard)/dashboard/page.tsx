@@ -9,7 +9,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { StatsGrid, type StatItem } from '@/components/shared';
-import { ActiveTripsCard, UpcomingTripsCard, RecentAlertsCard } from '@/components/modules/dashboard';
+import { ActiveTripsCard, UpcomingTripsCard, RecentAlertsCard, PendingNovedadesCard } from '@/components/modules/dashboard';
 import {
   useConvexAuth,
   useActiveAndUpcomingTrips,
@@ -18,6 +18,8 @@ import {
   useDrivers,
   useRoutes,
   useIncidents,
+  usePendingNovedades,
+  usePendingNovedadesCount,
 } from '@/hooks';
 
 /**
@@ -41,6 +43,8 @@ export default function DashboardPage() {
   const { drivers, isLoading: driversLoading } = useDrivers({ isActive: true });
   const { routes, isLoading: routesLoading } = useRoutes();
   const { incidents, isLoading: incidentsLoading } = useIncidents();
+  const { novedades: pendingNovedades, isLoading: novedadesLoading } = usePendingNovedades();
+  const { count: pendingNovedadesCount, isLoading: novedadesCountLoading } = usePendingNovedadesCount();
 
   const isLoading =
     authLoading ||
@@ -49,7 +53,9 @@ export default function DashboardPage() {
     studentsLoading ||
     driversLoading ||
     routesLoading ||
-    incidentsLoading;
+    incidentsLoading ||
+    novedadesLoading ||
+    novedadesCountLoading;
 
   // Calculate open incidents count
   const openIncidentsCount = incidents.filter((i) => i.status === 'open').length;
@@ -111,8 +117,15 @@ export default function DashboardPage() {
         <UpcomingTripsCard trips={upcomingTrips} isLoading={tripsLoading} />
       </div>
 
-      {/* Recent Alerts Section - full width */}
-      <RecentAlertsCard incidents={incidents} isLoading={incidentsLoading} />
+      {/* Pending Novedades and Recent Alerts - two columns */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <PendingNovedadesCard
+          novedades={pendingNovedades}
+          count={pendingNovedadesCount}
+          isLoading={novedadesLoading}
+        />
+        <RecentAlertsCard incidents={incidents} isLoading={incidentsLoading} />
+      </div>
     </div>
   );
 }

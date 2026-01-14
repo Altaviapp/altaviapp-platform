@@ -304,6 +304,43 @@ export const me = query({
 });
 
 // ============================================================================
+// TOUCH SESSION (update lastUsedAt)
+// ============================================================================
+
+/**
+ * Update session's lastUsedAt timestamp
+ * Called on token verification to track session activity
+ */
+export const touchSession = mutation({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (!args.token) {
+      return { success: false };
+    }
+
+    // Find active session
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .first();
+
+    if (!session) {
+      return { success: false };
+    }
+
+    // Update lastUsedAt
+    await ctx.db.patch(session._id, {
+      lastUsedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+// ============================================================================
 // LOGOUT
 // ============================================================================
 

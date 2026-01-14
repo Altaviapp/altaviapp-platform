@@ -944,6 +944,11 @@ http.route({
         token,
       });
 
+      // Update session lastUsedAt if verification was successful
+      if (result.success) {
+        await ctx.runMutation(api.authApi.touchSession, { token });
+      }
+
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: {

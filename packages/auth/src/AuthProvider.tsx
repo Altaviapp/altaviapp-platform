@@ -175,7 +175,7 @@ export function AuthProvider({
   // AUTH ACTIONS
   // ============================================
 
-  const login = useCallback(async (email: string, password: string, rememberMe: boolean = false): Promise<LoginResult> => {
+  const login = useCallback(async (email: string, password: string, rememberMe: boolean = true): Promise<LoginResult> => {
     try {
       const data = await apiRequest<{
         success: boolean;
@@ -233,6 +233,30 @@ export function AuthProvider({
     if (!savedToken) return false;
     return verifyToken(savedToken);
   }, [storageKey, verifyToken]);
+
+  // Auto-refresh session periodically and on tab visibility change
+  useEffect(() => {
+    if (typeof window === 'undefined' || !token) return;
+
+    // Refresh session every 5 minutes to keep it active
+    const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    const intervalId = setInterval(() => {
+      refreshSession();
+    }, REFRESH_INTERVAL);
+
+    // Also refresh when user returns to the tab (e.g., after being away)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshSession();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [token, refreshSession]);
 
   // ============================================
   // PASSWORD MANAGEMENT

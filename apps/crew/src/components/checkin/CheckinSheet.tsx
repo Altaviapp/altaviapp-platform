@@ -39,6 +39,8 @@ interface CheckinSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (studentName: string) => void;
+  /** Pre-selected student ID for manual check-in (from clicking student in list) */
+  selectedStudentId?: string | null;
 }
 
 interface ScannedStudent {
@@ -55,6 +57,7 @@ export function CheckinSheet({
   isOpen,
   onClose,
   onSuccess,
+  selectedStudentId,
 }: CheckinSheetProps) {
   const [mode, setMode] = useState<CheckinMode>('scanner');
   const [scannedStudent, setScannedStudent] = useState<ScannedStudent | null>(null);
@@ -80,6 +83,25 @@ export function CheckinSheet({
     }
   }, [isOpen]);
 
+  // Auto-select student if selectedStudentId is provided (from clicking student in list)
+  useEffect(() => {
+    if (!isOpen || !selectedStudentId || tripStudents.length === 0) return;
+
+    // Find the student in tripStudents
+    const tripStudent = tripStudents.find(
+      (ts: any) => String(ts.student?.id) === String(selectedStudentId)
+    );
+
+    if (tripStudent && tripStudent.student && !tripStudent.checkedIn) {
+      handleManualSelect({
+        _id: tripStudent.student.id,
+        name: `${tripStudent.student.firstName || ''} ${tripStudent.student.lastName || ''}`.trim(),
+        stopId: tripStudent.stop?.id,
+        stopName: tripStudent.stop?.name || currentStop?.name || 'Parada actual',
+      });
+    }
+  }, [isOpen, selectedStudentId, tripStudents, currentStop]);
+
   // Process QR lookup result
   useEffect(() => {
     if (!lastQrCode || qrLoading) return;
@@ -102,10 +124,16 @@ export function CheckinSheet({
         return;
       }
 
+      const stopId = tripStudent.stop?.id || currentStop?.id;
+      if (!stopId) {
+        setError('No se pudo determinar la parada del estudiante');
+        setMode('error');
+        return;
+      }
       setScannedStudent({
         id: qrStudent._id as Id<'students'>,
         name: `${qrStudent.firstName} ${qrStudent.lastName}`,
-        stopId: (tripStudent.stop as any)?._id || currentStop?.id || '' as Id<'routeStops'>,
+        stopId,
         stopName: tripStudent.stop?.name || currentStop?.name || 'Parada actual',
       });
       setMode('confirming');
@@ -128,10 +156,16 @@ export function CheckinSheet({
 
   // Handle manual student selection
   const handleManualSelect = useCallback((student: any) => {
+    const stopId = student.stop?.id || student.stopId || currentStop?.id;
+    if (!stopId) {
+      setError('No se pudo determinar la parada del estudiante');
+      setMode('error');
+      return;
+    }
     setScannedStudent({
       id: student._id || student.id,
       name: student.name || `${student.firstName} ${student.lastName}`,
-      stopId: student.stop?._id || student.stopId || currentStop?.id || '' as Id<'routeStops'>,
+      stopId,
       stopName: student.stop?.name || student.stopName || currentStop?.name || 'Parada actual',
     });
     setMode('confirming');

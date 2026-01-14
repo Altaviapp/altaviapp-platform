@@ -75,3 +75,12 @@ export {
   useTrip,
   useActiveTripForStudent,
 } from "./useTrips";
+
+// Alert Preferences
+export {
+  useAlertPreferences,
+} from "./useAlertPreferences";
+export type { AlertPreferences } from "./useAlertPreferences";
+
+// User Profile
+export { useProfile } from "./useProfile";

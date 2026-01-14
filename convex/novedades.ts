@@ -134,11 +134,27 @@ export const create = mutation({
 
     if (args.typeId) {
       novedadType = await ctx.db.get(args.typeId);
-      if (!novedadType || novedadType.institutionId !== student.institutionId) {
-        throw new Error("Tipo de novedad no válido");
+
+      // Debug logging for type validation
+      console.log("[novedades.create] Validating novedadType:", {
+        typeId: args.typeId,
+        found: !!novedadType,
+        typeInstitutionId: novedadType?.institutionId,
+        studentInstitutionId: student.institutionId,
+        isActive: novedadType?.isActive,
+      });
+
+      if (!novedadType) {
+        throw new Error(`Tipo de novedad no encontrado: ${args.typeId}`);
+      }
+      if (novedadType.institutionId !== student.institutionId) {
+        throw new Error(
+          `El tipo de novedad "${novedadType.name}" pertenece a otra institución. ` +
+          `Por favor contacta al administrador para configurar los tipos de novedad.`
+        );
       }
       if (!novedadType.isActive) {
-        throw new Error("Este tipo de novedad no está activo");
+        throw new Error(`El tipo de novedad "${novedadType.name}" no está activo`);
       }
       effectiveCategory = novedadType.category;
       requiresApproval = novedadType.requiresApproval;
@@ -274,114 +290,127 @@ export const create = mutation({
     });
 
     // Find assigned crew members and notify them
-    const studentRoutes = await ctx.db
-      .query("studentRoutes")
-      .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .collect();
-
-    const notifiedUsers = new Set<string>();
-
-    // Get display name for the novedad type
-    const typeName = novedadType?.name || getTypeLabel(args.type || "");
-
-    for (const sr of studentRoutes) {
-      const route = await ctx.db.get(sr.routeId);
-      if (!route || !route.isActive) continue;
-
-      // Check if this route type is affected
-      if (
-        args.affectedRouteType !== "both" &&
-        route.type !== args.affectedRouteType
-      ) {
-        continue;
-      }
-
-      // If specific route specified, only notify that route's crew
-      if (args.routeId && sr.routeId !== args.routeId) {
-        continue;
-      }
-
-      // Determine notification type and title based on novedad category
-      const isPickupChange = effectiveCategory === "pickup_change";
-      const notifTitle = isPickupChange
-        ? `⚠️ ${typeName.toUpperCase()}: ${student.firstName} ${student.lastName}`
-        : `Nueva novedad: ${typeName}`;
-      const notifMessage = isPickupChange
-        ? `${student.firstName} ${student.lastName} - ${typeName}. NO ABORDARÁ. Fecha: ${effectiveStartDate}`
-        : `${student.firstName} ${student.lastName} - ${args.reason}. Fecha: ${effectiveStartDate}`;
-      const notifType = isPickupChange || effectiveCategory === "absence" ? "warning" : "info";
-
-      // Notify driver
-      const driver = await ctx.db.get(route.driverId);
-      if (driver && !notifiedUsers.has(driver.userId)) {
-        await ctx.db.insert("notifications", {
-          userId: driver.userId,
-          title: notifTitle,
-          message: notifMessage,
-          type: notifType,
-          category: "novedad",
-          relatedEntityType: "novedad",
-          relatedEntityId: novedadId,
-          read: false,
-          createdAt: now,
-        });
-        notifiedUsers.add(driver.userId);
-      }
-
-      // Notify monitor if exists
-      if (route.monitorId) {
-        const monitor = await ctx.db.get(route.monitorId);
-        if (monitor && !notifiedUsers.has(monitor.userId)) {
-          await ctx.db.insert("notifications", {
-            userId: monitor.userId,
-            title: notifTitle,
-            message: notifMessage,
-            type: notifType,
-            category: "novedad",
-            relatedEntityType: "novedad",
-            relatedEntityId: novedadId,
-            read: false,
-            createdAt: now,
-          });
-          notifiedUsers.add(monitor.userId);
-        }
-      }
-    }
-
-    // Notify admins if novedad requires approval
-    if (requiresApproval) {
-      const admins = await ctx.db
-        .query("users")
-        .withIndex("by_institution", (q) => q.eq("institutionId", student.institutionId))
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("isActive"), true),
-            q.or(
-              q.eq(q.field("role"), "admin"),
-              q.eq(q.field("role"), "super_admin")
-            )
-          )
-        )
+    // Wrapped in try-catch to ensure novedad creation succeeds even if notifications fail
+    try {
+      const studentRoutes = await ctx.db
+        .query("studentRoutes")
+        .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
+        .filter((q) => q.eq(q.field("isActive"), true))
         .collect();
 
+      const notifiedUsers = new Set<string>();
+
+      // Get display name for the novedad type
       const typeName = novedadType?.name || getTypeLabel(args.type || "");
 
-      for (const admin of admins) {
-        if (!notifiedUsers.has(admin._id)) {
-          await ctx.db.insert("notifications", {
-            userId: admin._id,
-            title: `Novedad pendiente: ${typeName}`,
-            message: `${student.firstName} ${student.lastName} - Requiere aprobación`,
-            type: "warning",
-            category: "approval_request",
-            relatedEntityType: "novedad",
-            relatedEntityId: novedadId,
-            read: false,
-            createdAt: now,
-          });
+      for (const sr of studentRoutes) {
+        const route = await ctx.db.get(sr.routeId);
+        if (!route || !route.isActive) continue;
+
+        // Check if this route type is affected
+        if (
+          args.affectedRouteType !== "both" &&
+          route.type !== args.affectedRouteType
+        ) {
+          continue;
+        }
+
+        // If specific route specified, only notify that route's crew
+        if (args.routeId && sr.routeId !== args.routeId) {
+          continue;
+        }
+
+        // Determine notification type and title based on novedad category
+        const isPickupChange = effectiveCategory === "pickup_change";
+        const notifTitle = isPickupChange
+          ? `⚠️ ${typeName.toUpperCase()}: ${student.firstName} ${student.lastName}`
+          : `Nueva novedad: ${typeName}`;
+        const notifMessage = isPickupChange
+          ? `${student.firstName} ${student.lastName} - ${typeName}. NO ABORDARÁ. Fecha: ${effectiveStartDate}`
+          : `${student.firstName} ${student.lastName} - ${args.reason}. Fecha: ${effectiveStartDate}`;
+        const notifType = isPickupChange || effectiveCategory === "absence" ? "warning" : "info";
+
+        // Notify driver (verify user exists before creating notification)
+        const driver = await ctx.db.get(route.driverId);
+        if (driver) {
+          const driverUser = await ctx.db.get(driver.userId);
+          if (driverUser && !notifiedUsers.has(driver.userId.toString())) {
+            await ctx.db.insert("notifications", {
+              userId: driver.userId,
+              title: notifTitle,
+              message: notifMessage,
+              type: notifType,
+              category: "novedad",
+              relatedEntityType: "novedad",
+              relatedEntityId: novedadId.toString(),
+              read: false,
+              createdAt: now,
+            });
+            notifiedUsers.add(driver.userId.toString());
+          }
+        }
+
+        // Notify monitor if exists (verify user exists before creating notification)
+        if (route.monitorId) {
+          const monitor = await ctx.db.get(route.monitorId);
+          if (monitor) {
+            const monitorUser = await ctx.db.get(monitor.userId);
+            if (monitorUser && !notifiedUsers.has(monitor.userId.toString())) {
+              await ctx.db.insert("notifications", {
+                userId: monitor.userId,
+                title: notifTitle,
+                message: notifMessage,
+                type: notifType,
+                category: "novedad",
+                relatedEntityType: "novedad",
+                relatedEntityId: novedadId.toString(),
+                read: false,
+                createdAt: now,
+              });
+              notifiedUsers.add(monitor.userId.toString());
+            }
+          }
         }
       }
+
+      // Notify admins if novedad requires approval
+      if (requiresApproval) {
+        const admins = await ctx.db
+          .query("users")
+          .withIndex("by_institution", (q) => q.eq("institutionId", student.institutionId))
+          .filter((q) =>
+            q.and(
+              q.eq(q.field("isActive"), true),
+              q.or(
+                q.eq(q.field("role"), "admin"),
+                q.eq(q.field("role"), "super_admin")
+              )
+            )
+          )
+          .collect();
+
+        const adminTypeName = novedadType?.name || getTypeLabel(args.type || "");
+
+        for (const admin of admins) {
+          if (!notifiedUsers.has(admin._id.toString())) {
+            await ctx.db.insert("notifications", {
+              userId: admin._id,
+              title: `Novedad pendiente: ${adminTypeName}`,
+              message: `${student.firstName} ${student.lastName} - Requiere aprobación`,
+              type: "warning",
+              category: "approval_request",
+              relatedEntityType: "novedad",
+              relatedEntityId: novedadId.toString(),
+              read: false,
+              createdAt: now,
+            });
+            notifiedUsers.add(admin._id.toString());
+          }
+        }
+      }
+    } catch (notifError) {
+      // Log error but don't fail the novedad creation
+      console.error("[novedades.create] Error sending notifications:", notifError);
     }
 
     return { success: true, novedadId, status: initialStatus };

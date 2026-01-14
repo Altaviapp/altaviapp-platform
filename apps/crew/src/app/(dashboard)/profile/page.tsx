@@ -7,20 +7,21 @@ import {
   // History tab
   Calendar, ChevronDown, Clock, Users, Sun, Moon,
   // Settings tab
-  Bell, Map, Lock, Smartphone, HelpCircle, LogOut,
+  Lock, Smartphone, HelpCircle, LogOut, Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConvexAuth, useDriverProfile, useMonitorProfile, useTripHistory } from '@/hooks';
 import { useRouter } from 'next/navigation';
-import { LoadingState, EmptyState, Card, CardContent, Button, Badge, Switch } from '@/components/core';
+import { LoadingState, EmptyState, Card, CardContent, Button, Badge } from '@/components/core';
 import { PageHeader } from '@/components/shared';
+import { ChangePasswordSheet } from '@/components/profile/ChangePasswordSheet';
 
 type TabType = 'profile' | 'history' | 'settings';
 
 const tabs: { id: TabType; label: string; icon: typeof User }[] = [
   { id: 'profile', label: 'Perfil', icon: User },
   { id: 'history', label: 'Historial', icon: Calendar },
-  { id: 'settings', label: 'Ajustes', icon: Bell },
+  { id: 'settings', label: 'Ajustes', icon: Settings },
 ];
 
 // Mock stats for profile display
@@ -101,14 +102,7 @@ export default function ProfilePage() {
   const { tripsByDate, stats: historyStats, isLoading: historyLoading, isEmpty: historyEmpty } = useTripHistory(selectedPeriod.limit);
 
   // Settings state
-  const [notifications, setNotifications] = useState({
-    newTrips: true,
-    routeChanges: true,
-    adminMessages: true,
-    systemAlerts: true,
-  });
-  const [vibration, setVibration] = useState(true);
-  const [mapView, setMapView] = useState('satellite');
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -416,66 +410,6 @@ export default function ProfilePage() {
       {/* Settings Tab */}
       {activeTab === 'settings' && (
         <div className="space-y-4">
-          {/* Notifications */}
-          <Card>
-            <CardContent>
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Bell className="w-5 h-5 text-primary" />
-                Notificaciones
-              </h3>
-
-              <div className="space-y-4">
-                {[
-                  { key: 'newTrips', label: 'Nuevos viajes asignados' },
-                  { key: 'routeChanges', label: 'Cambios en la ruta' },
-                  { key: 'adminMessages', label: 'Mensajes de administrador' },
-                  { key: 'systemAlerts', label: 'Alertas del sistema' },
-                ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">{item.label}</span>
-                    <Switch
-                      checked={notifications[item.key as keyof typeof notifications]}
-                      onChange={(e) => setNotifications({ ...notifications, [item.key]: e.target.checked })}
-                    />
-                  </div>
-                ))}
-
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <span className="text-sm text-gray-700">Vibración</span>
-                  <Switch
-                    checked={vibration}
-                    onChange={(e) => setVibration(e.target.checked)}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Map Settings */}
-          <Card>
-            <CardContent>
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Map className="w-5 h-5 text-primary" />
-                Mapas
-              </h3>
-
-              <label className="text-sm text-gray-700 block mb-2">Vista predeterminada</label>
-              <div className="flex gap-2">
-                {['satellite', 'streets', 'terrain'].map((view) => (
-                  <Button
-                    key={view}
-                    variant={mapView === view ? 'primary' : 'secondary'}
-                    size="sm"
-                    onClick={() => setMapView(view)}
-                    className="flex-1"
-                  >
-                    {view === 'satellite' ? 'Satélite' : view === 'streets' ? 'Calles' : 'Terreno'}
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Security */}
           <Card>
             <CardContent>
@@ -484,7 +418,10 @@ export default function ProfilePage() {
                 Seguridad
               </h3>
 
-              <button className="w-full flex items-center justify-between hover:bg-gray-50 transition-colors rounded-lg p-2 -m-2">
+              <button
+                onClick={() => setShowChangePassword(true)}
+                className="w-full flex items-center justify-between hover:bg-gray-50 transition-colors rounded-lg p-2 -m-2"
+              >
                 <span className="text-sm text-gray-700">Cambiar contraseña</span>
                 <ChevronRight className="w-4 h-4 text-gray-400" />
               </button>
@@ -508,20 +445,28 @@ export default function ProfilePage() {
           {/* Help Links */}
           <Card>
             <CardContent className="p-0">
-              <button className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100">
+              <a
+                href="mailto:soporte@altaviapp.com"
+                className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100"
+              >
                 <div className="flex items-center gap-3">
                   <HelpCircle className="w-5 h-5 text-gray-400" />
                   <span className="text-sm text-gray-700">Ayuda y soporte</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400" />
-              </button>
-              <button className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+              </a>
+              <a
+                href="https://altaviapp.com/terminos"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
                 <div className="flex items-center gap-3">
                   <FileText className="w-5 h-5 text-gray-400" />
                   <span className="text-sm text-gray-700">Términos y privacidad</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400" />
-              </button>
+              </a>
             </CardContent>
           </Card>
 
@@ -536,6 +481,12 @@ export default function ProfilePage() {
           </Button>
         </div>
       )}
+
+      {/* Change Password Sheet */}
+      <ChangePasswordSheet
+        isOpen={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+      />
     </div>
   );
 }

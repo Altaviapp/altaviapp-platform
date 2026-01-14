@@ -4,6 +4,7 @@ import { GoogleMap, Marker, Polyline, Circle } from "@react-google-maps/api";
 import { useCallback, useState, useMemo, useEffect } from "react";
 import { MAPS_CONFIG } from "../config/maps-config";
 import { useGoogleMapsContext, MapsLoadingState, MapsErrorState } from "./GoogleMapsProvider";
+import { useAnimatedPosition } from "../hooks/useAnimatedPosition";
 import type { LatLng } from "../types/maps";
 
 // ============================================
@@ -42,9 +43,21 @@ export type GoogleRouteMapProps = {
   polyline?: LatLng[];
   encodedPolyline?: string;
 
+  // Polyline differentiation (for parent app tracking)
+  /** Index up to which stops are completed - enables split polyline */
+  completedStopIndex?: number;
+  /** Show differentiated polyline (gray for completed, color for remaining) */
+  showDifferentiatedPolyline?: boolean;
+
+  // Stop highlighting (for parent app - highlight student's stop)
+  /** Index of stop to highlight (e.g., student's pickup/dropoff stop) */
+  highlightedStopIndex?: number;
+
   // Vehicle tracking (optional - for live tracking)
   vehiclePosition?: VehiclePosition | null;
   showVehicle?: boolean;
+  /** Enable smooth animation for vehicle marker between GPS updates */
+  animateVehicle?: boolean;
 
   // School/destination marker
   schoolPosition?: LatLng;
@@ -107,8 +120,12 @@ export function GoogleRouteMap({
   currentStopIndex,
   polyline,
   encodedPolyline,
+  completedStopIndex,
+  showDifferentiatedPolyline = false,
+  highlightedStopIndex,
   vehiclePosition,
   showVehicle = true,
+  animateVehicle = true,
   schoolPosition,
   schoolName,
   showGeofences = false,
@@ -128,6 +145,16 @@ export function GoogleRouteMap({
   const { isLoaded, loadError } = useGoogleMapsContext();
   const [map, setMap] = useState<google.maps.Map | null>(null);
 
+  // Animate vehicle position for smooth movement between GPS updates
+  const animatedVehiclePosition = useAnimatedPosition(
+    vehiclePosition?.position ?? null,
+    {
+      duration: 1000, // 1 second animation
+      maxAnimateDistance: 500, // Snap if distance > 500m (GPS jump)
+      enabled: animateVehicle,
+    }
+  );
+
   // Decode polyline if encoded version is provided
   const decodedPolyline = useMemo(() => {
     if (polyline) return polyline;
@@ -141,6 +168,40 @@ export function GoogleRouteMap({
     }
     return [];
   }, [polyline, encodedPolyline, isLoaded]);
+
+  // Split polyline into completed and remaining segments for differentiated display
+  const { completedPath, remainingPath } = useMemo(() => {
+    if (!showDifferentiatedPolyline || completedStopIndex === undefined || decodedPolyline.length < 2) {
+      return { completedPath: [], remainingPath: decodedPolyline };
+    }
+
+    // Find the polyline point closest to the completed stop position
+    const completedStopPosition = stops[completedStopIndex]?.position;
+    if (!completedStopPosition) {
+      return { completedPath: [], remainingPath: decodedPolyline };
+    }
+
+    // Find the index in polyline closest to the completed stop
+    let closestIndex = 0;
+    let minDistance = Infinity;
+
+    decodedPolyline.forEach((point, index) => {
+      const distance = Math.sqrt(
+        Math.pow(point.lat - completedStopPosition.lat, 2) +
+        Math.pow(point.lng - completedStopPosition.lng, 2)
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = index;
+      }
+    });
+
+    // Split at the closest point (include the point in both for continuity)
+    const completed = decodedPolyline.slice(0, closestIndex + 1);
+    const remaining = decodedPolyline.slice(closestIndex);
+
+    return { completedPath: completed, remainingPath: remaining };
+  }, [showDifferentiatedPolyline, completedStopIndex, decodedPolyline, stops]);
 
   // Calculate initial center from stops if not provided
   // NOTE: We intentionally exclude vehiclePosition to prevent auto-panning when GPS updates
@@ -226,10 +287,22 @@ export function GoogleRouteMap({
 
   // Create stop marker icon
   const createStopIcon = useCallback(
-    (status: StopStatus, order: number) => {
+    (status: StopStatus, order: number, isHighlighted: boolean = false) => {
       if (!isLoaded || !window.google) return undefined;
 
       const colors = stopColors[status];
+
+      // Highlighted stop (e.g., student's pickup/dropoff) gets special styling
+      if (isHighlighted) {
+        return {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 16, // Larger than other stops
+          fillColor: "#DBF227", // Altaviapp accent color (lime/yellow)
+          fillOpacity: 1,
+          strokeColor: "#042940", // Primary color border
+          strokeWeight: 3,
+        };
+      }
 
       return {
         path: google.maps.SymbolPath.CIRCLE,
@@ -269,17 +342,47 @@ export function GoogleRouteMap({
           gestureHandling: "greedy",
         }}
       >
-        {/* Route polyline */}
-        {decodedPolyline.length > 1 && (
-          <Polyline
-            path={decodedPolyline}
-            options={{
-              strokeColor: "#042940",
-              strokeOpacity: 0.8,
-              strokeWeight: 4,
-              geodesic: true,
-            }}
-          />
+        {/* Route polyline - differentiated or single */}
+        {showDifferentiatedPolyline ? (
+          <>
+            {/* Completed path (gray) */}
+            {completedPath.length > 1 && (
+              <Polyline
+                path={completedPath}
+                options={{
+                  strokeColor: "#9CA3AF", // Gray for completed
+                  strokeOpacity: 0.6,
+                  strokeWeight: 4,
+                  geodesic: true,
+                }}
+              />
+            )}
+            {/* Remaining path (primary color) */}
+            {remainingPath.length > 1 && (
+              <Polyline
+                path={remainingPath}
+                options={{
+                  strokeColor: "#042940", // Primary for remaining
+                  strokeOpacity: 0.8,
+                  strokeWeight: 4,
+                  geodesic: true,
+                }}
+              />
+            )}
+          </>
+        ) : (
+          /* Single polyline (default) */
+          decodedPolyline.length > 1 && (
+            <Polyline
+              path={decodedPolyline}
+              options={{
+                strokeColor: "#042940",
+                strokeOpacity: 0.8,
+                strokeWeight: 4,
+                geodesic: true,
+              }}
+            />
+          )
         )}
 
         {/* Geofences for stops */}
@@ -300,46 +403,55 @@ export function GoogleRouteMap({
           ))}
 
         {/* Stop markers */}
-        {stops.map((stop, index) => (
-          <Marker
-            key={stop.id}
-            position={stop.position}
-            icon={createStopIcon(stop.status, stop.order)}
-            label={{
-              text: String(stop.order),
-              color: "#FFFFFF",
-              fontWeight: "bold",
-              fontSize: stop.status === "current" ? "12px" : "10px",
-            }}
-            title={`${stop.order}. ${stop.name}${stop.eta ? ` - ETA: ${stop.eta}` : ""}`}
-            onClick={() => handleStopClick(stop.id)}
-            zIndex={stop.status === "current" ? 100 : 50 - index}
-          />
-        ))}
+        {stops.map((stop, index) => {
+          const isHighlighted = highlightedStopIndex !== undefined && index === highlightedStopIndex;
+          return (
+            <Marker
+              key={stop.id}
+              position={stop.position}
+              icon={createStopIcon(stop.status, stop.order, isHighlighted)}
+              label={{
+                text: String(stop.order),
+                color: isHighlighted ? "#042940" : "#FFFFFF",
+                fontWeight: "bold",
+                fontSize: isHighlighted ? "14px" : stop.status === "current" ? "12px" : "10px",
+              }}
+              title={`${stop.order}. ${stop.name}${stop.eta ? ` - ETA: ${stop.eta}` : ""}${isHighlighted ? " (Tu parada)" : ""}`}
+              onClick={() => handleStopClick(stop.id)}
+              zIndex={isHighlighted ? 150 : stop.status === "current" ? 100 : 50 - index}
+            />
+          );
+        })}
 
-        {/* School marker */}
+        {/* School marker - uses a building/school icon */}
         {schoolPosition && (
           <Marker
             position={schoolPosition}
             icon={{
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 12,
-              fillColor: "#10B981",
+              // School/building icon path
+              path: "M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z",
+              fillColor: "#042940", // Altaviapp primary color
               fillOpacity: 1,
-              strokeColor: "#059669",
-              strokeWeight: 2,
+              strokeColor: "#FFFFFF",
+              strokeWeight: 1,
+              scale: 1.5,
+              anchor: new google.maps.Point(12, 12),
+            }}
+            label={{
+              text: "🏫",
+              fontSize: "0px", // Hidden - just for accessibility
             }}
             title={schoolName || "Colegio"}
             zIndex={10}
           />
         )}
 
-        {/* Vehicle marker */}
-        {showVehicle && vehiclePosition?.position && (
+        {/* Vehicle marker - uses animated position for smooth movement */}
+        {showVehicle && animatedVehiclePosition && (
           <Marker
-            position={vehiclePosition.position}
+            position={animatedVehiclePosition}
             icon={vehicleIcon}
-            title={`Vehículo${vehiclePosition.speed ? ` - ${Math.round(vehiclePosition.speed)} km/h` : ""}`}
+            title={`Vehículo${vehiclePosition?.speed ? ` - ${Math.round(vehiclePosition.speed)} km/h` : ""}`}
             onClick={onVehicleClick}
             zIndex={200}
           />

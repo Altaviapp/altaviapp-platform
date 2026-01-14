@@ -395,6 +395,18 @@ export default defineSchema({
     // Novedades confirmation data (from crew review step)
     novedadesConfirmedAt: v.optional(v.number()),
     confirmedNovedadIds: v.optional(v.array(v.id("novedades"))),
+    // Trip completion statistics (populated when trip completes)
+    stats: v.optional(v.object({
+      duration: v.number(), // milliseconds
+      plannedDuration: v.number(), // milliseconds
+      studentsPickedUp: v.number(),
+      studentsAbsent: v.number(),
+      studentsNoShow: v.number(),
+      incidentsCount: v.number(),
+      stopsCompleted: v.number(),
+      stopsSkipped: v.number(),
+      totalStops: v.number(),
+    })),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -482,10 +494,13 @@ export default defineSchema({
       // Stop events
       v.literal("arrived_at_stop"),
       v.literal("departed_from_stop"),
+      v.literal("stop_skipped"),
+      v.literal("stop_note_added"),
       // Student events
       v.literal("student_checkin"),
       v.literal("student_checkout"),
       v.literal("student_absent"),
+      v.literal("student_no_show"),
       // Crew events
       v.literal("checklist_completed"),
       v.literal("relay_mode_activated"),
@@ -888,4 +903,32 @@ export default defineSchema({
     .index("by_institution", ["institutionId"])
     .index("by_device", ["deviceId"])
     .index("by_received", ["institutionId", "receivedAt"]),
+
+  // ============================================
+  // USER PREFERENCES (Parent App - Alert Settings)
+  // ============================================
+
+  userPreferences: defineTable({
+    userId: v.id("users"),
+    studentId: v.id("students"),
+    institutionId: v.id("institutions"),
+
+    // Alert settings
+    alertsEnabled: v.boolean(),          // Master toggle for alerts
+    alertRadius: v.number(),             // Distance in meters (500, 1000, 2000)
+
+    // Push notification settings (future use)
+    pushToken: v.optional(v.string()),   // FCM/APNs token
+    pushEnabled: v.optional(v.boolean()),
+
+    // Last alert tracking (to avoid duplicate alerts)
+    lastAlertTripId: v.optional(v.id("trips")),
+    lastAlertSentAt: v.optional(v.number()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_student", ["userId", "studentId"])
+    .index("by_institution", ["institutionId"]),
 });

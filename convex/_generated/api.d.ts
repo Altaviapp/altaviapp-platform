@@ -39,11 +39,13 @@ import type * as routes from "../routes.js";
 import type * as seed_clearData from "../seed/clearData.js";
 import type * as seed_createDemo from "../seed/createDemo.js";
 import type * as seed_demoData from "../seed/demoData.js";
+import type * as seed_listInstitutions from "../seed/listInstitutions.js";
 import type * as seed_seedNovedadTypes from "../seed/seedNovedadTypes.js";
 import type * as studentRoutes from "../studentRoutes.js";
 import type * as students from "../students.js";
 import type * as tripEvents from "../tripEvents.js";
 import type * as trips from "../trips.js";
+import type * as userPreferences from "../userPreferences.js";
 import type * as users from "../users.js";
 import type * as vehicles from "../vehicles.js";
 
@@ -85,11 +87,13 @@ declare const fullApi: ApiFromModules<{
   "seed/clearData": typeof seed_clearData;
   "seed/createDemo": typeof seed_createDemo;
   "seed/demoData": typeof seed_demoData;
+  "seed/listInstitutions": typeof seed_listInstitutions;
   "seed/seedNovedadTypes": typeof seed_seedNovedadTypes;
   studentRoutes: typeof studentRoutes;
   students: typeof students;
   tripEvents: typeof tripEvents;
   trips: typeof trips;
+  userPreferences: typeof userPreferences;
   users: typeof users;
   vehicles: typeof vehicles;
 }>;

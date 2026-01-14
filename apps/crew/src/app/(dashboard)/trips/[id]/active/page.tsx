@@ -18,11 +18,14 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { GoogleMapsProvider, GoogleRouteMap, getRoutePolyline, type RouteStopMarker, type StopStatus, type LatLng } from '@altaviapp/maps';
 
-import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip, useTripStudents } from '@/hooks';
+import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip, useTripStudents, useStopActions, useSOS } from '@/hooks';
 import type { GeofenceAlert, GPSSourceType } from '@/hooks';
 import { RelayModeModal } from '@/components/trip/RelayModeModal';
 import { IncidentReportModal } from '@/components/trip/IncidentReportModal';
 import { NextStopCard, type StudentWithStatus } from '@/components/trip/NextStopCard';
+import { SOSButton } from '@/components/trip/SOSButton';
+import { EmergencyContactsSheet } from '@/components/trip/EmergencyContactsSheet';
+import { TripCompletionModal } from '@/components/trip/TripCompletionModal';
 import { QuickActions } from '@/components/trip/QuickActions';
 import { CheckinSheet } from '@/components/checkin';
 import { Id } from '../../../../../../../../convex/_generated/dataModel';
@@ -49,6 +52,13 @@ export default function ActiveTripPage() {
   const [isCheckinOpen, setIsCheckinOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
+  // SOS and Emergency contacts state
+  const [isEmergencyContactsOpen, setIsEmergencyContactsOpen] = useState(false);
+
+  // Trip completion modal state
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
+  const [completionStats, setCompletionStats] = useState<any>(null);
+
   // Map reference for centering
   const mapRef = useRef<google.maps.Map | null>(null);
 
@@ -71,6 +81,18 @@ export default function ActiveTripPage() {
   const absentCount = novedades.filter((n: any) =>
     n.type === 'absence' || n.typeCategorySnapshot === 'absence'
   ).length;
+
+  // Stop actions (arrival, skip, notes)
+  const {
+    arriveAtStop,
+    skipStop,
+    addStopNote,
+    isStopArrived,
+    isStopSkipped,
+  } = useStopActions(tripId || null);
+
+  // SOS emergency hook
+  const { triggerSOS, emergencyContacts } = useSOS(tripId || null);
 
   // Trip is active if status is in_progress
   const isActive = convexTrip?.status === 'in_progress';
@@ -109,6 +131,12 @@ export default function ActiveTripPage() {
   const vehiclePlate = convexTrip?.vehicle?.licensePlate ?? 'N/A';
   const tripStops = convexTrip?.stops ?? [];
   const isPickup = routeType === 'pickup';
+
+  // School location for map marker
+  const schoolPosition = convexTrip?.school
+    ? { lat: convexTrip.school.lat, lng: convexTrip.school.lng }
+    : undefined;
+  const schoolName = convexTrip?.school?.name;
 
   // Prepare stops for map
   const mapStops = useMemo((): RouteStopMarker[] => tripStops.map((stop, index) => {
@@ -325,8 +353,28 @@ export default function ActiveTripPage() {
         const latitude = position?.latitude ?? gpsPosition?.latitude ?? -0.1828;
         const longitude = position?.longitude ?? gpsPosition?.longitude ?? -78.4847;
 
-        await completeTrip(tripId as Id<"trips">, latitude, longitude);
-        router.push('/dashboard');
+        const result = await completeTrip(tripId as Id<"trips">, latitude, longitude);
+
+        // Use stats from backend response
+        if (result.stats) {
+          setCompletionStats(result.stats);
+        } else {
+          // Fallback to calculating stats locally (for backwards compatibility)
+          const startTime = convexTrip?.startTime ?? Date.now();
+          const endTime = Date.now();
+          setCompletionStats({
+            duration: endTime - startTime,
+            plannedDuration: 40 * 60000,
+            studentsPickedUp: tripStudents?.filter((s: any) => s.checkedIn).length ?? 0,
+            studentsAbsent: tripStudents?.filter((s: any) => s.novedad?.typeCategory === 'absence').length ?? 0,
+            studentsNoShow: tripStudents?.filter((s: any) => !s.checkedIn && !s.novedad).length ?? 0,
+            incidentsCount: 0,
+            stopsCompleted: tripStops.filter((s: any) => isStopArrived(s._id as string)).length,
+            stopsSkipped: tripStops.filter((s: any) => isStopSkipped(s._id as string)).length,
+            totalStops: tripStops.length,
+          });
+        }
+        setIsCompletionModalOpen(true);
       } catch (error) {
         console.error('Error completing trip:', error);
         alert(`Error al finalizar viaje: ${error instanceof Error ? error.message : 'Error desconocido'}`);
@@ -433,8 +481,12 @@ export default function ActiveTripPage() {
             stops={mapStops}
             currentStopIndex={currentStopIndex}
             polyline={directionsPolyline.length > 0 ? directionsPolyline : routePolyline}
+            completedStopIndex={completedStops > 0 ? completedStops - 1 : undefined}
+            showDifferentiatedPolyline={completedStops > 0}
             vehiclePosition={vehiclePosition}
             showVehicle={!!vehiclePosition}
+            schoolPosition={schoolPosition}
+            schoolName={schoolName}
             autoFitBounds={!initialBoundsFit}
             showGeofences={false}
             onMapLoad={handleMapLoad}
@@ -503,6 +555,14 @@ export default function ActiveTripPage() {
             <Crosshair className="w-5 h-5 text-primary" />
           </button>
 
+          {/* SOS Button - positioned on RIGHT */}
+          <div className="absolute bottom-4 right-3 z-20">
+            <SOSButton
+              onTrigger={triggerSOS}
+              onOpenContacts={() => setIsEmergencyContactsOpen(true)}
+            />
+          </div>
+
         </GoogleMapsProvider>
       </div>
 
@@ -540,8 +600,18 @@ export default function ActiveTripPage() {
             }
             students={nextStopStudents}
             routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
+            isArrived={isStopArrived(nextStopRaw._id as string)}
             onNavigate={handleNavigate}
             onCheckin={handleStudentCheckin}
+            onArrived={async () => {
+              await arriveAtStop(nextStopRaw._id as string);
+            }}
+            onSkip={async (reason) => {
+              await skipStop(nextStopRaw._id as string, reason);
+            }}
+            onAddNote={async (note) => {
+              await addStopNote(nextStopRaw._id as string, note);
+            }}
           />
         )}
 
@@ -590,6 +660,47 @@ export default function ActiveTripPage() {
         onClose={() => {
           setIsCheckinOpen(false);
           setSelectedStudentId(null);
+        }}
+        selectedStudentId={selectedStudentId}
+      />
+
+      {/* Emergency Contacts Sheet */}
+      <EmergencyContactsSheet
+        isOpen={isEmergencyContactsOpen}
+        onClose={() => setIsEmergencyContactsOpen(false)}
+        institutionName={convexTrip?.school?.name}
+        contacts={[
+          // Add institution contact if available
+          ...(emergencyContacts?.institution ? [{
+            type: 'institution' as const,
+            name: emergencyContacts.institution.name,
+            phone: emergencyContacts.institution.phone ?? '',
+          }] : []),
+          // Add coordinators
+          ...(emergencyContacts?.coordinators ?? []).map((c: any) => ({
+            type: 'coordinator' as const,
+            name: c.name,
+            role: c.role,
+            phone: c.phone ?? '',
+          })),
+        ]}
+        countryCode="EC"
+      />
+
+      {/* Trip Completion Modal */}
+      <TripCompletionModal
+        isOpen={isCompletionModalOpen}
+        onClose={() => setIsCompletionModalOpen(false)}
+        stats={completionStats}
+        routeName={routeName}
+        routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
+        onViewSummary={() => {
+          setIsCompletionModalOpen(false);
+          router.push(`/trips/${tripId}/summary`);
+        }}
+        onGoToDashboard={() => {
+          setIsCompletionModalOpen(false);
+          router.push('/dashboard');
         }}
       />
     </div>

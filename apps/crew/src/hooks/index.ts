@@ -91,3 +91,9 @@ export {
   EVENT_TYPE_CONFIG,
 } from './useTripEvents';
 export type { TripEventType, ActorRole } from './useTripEvents';
+
+// Stop Actions (arrival, skip, notes)
+export { useStopActions } from './useStopActions';
+
+// SOS Emergency
+export { useSOS } from './useSOS';

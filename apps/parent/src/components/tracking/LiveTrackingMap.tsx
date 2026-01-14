@@ -39,6 +39,8 @@ export interface LiveTrackingMapProps {
   schoolLocation?: { lat: number; lng: number; name: string };
   /** Student's pickup/dropoff stop (highlighted) */
   studentStopId?: string;
+  /** Index of completed stops (for differentiated polyline) */
+  completedStopIndex?: number;
   /** Map height */
   height?: string;
   /** Auto-center on vehicle */
@@ -68,6 +70,7 @@ export function LiveTrackingMap({
   stops = [],
   schoolLocation,
   studentStopId,
+  completedStopIndex,
   height = '300px',
   autoCenter = true,
   lastUpdate,
@@ -101,6 +104,40 @@ export function LiveTrackingMap({
     if (stops.length < 2) return [];
     return stops.map(stop => ({ lat: stop.lat, lng: stop.lng }));
   }, [encodedPolyline, stops]);
+
+  // Split polyline into completed and remaining segments
+  const { completedPath, remainingPath } = useMemo(() => {
+    if (completedStopIndex === undefined || routePath.length < 2 || stops.length === 0) {
+      return { completedPath: [], remainingPath: routePath };
+    }
+
+    // Find the stop position for the last completed stop
+    const completedStop = stops[completedStopIndex];
+    if (!completedStop) {
+      return { completedPath: [], remainingPath: routePath };
+    }
+
+    // Find closest point in polyline to completed stop
+    let closestIndex = 0;
+    let minDistance = Infinity;
+
+    routePath.forEach((point, index) => {
+      const distance = Math.sqrt(
+        Math.pow(point.lat - completedStop.lat, 2) +
+        Math.pow(point.lng - completedStop.lng, 2)
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = index;
+      }
+    });
+
+    // Split polyline (include split point in both for continuity)
+    const completed = routePath.slice(0, closestIndex + 1);
+    const remaining = routePath.slice(closestIndex);
+
+    return { completedPath: completed, remainingPath: remaining };
+  }, [completedStopIndex, routePath, stops]);
 
   // Auto-center on vehicle when location updates
   useEffect(() => {
@@ -207,16 +244,44 @@ export function LiveTrackingMap({
           fullscreenControl: true,
         }}
       >
-        {/* Route polyline */}
-        {routePath.length > 1 && (
-          <Polyline
-            path={routePath}
-            options={{
-              strokeColor: '#042940',
-              strokeOpacity: 0.6,
-              strokeWeight: 4,
-            }}
-          />
+        {/* Route polyline - differentiated if completedStopIndex is set */}
+        {completedStopIndex !== undefined ? (
+          <>
+            {/* Completed path (gray) */}
+            {completedPath.length > 1 && (
+              <Polyline
+                path={completedPath}
+                options={{
+                  strokeColor: '#9CA3AF',
+                  strokeOpacity: 0.5,
+                  strokeWeight: 4,
+                }}
+              />
+            )}
+            {/* Remaining path (primary color) */}
+            {remainingPath.length > 1 && (
+              <Polyline
+                path={remainingPath}
+                options={{
+                  strokeColor: '#042940',
+                  strokeOpacity: 0.8,
+                  strokeWeight: 4,
+                }}
+              />
+            )}
+          </>
+        ) : (
+          /* Single polyline (default) */
+          routePath.length > 1 && (
+            <Polyline
+              path={routePath}
+              options={{
+                strokeColor: '#042940',
+                strokeOpacity: 0.6,
+                strokeWeight: 4,
+              }}
+            />
+          )
         )}
 
         {/* Route stops */}

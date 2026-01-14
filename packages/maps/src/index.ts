@@ -64,6 +64,12 @@ export type {
   VehiclePosition,
   StopStatus,
 } from "./components/GoogleRouteMap";
+export { StaticRouteMap } from "./components/StaticRouteMap";
+export type {
+  StaticRouteMapProps,
+  StaticRouteMapStop,
+  StopMarkerStatus,
+} from "./components/StaticRouteMap";
 
 // Services
 export { geocodeAddress, reverseGeocode, clearGeocodeCache } from "./services/geocoding";
@@ -80,3 +86,5 @@ export {
 
 // Hooks
 export { useGeolocation } from "./hooks/useGeolocation";
+export { useAnimatedPosition } from "./hooks/useAnimatedPosition";
+export type { UseAnimatedPositionOptions } from "./hooks/useAnimatedPosition";

@@ -66,6 +66,21 @@ export function useStudentTracking(studentId: Id<"students"> | null) {
 
   const hasActiveTrip = tracking !== null && tracking !== undefined;
 
+  // Extract progress data (new structure with object)
+  const progressData = tracking?.progress;
+  const progressPercentage = typeof progressData === "object"
+    ? progressData?.percentage ?? 0
+    : (progressData ?? 0);
+  const completedStops = typeof progressData === "object"
+    ? progressData?.completedStops ?? 0
+    : 0;
+  const totalStops = typeof progressData === "object"
+    ? progressData?.totalStops ?? 0
+    : 0;
+  const currentStopIndex = typeof progressData === "object"
+    ? progressData?.currentStopIndex ?? 0
+    : 0;
+
   return {
     tracking,
     isLoading: tracking === undefined,
@@ -80,13 +95,19 @@ export function useStudentTracking(studentId: Id<"students"> | null) {
     vehicle: tracking?.vehicle ?? null,
     driver: tracking?.driver ?? null,
     school: tracking?.school ?? null,
-    progress: tracking?.progress ?? 0,
+    // Progress data (enhanced structure)
+    progress: progressPercentage,
+    completedStops,
+    totalStops,
+    currentStopIndex,
     // ETA data (distance-based real-time)
     etaMinutes: tracking?.etaMinutes ?? null,
     etaTime: tracking?.etaTime ?? null,
     distanceKm: tracking?.distanceKm ?? null,
     delayStatus: tracking?.delayStatus ?? null,
     currentSpeed: tracking?.currentSpeed ?? null,
+    // Last GPS update timestamp
+    lastGPSUpdate: tracking?.lastGPSUpdate ?? null,
   };
 }
 

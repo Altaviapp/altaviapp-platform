@@ -317,12 +317,20 @@ export const getTrip = query({
     const driver = await ctx.db.get(trip.driverId);
     const monitor = trip.monitorId ? await ctx.db.get(trip.monitorId) : null;
 
+    // Get institution for school location
+    const institution = await ctx.db.get(route.institutionId);
+
     // Find the next stop for quick reference
     const nextStop = stopsWithETAs.find((s) => s.isNext);
 
     return {
       ...trip,
-      route: { id: route._id, name: route.name, type: route.type },
+      route: {
+        id: route._id,
+        name: route.name,
+        type: route.type,
+        optimizedPolyline: route.optimizedPolyline,
+      },
       vehicle: vehicle ? { licensePlate: vehicle.licensePlate } : null,
       driver,
       monitor,
@@ -339,6 +347,14 @@ export const getTrip = query({
             delayStatus: nextStop.delayStatus,
           }
         : null,
+      school:
+        institution && institution.schoolLatitude && institution.schoolLongitude
+          ? {
+              name: institution.name,
+              lat: institution.schoolLatitude,
+              lng: institution.schoolLongitude,
+            }
+          : null,
       stats: {
         totalStudents: tripStudents.length,
         checkedIn: checkins.length,
@@ -658,14 +674,94 @@ export const completeTrip = mutation({
       timestamp: now,
     });
 
-    // Update trip status
+    // Get route for planned duration
+    const route = await ctx.db.get(trip.routeId);
+    const plannedDuration = (route?.estimatedDuration ?? 40) * 60000; // Convert minutes to ms
+
+    // Get trip students to calculate stats
+    const tripStudents = await ctx.db
+      .query("tripStudents")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    // Get check-ins for this trip
+    const checkins = await ctx.db
+      .query("studentCheckins")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    const checkedInStudentIds = new Set(checkins.map((c) => c.studentId.toString()));
+
+    const studentsPickedUp = checkins.length;
+    const studentsAbsent = tripStudents.filter((ts) => ts.status === "absent" || ts.status === "parent_pickup").length;
+    const studentsNoShow = tripStudents.filter((ts) =>
+      ts.status === "scheduled" && !checkedInStudentIds.has(ts.studentId.toString())
+    ).length;
+
+    // Get stops to calculate stats
+    const stops = await ctx.db
+      .query("routeStops")
+      .withIndex("by_route", (q) => q.eq("routeId", trip.routeId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Get trip events to count arrived/skipped stops
+    const stopEvents = await ctx.db
+      .query("tripEvents")
+      .withIndex("by_trip_timestamp", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    const stopsCompleted = stopEvents.filter((e) => e.type === "arrived_at_stop").length;
+    const stopsSkipped = stopEvents.filter((e) => e.type === "stop_skipped").length;
+
+    // Count incidents
+    const incidents = await ctx.db
+      .query("incidents")
+      .filter((q) => q.eq(q.field("tripId"), args.tripId))
+      .collect();
+
+    // Calculate duration
+    const startTime = trip.startTime ?? now;
+    const duration = now - startTime;
+
+    // Build stats object
+    const stats = {
+      duration,
+      plannedDuration,
+      studentsPickedUp,
+      studentsAbsent,
+      studentsNoShow,
+      incidentsCount: incidents.length,
+      stopsCompleted,
+      stopsSkipped,
+      totalStops: stops.length,
+    };
+
+    // Create trip completed event
+    await ctx.db.insert("tripEvents", {
+      tripId: args.tripId,
+      institutionId: route?.institutionId ?? (null as any),
+      type: "trip_completed",
+      title: "Viaje finalizado",
+      description: `${studentsPickedUp} estudiantes ${route?.type === "pickup" ? "recogidos" : "entregados"}, ${stopsCompleted}/${stops.length} paradas`,
+      actorId: args.userId,
+      actorRole: currentUser.role === "driver" ? "driver" : "monitor",
+      latitude: args.latitude,
+      longitude: args.longitude,
+      metadata: stats,
+      timestamp: now,
+      createdAt: now,
+    });
+
+    // Update trip status with stats
     await ctx.db.patch(args.tripId, {
       status: "completed",
       endTime: now,
+      stats,
       updatedAt: now,
     });
 
-    return { success: true };
+    return { success: true, stats };
   },
 });
 
@@ -818,9 +914,14 @@ export const getActiveTripForStudent = query({
     // Determine which stops are completed based on check-ins
     const stopsWithCheckins = new Set(checkins.map(c => c.stopId.toString()));
     const completedStopsCount = stopsWithCheckins.size;
-    const progress = sortedStops.length > 0
+    const progressPercentage = sortedStops.length > 0
       ? Math.round((completedStopsCount / sortedStops.length) * 100)
       : 0;
+
+    // Find current stop index (first non-completed stop)
+    const currentStopIndex = sortedStops.findIndex(
+      (stop) => !stopsWithCheckins.has(stop._id.toString())
+    );
 
     // Calculate effective speed for ETA
     let effectiveSpeed = 25; // Default urban speed
@@ -985,12 +1086,18 @@ export const getActiveTripForStudent = query({
         lat: institution.schoolLatitude,
         lng: institution.schoolLongitude,
       } : null,
-      progress,
+      progress: {
+        percentage: progressPercentage,
+        completedStops: completedStopsCount,
+        totalStops: sortedStops.length,
+        currentStopIndex: currentStopIndex >= 0 ? currentStopIndex : sortedStops.length,
+      },
       etaMinutes,
       etaTime,
       distanceKm,
       delayStatus,
       currentSpeed: latestGps?.speed ?? null,
+      lastGPSUpdate: latestGps?.timestamp ?? null,
     };
   },
 });
@@ -2170,5 +2277,715 @@ export const getTripsForCrewByMonth = query({
     });
 
     return userTrips;
+  },
+});
+
+// ============================================
+// STOP ACTIONS - Manual confirmation of arrival/skip
+// ============================================
+
+/**
+ * Record arrival at a stop
+ * Driver manually confirms they've arrived at a stop
+ */
+export const arriveAtStop = mutation({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+    stopId: v.id("routeStops"),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await verifyUser(ctx, args.userId);
+
+    // Verify trip exists and is in progress
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      throw new Error("Viaje no encontrado");
+    }
+    if (trip.status !== "in_progress") {
+      throw new Error("El viaje no está en progreso");
+    }
+
+    // Verify stop belongs to trip's route
+    const stop = await ctx.db.get(args.stopId);
+    if (!stop || stop.routeId !== trip.routeId) {
+      throw new Error("Parada no encontrada o no pertenece a esta ruta");
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (!route) {
+      throw new Error("Ruta no encontrada");
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+
+    const now = Date.now();
+
+    // Create arrival event
+    await ctx.db.insert("tripEvents", {
+      tripId: args.tripId,
+      institutionId: route.institutionId,
+      type: "arrived_at_stop",
+      title: `Llegada a ${stop.name}`,
+      description: `El conductor confirmó llegada a la parada ${stop.name}`,
+      stopId: args.stopId,
+      actorId: args.userId,
+      actorRole: currentUser.role === "driver" ? "driver" : currentUser.role === "monitor" ? "monitor" : "admin",
+      latitude: args.latitude,
+      longitude: args.longitude,
+      metadata: {
+        scheduledTime: stop.estimatedArrivalTime,
+        actualTime: new Date(now).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" }),
+      },
+      timestamp: now,
+      createdAt: now,
+    });
+
+    return { success: true, stopId: args.stopId, arrivedAt: now };
+  },
+});
+
+/**
+ * Skip a stop (no students to pick up/drop off)
+ * Marks pending students at this stop as no_show
+ */
+export const skipStop = mutation({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+    stopId: v.id("routeStops"),
+    reason: v.optional(v.string()),
+    latitude: v.number(),
+    longitude: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await verifyUser(ctx, args.userId);
+
+    // Verify trip exists and is in progress
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      throw new Error("Viaje no encontrado");
+    }
+    if (trip.status !== "in_progress") {
+      throw new Error("El viaje no está en progreso");
+    }
+
+    // Verify stop belongs to trip's route
+    const stop = await ctx.db.get(args.stopId);
+    if (!stop || stop.routeId !== trip.routeId) {
+      throw new Error("Parada no encontrada o no pertenece a esta ruta");
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (!route) {
+      throw new Error("Ruta no encontrada");
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+
+    const now = Date.now();
+
+    // Get pending students at this stop
+    const tripStudents = await ctx.db
+      .query("tripStudents")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("stopId"), args.stopId),
+          q.eq(q.field("status"), "scheduled")
+        )
+      )
+      .collect();
+
+    // Get check-ins at this stop
+    const checkins = await ctx.db
+      .query("studentCheckins")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .filter((q) => q.eq(q.field("stopId"), args.stopId))
+      .collect();
+
+    const checkedInStudentIds = new Set(checkins.map((c) => c.studentId));
+
+    // Mark unchecked students as no_show (create student_no_show events)
+    const noShowStudents: string[] = [];
+    for (const ts of tripStudents) {
+      if (!checkedInStudentIds.has(ts.studentId)) {
+        // Create no_show event for this student
+        const student = await ctx.db.get(ts.studentId);
+        if (student) {
+          await ctx.db.insert("tripEvents", {
+            tripId: args.tripId,
+            institutionId: route.institutionId,
+            type: "student_no_show",
+            title: `No show: ${student.firstName} ${student.lastName}`,
+            description: `El estudiante no se presentó en la parada ${stop.name}`,
+            stopId: args.stopId,
+            studentId: ts.studentId,
+            actorId: args.userId,
+            actorRole: currentUser.role === "driver" ? "driver" : currentUser.role === "monitor" ? "monitor" : "admin",
+            latitude: args.latitude,
+            longitude: args.longitude,
+            timestamp: now,
+            createdAt: now,
+          });
+          noShowStudents.push(`${student.firstName} ${student.lastName}`);
+        }
+      }
+    }
+
+    // Create stop skipped event
+    await ctx.db.insert("tripEvents", {
+      tripId: args.tripId,
+      institutionId: route.institutionId,
+      type: "stop_skipped",
+      title: `Parada omitida: ${stop.name}`,
+      description: args.reason || `La parada ${stop.name} fue omitida`,
+      stopId: args.stopId,
+      actorId: args.userId,
+      actorRole: currentUser.role === "driver" ? "driver" : currentUser.role === "monitor" ? "monitor" : "admin",
+      latitude: args.latitude,
+      longitude: args.longitude,
+      metadata: {
+        reason: args.reason,
+        noShowStudents,
+        studentsCount: noShowStudents.length,
+      },
+      timestamp: now,
+      createdAt: now,
+    });
+
+    return {
+      success: true,
+      stopId: args.stopId,
+      skippedAt: now,
+      noShowCount: noShowStudents.length,
+    };
+  },
+});
+
+/**
+ * Add a note to a stop (private - only visible to coordinators)
+ */
+export const addStopNote = mutation({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+    stopId: v.id("routeStops"),
+    note: v.string(),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await verifyUser(ctx, args.userId);
+
+    // Verify trip exists
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      throw new Error("Viaje no encontrado");
+    }
+
+    // Verify stop belongs to trip's route
+    const stop = await ctx.db.get(args.stopId);
+    if (!stop || stop.routeId !== trip.routeId) {
+      throw new Error("Parada no encontrada o no pertenece a esta ruta");
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (!route) {
+      throw new Error("Ruta no encontrada");
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+
+    const now = Date.now();
+
+    // Create note event (private - metadata includes isPrivate flag)
+    await ctx.db.insert("tripEvents", {
+      tripId: args.tripId,
+      institutionId: route.institutionId,
+      type: "stop_note_added",
+      title: `Nota en ${stop.name}`,
+      description: args.note,
+      stopId: args.stopId,
+      actorId: args.userId,
+      actorRole: currentUser.role === "driver" ? "driver" : currentUser.role === "monitor" ? "monitor" : "admin",
+      latitude: args.latitude,
+      longitude: args.longitude,
+      metadata: {
+        isPrivate: true, // Only visible to coordinators
+        note: args.note,
+      },
+      timestamp: now,
+      createdAt: now,
+    });
+
+    return { success: true, stopId: args.stopId, noteAddedAt: now };
+  },
+});
+
+/**
+ * Get stop events for a trip (arrival times, skips, notes)
+ */
+export const getStopEvents = query({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+  },
+  handler: async (ctx, args) => {
+    await verifyUser(ctx, args.userId);
+
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      throw new Error("Viaje no encontrado");
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (route) {
+      await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+    }
+
+    // Get stop-related events
+    const events = await ctx.db
+      .query("tripEvents")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("type"), "arrived_at_stop"),
+          q.eq(q.field("type"), "stop_skipped"),
+          q.eq(q.field("type"), "stop_note_added"),
+          q.eq(q.field("type"), "student_no_show")
+        )
+      )
+      .collect();
+
+    // Group by stop
+    const byStop: Record<string, {
+      arrivedAt?: number;
+      skippedAt?: number;
+      notes: Array<{ note: string; timestamp: number }>;
+      noShowStudents: string[];
+    }> = {};
+
+    for (const event of events) {
+      if (!event.stopId) continue;
+      const stopId = event.stopId.toString();
+
+      if (!byStop[stopId]) {
+        byStop[stopId] = { notes: [], noShowStudents: [] };
+      }
+
+      if (event.type === "arrived_at_stop") {
+        byStop[stopId].arrivedAt = event.timestamp;
+      } else if (event.type === "stop_skipped") {
+        byStop[stopId].skippedAt = event.timestamp;
+      } else if (event.type === "stop_note_added") {
+        const metadata = event.metadata as { note?: string } | undefined;
+        byStop[stopId].notes.push({
+          note: metadata?.note || event.description || "",
+          timestamp: event.timestamp,
+        });
+      } else if (event.type === "student_no_show" && event.studentId) {
+        const student = await ctx.db.get(event.studentId);
+        if (student) {
+          byStop[stopId].noShowStudents.push(`${student.firstName} ${student.lastName}`);
+        }
+      }
+    }
+
+    return byStop;
+  },
+});
+
+// ============================================
+// EMERGENCY SOS
+// ============================================
+
+/**
+ * Trigger SOS - Emergency button
+ * Creates a critical incident and notifies all admins
+ */
+export const triggerSOS = mutation({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+    latitude: v.number(),
+    longitude: v.number(),
+    message: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await verifyUser(ctx, args.userId);
+
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      throw new Error("Viaje no encontrado");
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (!route) {
+      throw new Error("Ruta no encontrada");
+    }
+
+    const now = Date.now();
+
+    // Create critical incident
+    const incidentId = await ctx.db.insert("incidents", {
+      institutionId: route.institutionId,
+      tripId: args.tripId,
+      reportedBy: args.userId,
+      type: "emergency",
+      severity: "critical",
+      title: "🚨 SOS - Emergencia",
+      description: args.message || "Botón de emergencia activado",
+      location: `${args.latitude}, ${args.longitude}`,
+      latitude: args.latitude,
+      longitude: args.longitude,
+      status: "open",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Create trip event
+    await ctx.db.insert("tripEvents", {
+      tripId: args.tripId,
+      institutionId: route.institutionId,
+      type: "incident_reported",
+      title: "🚨 EMERGENCIA - SOS Activado",
+      description: args.message || "El conductor activó el botón de emergencia",
+      incidentId,
+      actorId: args.userId,
+      actorRole: currentUser.role === "driver" ? "driver" : "monitor",
+      latitude: args.latitude,
+      longitude: args.longitude,
+      metadata: {
+        isSOS: true,
+        severity: "critical",
+      },
+      timestamp: now,
+      createdAt: now,
+    });
+
+    // Get all admins for this institution to notify
+    const admins = await ctx.db
+      .query("users")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("institutionId"), route.institutionId),
+          q.or(
+            q.eq(q.field("role"), "admin"),
+            q.eq(q.field("role"), "super_admin")
+          ),
+          q.eq(q.field("isActive"), true)
+        )
+      )
+      .collect();
+
+    // Create notifications for all admins
+    for (const admin of admins) {
+      await ctx.db.insert("notifications", {
+        userId: admin._id,
+        type: "error", // Critical notification
+        category: "incident",
+        title: "🚨 EMERGENCIA - SOS Activado",
+        message: `${currentUser.name} activó el botón de emergencia en la ruta ${route.name}`,
+        relatedEntityType: "incident",
+        relatedEntityId: incidentId,
+        read: false,
+        createdAt: now,
+      });
+    }
+
+    return {
+      success: true,
+      incidentId,
+      notifiedAdmins: admins.length,
+    };
+  },
+});
+
+/**
+ * Get emergency contacts for a trip
+ */
+export const getEmergencyContacts = query({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+  },
+  handler: async (ctx, args) => {
+    await verifyUser(ctx, args.userId);
+
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      throw new Error("Viaje no encontrado");
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (!route) {
+      throw new Error("Ruta no encontrada");
+    }
+
+    const institution = await ctx.db.get(route.institutionId);
+
+    // Get admins as coordinators
+    const admins = await ctx.db
+      .query("users")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("institutionId"), route.institutionId),
+          q.or(
+            q.eq(q.field("role"), "admin"),
+            q.eq(q.field("role"), "super_admin")
+          ),
+          q.eq(q.field("isActive"), true)
+        )
+      )
+      .take(3);
+
+    return {
+      institution: institution
+        ? {
+            name: institution.name,
+            phone: institution.phone,
+          }
+        : null,
+      coordinators: admins.map((a) => ({
+        name: a.name,
+        phone: a.phone,
+        role: a.role,
+      })),
+      emergencyNumbers: [
+        { name: "Emergencias Ecuador", number: "911" },
+        { name: "Policía Nacional", number: "101" },
+        { name: "Bomberos", number: "102" },
+      ],
+    };
+  },
+});
+
+// ============================================
+// TRIP COMPLETION WITH STATS
+// ============================================
+
+/**
+ * Get trip completion statistics (for modal/summary)
+ */
+export const getTripStats = query({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+  },
+  handler: async (ctx, args) => {
+    await verifyUser(ctx, args.userId);
+
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      throw new Error("Viaje no encontrado");
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (route) {
+      await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+    }
+
+    // Get trip students
+    const tripStudents = await ctx.db
+      .query("tripStudents")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    // Get check-ins
+    const checkins = await ctx.db
+      .query("studentCheckins")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    // Get incidents
+    const incidents = await ctx.db
+      .query("incidents")
+      .filter((q) => q.eq(q.field("tripId"), args.tripId))
+      .collect();
+
+    // Get stop events
+    const stopEvents = await ctx.db
+      .query("tripEvents")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("type"), "arrived_at_stop"),
+          q.eq(q.field("type"), "stop_skipped")
+        )
+      )
+      .collect();
+
+    const stopsArrived = stopEvents.filter((e) => e.type === "arrived_at_stop").length;
+    const stopsSkipped = stopEvents.filter((e) => e.type === "stop_skipped").length;
+
+    // Calculate duration
+    const duration = trip.startTime && trip.endTime
+      ? trip.endTime - trip.startTime
+      : trip.startTime
+        ? Date.now() - trip.startTime
+        : 0;
+
+    const plannedDuration = route?.estimatedDuration
+      ? route.estimatedDuration * 60 * 1000 // Convert minutes to ms
+      : 0;
+
+    // Student stats
+    const checkedInIds = new Set(checkins.map((c) => c.studentId));
+    const studentsCheckedIn = tripStudents.filter((ts) =>
+      checkedInIds.has(ts.studentId)
+    ).length;
+    const studentsAbsent = tripStudents.filter((ts) => ts.status === "absent").length;
+    const studentsParentPickup = tripStudents.filter((ts) => ts.status === "parent_pickup").length;
+    const studentsNoShow = tripStudents.filter((ts) =>
+      ts.status === "scheduled" && !checkedInIds.has(ts.studentId)
+    ).length;
+
+    return {
+      duration,
+      plannedDuration,
+      durationDiff: duration - plannedDuration,
+      students: {
+        total: tripStudents.length,
+        checkedIn: studentsCheckedIn,
+        absent: studentsAbsent,
+        parentPickup: studentsParentPickup,
+        noShow: studentsNoShow,
+        expected: tripStudents.length - studentsAbsent - studentsParentPickup,
+      },
+      stops: {
+        total: route?.optimizedPolyline ? stopEvents.length : 0,
+        arrived: stopsArrived,
+        skipped: stopsSkipped,
+      },
+      incidents: {
+        total: incidents.length,
+        critical: incidents.filter((i) => i.severity === "critical").length,
+        open: incidents.filter((i) => i.status === "open").length,
+      },
+      trip: {
+        status: trip.status,
+        startTime: trip.startTime,
+        endTime: trip.endTime,
+        routeName: route?.name,
+        routeType: route?.type,
+      },
+    };
+  },
+});
+
+/**
+ * Get trip summary with timeline (for summary page)
+ */
+export const getTripSummary = query({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+  },
+  handler: async (ctx, args) => {
+    await verifyUser(ctx, args.userId);
+
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      throw new Error("Viaje no encontrado");
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (route) {
+      await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+    }
+
+    // Get all trip events for timeline
+    const events = await ctx.db
+      .query("tripEvents")
+      .withIndex("by_trip_timestamp", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    // Get check-ins with student info
+    const checkins = await ctx.db
+      .query("studentCheckins")
+      .withIndex("by_trip", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    const enrichedCheckins = await Promise.all(
+      checkins.map(async (c) => {
+        const student = await ctx.db.get(c.studentId);
+        const stop = await ctx.db.get(c.stopId);
+        return {
+          ...c,
+          studentName: student ? `${student.firstName} ${student.lastName}` : "Desconocido",
+          stopName: stop?.name || "Desconocido",
+        };
+      })
+    );
+
+    // Get stops with arrival info
+    const stops = await ctx.db
+      .query("routeStops")
+      .withIndex("by_route", (q) => q.eq("routeId", trip.routeId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    const stopEvents = events.filter(
+      (e) => e.type === "arrived_at_stop" || e.type === "stop_skipped"
+    );
+
+    const stopsWithStatus = stops
+      .sort((a, b) => a.order - b.order)
+      .map((stop) => {
+        const arrivalEvent = stopEvents.find(
+          (e) => e.stopId?.toString() === stop._id.toString() && e.type === "arrived_at_stop"
+        );
+        const skipEvent = stopEvents.find(
+          (e) => e.stopId?.toString() === stop._id.toString() && e.type === "stop_skipped"
+        );
+
+        return {
+          ...stop,
+          arrivedAt: arrivalEvent?.timestamp,
+          skippedAt: skipEvent?.timestamp,
+          status: arrivalEvent ? "arrived" : skipEvent ? "skipped" : "pending",
+        };
+      });
+
+    // Get incidents
+    const incidents = await ctx.db
+      .query("incidents")
+      .filter((q) => q.eq(q.field("tripId"), args.tripId))
+      .collect();
+
+    // Get vehicle and driver
+    const vehicle = await ctx.db.get(trip.vehicleId);
+    const driver = await ctx.db.get(trip.driverId);
+    const driverUser = driver ? await ctx.db.get(driver.userId) : null;
+
+    // Get institution for school position
+    const institution = route ? await ctx.db.get(route.institutionId) : null;
+    const schoolPosition = institution?.schoolLatitude && institution?.schoolLongitude
+      ? { lat: institution.schoolLatitude, lng: institution.schoolLongitude }
+      : null;
+
+    return {
+      trip: {
+        ...trip,
+        routeName: route?.name,
+        routeType: route?.type,
+      },
+      vehicle: vehicle
+        ? { licensePlate: vehicle.licensePlate, brand: vehicle.brand }
+        : null,
+      driver: driverUser
+        ? { name: driverUser.name, phone: driverUser.phone }
+        : null,
+      timeline: events.sort((a, b) => a.timestamp - b.timestamp),
+      checkins: enrichedCheckins.sort((a, b) => a.timestamp - b.timestamp),
+      stops: stopsWithStatus,
+      incidents,
+      schoolPosition,
+      schoolName: institution?.name,
+      routePolyline: route?.optimizedPolyline ?? null,
+    };
   },
 });

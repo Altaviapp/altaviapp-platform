@@ -696,3 +696,55 @@ export const clearDemoData = action({
     return { message: "Not implemented for safety" };
   },
 });
+
+// Internal mutation to fix route durations (one-time migration)
+export const _fixRouteDurations = internalMutation({
+  args: {
+    institutionId: v.id("institutions"),
+  },
+  handler: async (ctx, args) => {
+    const routes = await ctx.db
+      .query("routes")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .collect();
+
+    let fixedCount = 0;
+    const now = Date.now();
+
+    for (const route of routes) {
+      // If duration > 180 (3 hours in minutes), it's likely in seconds
+      if (route.estimatedDuration && route.estimatedDuration > 180) {
+        const correctedDuration = Math.round(route.estimatedDuration / 60);
+        await ctx.db.patch(route._id, {
+          estimatedDuration: correctedDuration,
+          updatedAt: now,
+        });
+        fixedCount++;
+        console.log(`Fixed route ${route.name}: ${route.estimatedDuration}s -> ${correctedDuration}min`);
+      }
+    }
+
+    return {
+      routesChecked: routes.length,
+      routesFixed: fixedCount,
+    };
+  },
+});
+
+// Action to fix route durations
+export const fixRouteDurations = action({
+  args: {
+    institutionId: v.id("institutions"),
+  },
+  handler: async (ctx, args): Promise<{ routesChecked: number; routesFixed: number }> => {
+    const result: { routesChecked: number; routesFixed: number } = await ctx.runMutation(internal.seed.createDemo._fixRouteDurations, {
+      institutionId: args.institutionId,
+    });
+
+    console.log(`\n✅ Route duration fix complete:`);
+    console.log(`   Checked: ${result.routesChecked} routes`);
+    console.log(`   Fixed: ${result.routesFixed} routes`);
+
+    return result;
+  },
+});

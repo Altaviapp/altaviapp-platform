@@ -24,7 +24,7 @@ import type {
   VehiclePosition,
 } from '@altaviapp/maps';
 import { useTrip, useTripStudents, useGPSTracking, useNovedadesForTrip, useConvexAuth } from '@/hooks';
-import type { GeofenceAlert } from '@/hooks';
+import type { GeofenceAlert, GPSSourceType } from '@/hooks';
 import { Id } from '../../../../convex/_generated/dataModel';
 
 export interface UseActiveTripDataOptions {
@@ -44,7 +44,7 @@ export interface UseActiveTripDataResult {
   /** GPS tracking error if any */
   gpsError: ReturnType<typeof useGPSTracking>['error'];
   /** Start GPS tracking */
-  startTracking: (tripId: Id<"trips">) => void;
+  startTracking: (tripId: Id<"trips">, options?: { gpsSource?: GPSSourceType; fallbackToMobile?: boolean }) => void;
   /** Stop GPS tracking */
   stopTracking: () => void;
   /** Request GPS permission */

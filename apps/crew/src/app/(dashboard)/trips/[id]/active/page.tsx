@@ -1,25 +1,23 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useCallback, useState, useMemo, useRef } from 'react';
+import { useEffect, useCallback, useState, useMemo } from 'react';
 import {
   ArrowLeft,
-  Bus,
-  MapPin,
   Clock,
   AlertTriangle,
   Sunrise,
   Sunset,
   FileText,
   UserMinus,
-  Crosshair,
+  MapPin,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { GoogleMapsProvider, GoogleRouteMap, getRoutePolyline, type RouteStopMarker, type StopStatus, type LatLng } from '@altaviapp/maps';
+import { ActiveTripView, GoogleMapsProvider } from '@altaviapp/maps';
 
-import { useTrip, useTripOperations, useConvexAuth, useGPSTracking, useCurrentPosition, useNovedadesForTrip, useTripStudents, useStopActions, useSOS } from '@/hooks';
-import type { GeofenceAlert, GPSSourceType } from '@/hooks';
+import { useTripOperations, useCurrentPosition, useStopActions, useSOS, useActiveTripData } from '@/hooks';
+import type { GPSSourceType, GeofenceAlert } from '@/hooks';
 import { RelayModeModal } from '@/components/trip/RelayModeModal';
 import { IncidentReportModal } from '@/components/trip/IncidentReportModal';
 import { NextStopCard, type StudentWithStatus } from '@/components/trip/NextStopCard';
@@ -33,8 +31,8 @@ import { Id } from '../../../../../../../../convex/_generated/dataModel';
 /**
  * Active Trip Page
  *
- * Redesigned with visual map, next stop card with integrated check-in,
- * and 3 action buttons (incident, relay, details)
+ * Redesigned with visual map using ActiveTripView component,
+ * next stop card with integrated check-in, and 3 action buttons.
  */
 export default function ActiveTripPage() {
   const params = useParams();
@@ -59,45 +57,7 @@ export default function ActiveTripPage() {
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
   const [completionStats, setCompletionStats] = useState<any>(null);
 
-  // Map reference for centering
-  const mapRef = useRef<google.maps.Map | null>(null);
-
-  // Directions polyline state
-  const [directionsPolyline, setDirectionsPolyline] = useState<LatLng[]>([]);
-  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
-  const [initialBoundsFit, setInitialBoundsFit] = useState(false);
-
-  // Get real trip data from Convex
-  const { trip: convexTrip, isLoading: tripLoading } = useTrip(tripId as Id<"trips"> | null);
-  const { completeTrip } = useTripOperations();
-  const { getPosition } = useCurrentPosition();
-  const { students: tripStudents } = useTripStudents(tripId || null);
-
-  // Use real auth
-  const { isAuthenticated } = useConvexAuth();
-
-  // Get novedades for this trip
-  const { novedades, hasNovedades } = useNovedadesForTrip(isAuthenticated ? tripId : null);
-  const absentCount = novedades.filter((n: any) =>
-    n.type === 'absence' || n.typeCategorySnapshot === 'absence'
-  ).length;
-
-  // Stop actions (arrival, skip, notes)
-  const {
-    arriveAtStop,
-    skipStop,
-    addStopNote,
-    isStopArrived,
-    isStopSkipped,
-  } = useStopActions(tripId || null);
-
-  // SOS emergency hook
-  const { triggerSOS, emergencyContacts } = useSOS(tripId || null);
-
-  // Trip is active if status is in_progress
-  const isActive = convexTrip?.status === 'in_progress';
-
-  // Handle geofence alerts from GPS tracking
+  // Handle geofence alerts
   const handleGeofenceAlert = useCallback((alerts: GeofenceAlert[]) => {
     alerts.forEach((alert) => {
       if ('Notification' in window && Notification.permission === 'granted') {
@@ -109,130 +69,47 @@ export default function ActiveTripPage() {
     });
   }, []);
 
-  // GPS Tracking
+  // Use the unified hook for trip data and GPS tracking
   const {
-    position: gpsPosition,
+    tripData,
+    isLoading,
     isTracking: gpsIsTracking,
-    error: gpsError,
-    permissionStatus: gpsPermission,
+    gpsPosition,
+    gpsError,
     startTracking: startGPSTracking,
     stopTracking: stopGPSTracking,
     requestPermission: requestGPSPermission,
+    permissionStatus: gpsPermission,
     geofenceAlerts,
-  } = useGPSTracking({
-    highAccuracy: true,
-    onGeofenceAlert: handleGeofenceAlert,
-  });
+    novedades,
+    hasNovedades,
+    absentCount,
+    rawTrip: convexTrip,
+    tripStudents,
+    polyline,
+  } = useActiveTripData(tripId, { onGeofenceAlert: handleGeofenceAlert });
 
-  // Trip data for UI
+  // Additional hooks for actions
+  const { completeTrip } = useTripOperations();
+  const { getPosition } = useCurrentPosition();
+  const { triggerSOS, emergencyContacts } = useSOS(tripId || null);
+  const {
+    arriveAtStop,
+    skipStop,
+    addStopNote,
+    isStopArrived,
+    isStopSkipped,
+  } = useStopActions(tripId || null);
+
+  // Trip data from hook
+  const isActive = convexTrip?.status === 'in_progress';
   const tripStartTime = convexTrip?.startTime;
-  const routeName = convexTrip?.route?.name ?? 'Ruta';
-  const routeType = convexTrip?.route?.type;
+  const routeName = tripData?.routeName ?? 'Ruta';
+  const routeType = tripData?.routeType;
   const vehiclePlate = convexTrip?.vehicle?.licensePlate ?? 'N/A';
-  const tripStops = convexTrip?.stops ?? [];
   const isPickup = routeType === 'pickup';
-
-  // School location for map marker
-  const schoolPosition = convexTrip?.school
-    ? { lat: convexTrip.school.lat, lng: convexTrip.school.lng }
-    : undefined;
-  const schoolName = convexTrip?.school?.name;
-
-  // Prepare stops for map
-  const mapStops = useMemo((): RouteStopMarker[] => tripStops.map((stop, index) => {
-    const stopWithMeta = stop as typeof stop & { isCompleted?: boolean; isNext?: boolean };
-    let status: StopStatus = 'pending';
-    if (stopWithMeta.isCompleted) status = 'completed';
-    else if (stopWithMeta.isNext) status = 'current';
-
-    return {
-      id: String(stop._id),
-      name: stop.name,
-      address: stop.address,
-      position: { lat: stop.latitude, lng: stop.longitude },
-      order: index + 1,
-      status,
-      scheduledTime: stop.estimatedArrivalTime ?? undefined,
-    };
-  }), [tripStops]);
-
-  // Generate polyline from stops (simple straight-line route)
-  const routePolyline = useMemo(() => {
-    if (tripStops.length < 2) return [];
-    return tripStops.map(stop => ({
-      lat: stop.latitude,
-      lng: stop.longitude,
-    }));
-  }, [tripStops]);
-
-  // Handle map load to store reference
-  const handleMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-  }, []);
-
-  // Center map on current position
-  const handleCenterOnMe = useCallback(() => {
-    if (mapRef.current && gpsPosition) {
-      mapRef.current.panTo({
-        lat: gpsPosition.latitude,
-        lng: gpsPosition.longitude,
-      });
-      mapRef.current.setZoom(16);
-    }
-  }, [gpsPosition]);
-
-  // Fetch directions route when stops are available or GPS position changes significantly
-  useEffect(() => {
-    const fetchRoute = async () => {
-      if (tripStops.length < 1 || isLoadingRoute) return;
-
-      const lastStop = tripStops[tripStops.length - 1];
-      if (!lastStop) return;
-
-      // Use current GPS position as origin if available, otherwise use first stop
-      const currentPos = gpsPosition
-        ? { lat: gpsPosition.latitude, lng: gpsPosition.longitude }
-        : tripStops[0] ? { lat: tripStops[0].latitude, lng: tripStops[0].longitude } : null;
-
-      if (!currentPos) return;
-
-      setIsLoadingRoute(true);
-      try {
-        const origin = currentPos;
-        const destination = { lat: lastStop.latitude, lng: lastStop.longitude };
-
-        // All stops except the last one are waypoints
-        const waypoints = tripStops.slice(0, -1).map(stop => ({
-          lat: stop.latitude,
-          lng: stop.longitude,
-        }));
-
-        const polyline = await getRoutePolyline(origin, destination, waypoints.length > 0 ? waypoints : undefined);
-        if (polyline && polyline.length > 0) {
-          setDirectionsPolyline(polyline);
-        }
-      } catch (error) {
-        console.error('Error fetching route:', error);
-        // Fall back to simple polyline if directions fail
-        const fallback = gpsPosition
-          ? [{ lat: gpsPosition.latitude, lng: gpsPosition.longitude }, ...routePolyline]
-          : routePolyline;
-        setDirectionsPolyline(fallback);
-      } finally {
-        setIsLoadingRoute(false);
-        // Mark initial bounds as fit after first route fetch
-        if (!initialBoundsFit) {
-          setInitialBoundsFit(true);
-        }
-      }
-    };
-
-    // Only fetch if Google Maps is loaded (mapRef is set)
-    // Refetch when GPS position changes significantly (but not too often)
-    if (mapRef.current && tripStops.length >= 1 && !directionsPolyline.length) {
-      fetchRoute();
-    }
-  }, [tripStops, isLoadingRoute, directionsPolyline.length, routePolyline, gpsPosition, initialBoundsFit]);
+  const tripStops = (convexTrip as any)?.stops ?? [];
+  const currentStopIndex = tripData?.currentStopIndex ?? 0;
 
   // Format elapsed time
   const elapsedFormatted = useMemo(() => {
@@ -288,7 +165,7 @@ export default function ActiveTripPage() {
     }
   }, [isActive, gpsIsTracking, stopGPSTracking]);
 
-  // Get next stop with ETA - calculate BEFORE early return to maintain hooks order
+  // Get next stop with ETA
   const stopsWithETA = tripStops as Array<typeof tripStops[0] & {
     etaMinutes?: number | null;
     etaTime?: string | null;
@@ -299,25 +176,14 @@ export default function ActiveTripPage() {
   const backendNextStop = convexTrip?.nextStop ?? null;
   const nextStopRaw = backendNextStop
     ? {
-        ...tripStops.find((s) => s._id.toString() === backendNextStop.id?.toString()) ?? tripStops[0],
+        ...tripStops.find((s: any) => s._id.toString() === backendNextStop.id?.toString()) ?? tripStops[0],
         etaMinutes: backendNextStop.etaMinutes,
         etaTime: backendNextStop.etaTime,
         distanceKm: backendNextStop.distanceKm,
       }
-    : stopsWithETA.find((s) => s.isNext) ?? tripStops[0] ?? null;
+    : stopsWithETA.find((s: any) => s.isNext) ?? tripStops[0] ?? null;
 
-  // Calculate progress - BEFORE early return
-  const completedStops = stopsWithETA.filter((s) => s.isCompleted).length;
-  const currentStopIndex = completedStops;
-  const totalStops = tripStops.length;
-
-  // Get speed - BEFORE early return
-  const tripStats = convexTrip?.stats as { currentSpeed?: number | null; avgSpeed?: number } | undefined;
-  const currentSpeed = gpsPosition?.speed
-    ? Math.round(gpsPosition.speed * 3.6)
-    : Math.round(tripStats?.currentSpeed ?? tripStats?.avgSpeed ?? 0);
-
-  // Get students for the next stop - MUST be called before early return
+  // Get students for the next stop
   const nextStopStudents = useMemo((): StudentWithStatus[] => {
     if (!nextStopRaw) return [];
 
@@ -355,11 +221,9 @@ export default function ActiveTripPage() {
 
         const result = await completeTrip(tripId as Id<"trips">, latitude, longitude);
 
-        // Use stats from backend response
         if (result.stats) {
           setCompletionStats(result.stats);
         } else {
-          // Fallback to calculating stats locally (for backwards compatibility)
           const startTime = convexTrip?.startTime ?? Date.now();
           const endTime = Date.now();
           setCompletionStats({
@@ -383,7 +247,7 @@ export default function ActiveTripPage() {
   };
 
   // Loading state
-  if (tripLoading || !convexTrip) {
+  if (isLoading || !tripData) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
@@ -428,208 +292,152 @@ export default function ActiveTripPage() {
     }
   };
 
-  // Vehicle position for map
-  const vehiclePosition = gpsPosition ? {
-    position: { lat: gpsPosition.latitude, lng: gpsPosition.longitude },
-    heading: gpsPosition.heading ?? 0,
-    speed: gpsPosition.speed ? gpsPosition.speed * 3.6 : 0,
-    accuracy: gpsPosition.accuracy ?? 10,
-    timestamp: gpsPosition.timestamp,
-  } : null;
-
   const TypeIcon = isPickup ? Sunrise : Sunset;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
-      {/* Compact Header */}
-      <div className={cn(
-        'px-4 py-3 flex items-center justify-between flex-shrink-0 z-30 sticky top-0',
-        isPickup ? 'bg-warning' : 'bg-info'
-      )}>
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-2 -ml-2 rounded-lg hover:bg-white/20">
-            <ArrowLeft className="w-5 h-5 text-white" />
-          </Link>
-          <div className="flex items-center gap-2">
-            <TypeIcon className="w-5 h-5 text-white" />
-            <div>
+    <GoogleMapsProvider>
+      <ActiveTripView
+        data={tripData}
+        showDifferentiatedPolyline={(tripData.completedStops ?? 0) > 0}
+        autoFitBounds={false}
+        renderHeader={() => (
+          <div className={cn(
+            'px-4 py-3 flex items-center justify-between flex-shrink-0 z-30',
+            isPickup ? 'bg-warning' : 'bg-info'
+          )}>
+            <div className="flex items-center gap-3">
+              <Link href="/dashboard" className="p-2 -ml-2 rounded-lg hover:bg-white/20">
+                <ArrowLeft className="w-5 h-5 text-white" />
+              </Link>
               <div className="flex items-center gap-2">
-                <span className="text-white font-bold text-sm uppercase tracking-wide">
-                  En Ruta
-                </span>
-                <span className="px-2 py-0.5 bg-white/20 rounded text-white text-xs font-medium">
-                  {isPickup ? 'Recogida' : 'Entrega'}
-                </span>
-              </div>
-              <p className="text-white/80 text-xs">{routeName}</p>
-            </div>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="flex items-center gap-1 text-white">
-            <Clock className="w-4 h-4" />
-            <span className="font-mono font-bold">{elapsedFormatted}</span>
-          </div>
-          <p className="text-white/70 text-xs">{vehiclePlate}</p>
-        </div>
-      </div>
-
-      {/* Map Container - 60vh height */}
-      <div className="relative flex-shrink-0" style={{ height: '60vh' }}>
-        <GoogleMapsProvider>
-          <GoogleRouteMap
-            stops={mapStops}
-            currentStopIndex={currentStopIndex}
-            polyline={directionsPolyline.length > 0 ? directionsPolyline : routePolyline}
-            completedStopIndex={completedStops > 0 ? completedStops - 1 : undefined}
-            showDifferentiatedPolyline={completedStops > 0}
-            vehiclePosition={vehiclePosition}
-            showVehicle={!!vehiclePosition}
-            schoolPosition={schoolPosition}
-            schoolName={schoolName}
-            autoFitBounds={!initialBoundsFit}
-            showGeofences={false}
-            onMapLoad={handleMapLoad}
-            style={{ width: '100%', height: '60vh' }}
-            overlays={{
-              topLeft: gpsIsTracking ? (
-                <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                <TypeIcon className="w-5 h-5 text-white" />
+                <div>
                   <div className="flex items-center gap-2">
-                    <div className={cn(
-                      'w-2 h-2 rounded-full',
-                      gpsIsTracking ? 'bg-success animate-pulse' : 'bg-gray-400'
-                    )} />
-                    <span className="font-bold text-lg">{currentSpeed}</span>
-                    <span className="text-gray-600 text-sm">km/h</span>
+                    <span className="text-white font-bold text-sm uppercase tracking-wide">
+                      En Ruta
+                    </span>
+                    <span className="px-2 py-0.5 bg-white/20 rounded text-white text-xs font-medium">
+                      {isPickup ? 'Recogida' : 'Entrega'}
+                    </span>
                   </div>
+                  <p className="text-white/80 text-xs">{routeName}</p>
                 </div>
-              ) : undefined,
-              topRight: (
-                <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin className="w-4 h-4 text-primary" />
-                    <span className="font-medium">{currentStopIndex}/{totalStops}</span>
-                    <span className="text-gray-500">paradas</span>
-                  </div>
-                </div>
-              ),
-            }}
-          />
-
-          {/* GPS Error Alert - floating on map */}
-          {gpsError && (
-            <div className="absolute top-14 left-2 right-2 z-20 p-2 bg-error/90 backdrop-blur-sm rounded-lg text-sm text-white flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-              {gpsError.message}
-            </div>
-          )}
-
-          {/* Novedades Indicator - floating on map */}
-          {hasNovedades && (
-            <Link
-              href={`/trips/${tripId}/students`}
-              className="absolute top-14 left-2 right-2 z-20 p-2 bg-amber-500/90 backdrop-blur-sm rounded-lg flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2 text-sm text-white">
-                <FileText className="w-4 h-4" />
-                <span className="font-medium">
-                  {novedades.length} {novedades.length === 1 ? 'novedad' : 'novedades'}
-                </span>
-                {absentCount > 0 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
-                    <UserMinus className="w-3 h-3" />
-                    {absentCount}
-                  </span>
-                )}
               </div>
-              <span className="text-xs text-white/80">Ver</span>
-            </Link>
-          )}
+            </div>
+            <div className="text-right">
+              <div className="flex items-center gap-1 text-white">
+                <Clock className="w-4 h-4" />
+                <span className="font-mono font-bold">{elapsedFormatted}</span>
+              </div>
+              <p className="text-white/70 text-xs">{vehiclePlate}</p>
+            </div>
+          </div>
+        )}
+        renderFloatingButtons={() => (
+          <>
+            {/* GPS Error Alert */}
+            {gpsError && (
+              <div className="absolute top-14 left-2 right-2 z-20 p-2 bg-error/90 backdrop-blur-sm rounded-lg text-sm text-white flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {gpsError.message}
+              </div>
+            )}
 
-          {/* Center on me button - positioned on LEFT to not cover zoom controls */}
-          <button
-            onClick={handleCenterOnMe}
-            className="absolute bottom-4 left-3 z-20 bg-white rounded-full p-3 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
-            aria-label="Centrar en mi ubicación"
-          >
-            <Crosshair className="w-5 h-5 text-primary" />
-          </button>
+            {/* Novedades Indicator */}
+            {hasNovedades && (
+              <Link
+                href={`/trips/${tripId}/students`}
+                className="absolute top-14 left-2 right-2 z-20 p-2 bg-amber-500/90 backdrop-blur-sm rounded-lg flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2 text-sm text-white">
+                  <FileText className="w-4 h-4" />
+                  <span className="font-medium">
+                    {novedades.length} {novedades.length === 1 ? 'novedad' : 'novedades'}
+                  </span>
+                  {absentCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                      <UserMinus className="w-3 h-3" />
+                      {absentCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-white/80">Ver</span>
+              </Link>
+            )}
 
-          {/* SOS Button - positioned on RIGHT */}
-          <div className="absolute bottom-4 right-3 z-20">
+            {/* SOS Button */}
             <SOSButton
               onTrigger={triggerSOS}
               onOpenContacts={() => setIsEmergencyContactsOpen(true)}
             />
-          </div>
-
-        </GoogleMapsProvider>
-      </div>
-
-      {/* Content Section - Normal page flow */}
-      <div className="bg-white px-4 py-4 space-y-4">
-        {/* Geofence Alerts */}
-        {geofenceAlerts.length > 0 && (
-          <div className="p-2 bg-info/10 rounded-lg">
-            {geofenceAlerts.map((alert, index) => (
-              <div key={`${alert.stopId}-${index}`} className="flex items-center gap-2 text-sm">
-                <MapPin className="w-4 h-4 text-info" />
-                <span className="font-medium text-info">{alert.stopName}:</span>
-                <span className="text-gray-700">{alert.message}</span>
+          </>
+        )}
+        renderSidePanel={() => (
+          <div className="px-4 py-4 space-y-4">
+            {/* Geofence Alerts */}
+            {geofenceAlerts.length > 0 && (
+              <div className="p-2 bg-info/10 rounded-lg">
+                {geofenceAlerts.map((alert, index) => (
+                  <div key={`${alert.stopId}-${index}`} className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-info" />
+                    <span className="font-medium text-info">{alert.stopName}:</span>
+                    <span className="text-gray-700">{alert.message}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+
+            {/* Next Stop Card */}
+            {nextStopRaw && (
+              <NextStopCard
+                stop={{
+                  _id: nextStopRaw._id as string,
+                  name: nextStopRaw.name ?? '',
+                  address: nextStopRaw.address ?? '',
+                  latitude: nextStopRaw.latitude ?? 0,
+                  longitude: nextStopRaw.longitude ?? 0,
+                }}
+                stopNumber={currentStopIndex + 1}
+                distanceKm={'distanceKm' in nextStopRaw ? (nextStopRaw.distanceKm ?? 0) : 0}
+                eta={
+                  'etaMinutes' in nextStopRaw && nextStopRaw.etaMinutes
+                    ? `~${nextStopRaw.etaMinutes} min`
+                    : nextStopRaw.estimatedArrivalTime ?? '-'
+                }
+                students={nextStopStudents}
+                routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
+                isArrived={isStopArrived(nextStopRaw._id as string)}
+                onNavigate={handleNavigate}
+                onCheckin={handleStudentCheckin}
+                onArrived={async () => {
+                  await arriveAtStop(nextStopRaw._id as string);
+                }}
+                onSkip={async (reason) => {
+                  await skipStop(nextStopRaw._id as string, reason);
+                }}
+                onAddNote={async (note) => {
+                  await addStopNote(nextStopRaw._id as string, note);
+                }}
+              />
+            )}
+
+            {/* Quick Actions */}
+            <QuickActions
+              onIncident={handleIncident}
+              onRelay={handleRelay}
+              onDetails={handleDetails}
+            />
+
+            {/* Finish Trip Button */}
+            <button
+              onClick={handleFinishTrip}
+              className="w-full py-3 bg-success hover:bg-success/90 text-white rounded-xl text-base font-bold transition-colors shadow-lg"
+            >
+              FINALIZAR VIAJE
+            </button>
           </div>
         )}
-
-        {/* Next Stop Card */}
-        {nextStopRaw && (
-          <NextStopCard
-            stop={{
-              _id: nextStopRaw._id as string,
-              name: nextStopRaw.name ?? '',
-              address: nextStopRaw.address ?? '',
-              latitude: nextStopRaw.latitude ?? 0,
-              longitude: nextStopRaw.longitude ?? 0,
-            }}
-            stopNumber={currentStopIndex + 1}
-            distanceKm={'distanceKm' in nextStopRaw ? (nextStopRaw.distanceKm ?? 0) : 0}
-            eta={
-              'etaMinutes' in nextStopRaw && nextStopRaw.etaMinutes
-                ? `~${nextStopRaw.etaMinutes} min`
-                : nextStopRaw.estimatedArrivalTime ?? '-'
-            }
-            students={nextStopStudents}
-            routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
-            isArrived={isStopArrived(nextStopRaw._id as string)}
-            onNavigate={handleNavigate}
-            onCheckin={handleStudentCheckin}
-            onArrived={async () => {
-              await arriveAtStop(nextStopRaw._id as string);
-            }}
-            onSkip={async (reason) => {
-              await skipStop(nextStopRaw._id as string, reason);
-            }}
-            onAddNote={async (note) => {
-              await addStopNote(nextStopRaw._id as string, note);
-            }}
-          />
-        )}
-
-        {/* Quick Actions */}
-        <QuickActions
-          onIncident={handleIncident}
-          onRelay={handleRelay}
-          onDetails={handleDetails}
-        />
-
-        {/* Finish Trip Button */}
-        <button
-          onClick={handleFinishTrip}
-          className="w-full py-3 bg-success hover:bg-success/90 text-white rounded-xl text-base font-bold transition-colors shadow-lg"
-        >
-          FINALIZAR VIAJE
-        </button>
-      </div>
+      />
 
       {/* Relay Mode Modal */}
       <RelayModeModal
@@ -670,13 +478,11 @@ export default function ActiveTripPage() {
         onClose={() => setIsEmergencyContactsOpen(false)}
         institutionName={convexTrip?.school?.name}
         contacts={[
-          // Add institution contact if available
           ...(emergencyContacts?.institution ? [{
             type: 'institution' as const,
             name: emergencyContacts.institution.name,
             phone: emergencyContacts.institution.phone ?? '',
           }] : []),
-          // Add coordinators
           ...(emergencyContacts?.coordinators ?? []).map((c: any) => ({
             type: 'coordinator' as const,
             name: c.name,
@@ -703,6 +509,6 @@ export default function ActiveTripPage() {
           router.push('/dashboard');
         }}
       />
-    </div>
+    </GoogleMapsProvider>
   );
 }

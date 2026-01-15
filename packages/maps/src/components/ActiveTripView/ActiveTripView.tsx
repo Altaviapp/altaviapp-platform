@@ -68,6 +68,8 @@ export function ActiveTripView({
   onStopClick,
   renderHeader,
   renderFloatingButtons,
+  renderMapFooter,
+  hideMapCenterButton = false,
   renderSidePanel,
   className = "",
 }: ActiveTripViewProps) {
@@ -98,6 +100,8 @@ export function ActiveTripView({
           onMapLoad={onMapLoad}
           onStopClick={onStopClick}
           renderFloatingButtons={renderFloatingButtons}
+          hideCenterButton={hideMapCenterButton}
+          renderFooter={renderMapFooter}
         />
 
         {/* Side panel as bottom panel */}
@@ -119,7 +123,7 @@ export function ActiveTripView({
       {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Map section - takes remaining space */}
-        <div className="flex-1 relative">
+        <div className="flex-1 flex flex-col">
           <TripMapSection
             ref={mapRef}
             data={data}
@@ -132,6 +136,9 @@ export function ActiveTripView({
             onMapLoad={onMapLoad}
             onStopClick={onStopClick}
             renderFloatingButtons={renderFloatingButtons}
+            hideCenterButton={hideMapCenterButton}
+            renderFooter={renderMapFooter}
+            className="flex-1"
           />
         </div>
 

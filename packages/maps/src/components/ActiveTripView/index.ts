@@ -14,6 +14,9 @@ export type { TripMapSectionProps, TripMapSectionRef } from "./TripMapSection";
 
 export { NextStopCard } from "./NextStopCard";
 
+export { MapFooter } from "./MapFooter";
+export type { MapFooterProps } from "./MapFooter";
+
 export { SpeedOverlay, ProgressOverlay, CenterButton } from "./MapOverlays";
 
 // Types

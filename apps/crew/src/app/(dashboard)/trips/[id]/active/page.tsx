@@ -14,23 +14,24 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { ActiveTripView, GoogleMapsProvider } from '@altaviapp/maps';
+import { ActiveTripView, GoogleMapsProvider, MapFooter } from '@altaviapp/maps';
 
 import { useTripOperations, useCurrentPosition, useStopActions, useActiveTripData } from '@/hooks';
 import type { GPSSourceType, GeofenceAlert } from '@/hooks';
 import { RelayModeModal } from '@/components/trip/RelayModeModal';
 import { IncidentReportModal } from '@/components/trip/IncidentReportModal';
-import { NextStopCard, type StudentWithStatus } from '@/components/trip/NextStopCard';
 import { TripCompletionModal } from '@/components/trip/TripCompletionModal';
-import { QuickActions } from '@/components/trip/QuickActions';
+import { CrewActionsPanel } from '@/components/trip/CrewActionsPanel';
 import { CheckinSheet } from '@/components/checkin';
 import { Id } from '../../../../../../../../convex/_generated/dataModel';
+import type { StudentWithStatus } from '@/components/trip/NextStopCard';
 
 /**
  * Active Trip Page
  *
- * Redesigned with visual map using ActiveTripView component,
- * next stop card with integrated check-in, and 3 action buttons.
+ * Redesigned layout with:
+ * - Container 1: Header + Map + Footer (next stop info)
+ * - Container 2: Crew actions panel
  */
 export default function ActiveTripPage() {
   const params = useParams();
@@ -81,7 +82,6 @@ export default function ActiveTripPage() {
     absentCount,
     rawTrip: convexTrip,
     tripStudents,
-    polyline,
   } = useActiveTripData(tripId, { onGeofenceAlert: handleGeofenceAlert });
 
   // Additional hooks for actions
@@ -90,7 +90,6 @@ export default function ActiveTripPage() {
   const {
     arriveAtStop,
     skipStop,
-    addStopNote,
     isStopArrived,
     isStopSkipped,
   } = useStopActions(tripId || null);
@@ -104,6 +103,7 @@ export default function ActiveTripPage() {
   const isPickup = routeType === 'pickup';
   const tripStops = (convexTrip as any)?.stops ?? [];
   const currentStopIndex = tripData?.currentStopIndex ?? 0;
+  const totalStops = tripData?.totalStops ?? 0;
 
   // Format elapsed time
   const elapsedFormatted = useMemo(() => {
@@ -177,7 +177,7 @@ export default function ActiveTripPage() {
       }
     : stopsWithETA.find((s: any) => s.isNext) ?? tripStops[0] ?? null;
 
-  // Get students for the next stop
+  // Get students for the next stop (for pending count)
   const nextStopStudents = useMemo((): StudentWithStatus[] => {
     if (!nextStopRaw) return [];
 
@@ -200,6 +200,13 @@ export default function ActiveTripPage() {
       })
       .filter((s: StudentWithStatus) => s._id);
   }, [tripStudents, nextStopRaw]);
+
+  // Count pending students at next stop
+  const pendingStudentsCount = useMemo(() => {
+    return nextStopStudents.filter(
+      (s) => s.status === 'pending'
+    ).length;
+  }, [nextStopStudents]);
 
   // Handle finish trip
   const handleFinishTrip = async () => {
@@ -260,9 +267,9 @@ export default function ActiveTripPage() {
     }
   };
 
-  // Handle student check-in from NextStopCard
-  const handleStudentCheckin = (studentId: string) => {
-    setSelectedStudentId(studentId);
+  // Open check-in sheet
+  const handleOpenCheckin = () => {
+    setSelectedStudentId(null);
     setIsCheckinOpen(true);
   };
 
@@ -286,7 +293,27 @@ export default function ActiveTripPage() {
     }
   };
 
+  // Handle arrival at stop
+  const handleArrived = async () => {
+    if (nextStopRaw) {
+      await arriveAtStop(nextStopRaw._id as string);
+    }
+  };
+
+  // Handle skip stop
+  const handleSkip = async (reason?: string) => {
+    if (nextStopRaw) {
+      await skipStop(nextStopRaw._id as string, reason);
+    }
+  };
+
+  // Get current stop arrival status
+  const isCurrentStopArrived = nextStopRaw ? isStopArrived(nextStopRaw._id as string) : false;
+
   const TypeIcon = isPickup ? Sunrise : Sunset;
+
+  // Get delay status for footer
+  const delayStatus = tripData.nextStop?.delayStatus;
 
   return (
     <GoogleMapsProvider>
@@ -294,6 +321,7 @@ export default function ActiveTripPage() {
         data={tripData}
         showDifferentiatedPolyline={(tripData.completedStops ?? 0) > 0}
         autoFitBounds={false}
+        hideMapCenterButton={true}
         renderHeader={() => (
           <div className={cn(
             'px-4 py-3 flex items-center justify-between flex-shrink-0 z-30',
@@ -358,72 +386,52 @@ export default function ActiveTripPage() {
                 <span className="text-xs text-white/80">Ver</span>
               </Link>
             )}
-          </>
-        )}
-        renderSidePanel={() => (
-          <div className="px-4 py-4 space-y-4">
+
             {/* Geofence Alerts */}
             {geofenceAlerts.length > 0 && (
-              <div className="p-2 bg-info/10 rounded-lg">
+              <div className="absolute bottom-20 left-2 right-2 z-20 p-2 bg-info/90 backdrop-blur-sm rounded-lg">
                 {geofenceAlerts.map((alert, index) => (
-                  <div key={`${alert.stopId}-${index}`} className="flex items-center gap-2 text-sm">
-                    <MapPin className="w-4 h-4 text-info" />
-                    <span className="font-medium text-info">{alert.stopName}:</span>
-                    <span className="text-gray-700">{alert.message}</span>
+                  <div key={`${alert.stopId}-${index}`} className="flex items-center gap-2 text-sm text-white">
+                    <MapPin className="w-4 h-4" />
+                    <span className="font-medium">{alert.stopName}:</span>
+                    <span>{alert.message}</span>
                   </div>
                 ))}
               </div>
             )}
-
-            {/* Next Stop Card */}
-            {nextStopRaw && (
-              <NextStopCard
-                stop={{
-                  _id: nextStopRaw._id as string,
-                  name: nextStopRaw.name ?? '',
-                  address: nextStopRaw.address ?? '',
-                  latitude: nextStopRaw.latitude ?? 0,
-                  longitude: nextStopRaw.longitude ?? 0,
-                }}
-                stopNumber={currentStopIndex + 1}
-                distanceKm={'distanceKm' in nextStopRaw ? (nextStopRaw.distanceKm ?? 0) : 0}
-                eta={
-                  'etaMinutes' in nextStopRaw && nextStopRaw.etaMinutes
-                    ? `~${nextStopRaw.etaMinutes} min`
-                    : nextStopRaw.estimatedArrivalTime ?? '-'
-                }
-                students={nextStopStudents}
-                routeType={routeType === 'pickup' ? 'pickup' : 'dropoff'}
-                isArrived={isStopArrived(nextStopRaw._id as string)}
-                onNavigate={handleNavigate}
-                onCheckin={handleStudentCheckin}
-                onArrived={async () => {
-                  await arriveAtStop(nextStopRaw._id as string);
-                }}
-                onSkip={async (reason) => {
-                  await skipStop(nextStopRaw._id as string, reason);
-                }}
-                onAddNote={async (note) => {
-                  await addStopNote(nextStopRaw._id as string, note);
-                }}
-              />
-            )}
-
-            {/* Quick Actions */}
-            <QuickActions
-              onIncident={handleIncident}
-              onRelay={handleRelay}
-              onDetails={handleDetails}
+          </>
+        )}
+        renderMapFooter={({ centerOnVehicle }) => (
+          nextStopRaw ? (
+            <MapFooter
+              stopName={nextStopRaw.name ?? 'Parada'}
+              stopAddress={nextStopRaw.address}
+              stopNumber={currentStopIndex + 1}
+              totalStops={totalStops}
+              etaMinutes={'etaMinutes' in nextStopRaw ? nextStopRaw.etaMinutes ?? undefined : undefined}
+              etaTime={'etaTime' in nextStopRaw ? nextStopRaw.etaTime ?? undefined : undefined}
+              distanceKm={'distanceKm' in nextStopRaw ? nextStopRaw.distanceKm ?? undefined : undefined}
+              delayStatus={delayStatus}
+              onCenterClick={centerOnVehicle}
+              centerDisabled={!tripData.vehiclePosition}
             />
-
-            {/* Finish Trip Button */}
-            <button
-              onClick={handleFinishTrip}
-              className="w-full py-3 bg-success hover:bg-success/90 text-white rounded-xl text-base font-bold transition-colors shadow-lg"
-            >
-              FINALIZAR VIAJE
-            </button>
-          </div>
+          ) : null
+        )}
+        renderSidePanel={() => (
+          <CrewActionsPanel
+            stopId={nextStopRaw?._id as string ?? ''}
+            isArrived={isCurrentStopArrived}
+            onArrived={handleArrived}
+            onSkip={handleSkip}
+            onNavigate={handleNavigate}
+            onCheckin={handleOpenCheckin}
+            pendingStudentsCount={pendingStudentsCount}
+            onIncident={handleIncident}
+            onRelay={handleRelay}
+            onDetails={handleDetails}
+            onFinish={handleFinishTrip}
+            canFinish={true}
+          />
         )}
       />
 

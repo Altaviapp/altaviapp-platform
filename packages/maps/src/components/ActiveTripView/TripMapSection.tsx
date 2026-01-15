@@ -33,6 +33,10 @@ export interface TripMapSectionProps {
   onMapLoad?: (map: google.maps.Map) => void;
   /** Render prop for custom floating buttons */
   renderFloatingButtons?: (context: FloatingButtonsContext) => React.ReactNode;
+  /** Hide center button from floating buttons (use when rendering in footer) */
+  hideCenterButton?: boolean;
+  /** Render prop for footer below the map */
+  renderFooter?: (context: FloatingButtonsContext) => React.ReactNode;
   /** Additional CSS classes */
   className?: string;
 }
@@ -55,6 +59,8 @@ export const TripMapSection = forwardRef<TripMapSectionRef, TripMapSectionProps>
       onStopClick,
       onMapLoad,
       renderFloatingButtons,
+      hideCenterButton = false,
+      renderFooter,
       className = "",
     },
     ref
@@ -95,57 +101,72 @@ export const TripMapSection = forwardRef<TripMapSectionRef, TripMapSectionProps>
     // Compute completed stop index for differentiated polyline
     const completedStopIndex = data.currentStopIndex > 0 ? data.currentStopIndex - 1 : undefined;
 
+    // Should we show the floating buttons container?
+    const showFloatingButtons = !hideCenterButton || renderFloatingButtons;
+
     return (
-      <div
-        className={`relative ${className}`}
-        style={{ height: typeof height === "number" ? `${height}px` : height }}
-      >
-        <GoogleRouteMap
-          stops={data.stops}
-          currentStopIndex={data.currentStopIndex}
-          polyline={data.polyline}
-          vehiclePosition={data.vehiclePosition}
-          showVehicle={!!data.vehiclePosition}
-          animateVehicle
-          schoolPosition={data.schoolPosition}
-          schoolName={data.schoolName}
-          completedStopIndex={completedStopIndex}
-          showDifferentiatedPolyline={showDifferentiatedPolyline}
-          highlightedStopIndex={highlightedStopIndex}
-          autoFitBounds={autoFitBounds}
-          showZoomControl={false}
-          onStopClick={onStopClick}
-          onMapLoad={handleMapLoad}
-          style={{ width: "100%", height: "100%" }}
-          overlays={{
-            // Speed overlay (top-left)
-            topLeft: showSpeedOverlay && data.currentSpeed > 0 ? (
-              <SpeedOverlay speed={data.currentSpeed} showPulse />
-            ) : undefined,
-            // Progress overlay (top-right)
-            topRight: showProgressOverlay ? (
-              <ProgressOverlay current={data.completedStops} total={data.totalStops} />
-            ) : undefined,
-          }}
-        />
+      <div className={`flex flex-col ${className}`}>
+        {/* Map container */}
+        <div
+          className="relative flex-shrink-0"
+          style={{ height: typeof height === "number" ? `${height}px` : height }}
+        >
+          <GoogleRouteMap
+            stops={data.stops}
+            currentStopIndex={data.currentStopIndex}
+            polyline={data.polyline}
+            vehiclePosition={data.vehiclePosition}
+            showVehicle={!!data.vehiclePosition}
+            animateVehicle
+            schoolPosition={data.schoolPosition}
+            schoolName={data.schoolName}
+            completedStopIndex={completedStopIndex}
+            showDifferentiatedPolyline={showDifferentiatedPolyline}
+            highlightedStopIndex={highlightedStopIndex}
+            autoFitBounds={autoFitBounds}
+            showZoomControl={false}
+            onStopClick={onStopClick}
+            onMapLoad={handleMapLoad}
+            style={{ width: "100%", height: "100%" }}
+            overlays={{
+              // Speed overlay (top-left)
+              topLeft: showSpeedOverlay && data.currentSpeed > 0 ? (
+                <SpeedOverlay speed={data.currentSpeed} showPulse />
+              ) : undefined,
+              // Progress overlay (top-right)
+              topRight: showProgressOverlay ? (
+                <ProgressOverlay current={data.completedStops} total={data.totalStops} />
+              ) : undefined,
+            }}
+          />
 
-        {/* Floating buttons container - bottom of map */}
-        <div className="absolute bottom-4 left-0 right-0 px-4 z-10">
-          <div className="flex items-end justify-between">
-            {/* Left side - Center button */}
-            <CenterButton
-              onClick={centerOnVehicle}
-              disabled={!data.vehiclePosition}
-            />
+          {/* Floating buttons container - bottom of map */}
+          {showFloatingButtons && (
+            <div className="absolute bottom-4 left-0 right-0 px-4 z-10">
+              <div className="flex items-end justify-between">
+                {/* Left side - Center button (unless hidden) */}
+                {!hideCenterButton ? (
+                  <CenterButton
+                    onClick={centerOnVehicle}
+                    disabled={!data.vehiclePosition}
+                  />
+                ) : (
+                  <div /> // Spacer for flex justify-between
+                )}
 
-            {/* Right side - Custom floating buttons */}
-            {renderFloatingButtons && (
-              <div className="flex flex-col gap-2">
-                {renderFloatingButtons(floatingContext)}
+                {/* Right side - Custom floating buttons */}
+                {renderFloatingButtons && (
+                  <div className="flex flex-col gap-2">
+                    {renderFloatingButtons(floatingContext)}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+
+        {/* Footer (rendered outside the map, below it) */}
+        {renderFooter && renderFooter(floatingContext)}
       </div>
     );
   }

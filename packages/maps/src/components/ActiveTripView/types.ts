@@ -117,6 +117,10 @@ export interface ActiveTripViewProps {
   renderHeader?: () => React.ReactNode;
   /** Render prop for floating buttons on the map */
   renderFloatingButtons?: (context: FloatingButtonsContext) => React.ReactNode;
+  /** Render prop for footer below the map (e.g., MapFooter with next stop info) */
+  renderMapFooter?: (context: FloatingButtonsContext) => React.ReactNode;
+  /** Hide center button from floating buttons (use when center is in footer) */
+  hideMapCenterButton?: boolean;
   /** Render prop for side/bottom panel content */
   renderSidePanel?: () => React.ReactNode;
 

@@ -97,3 +97,7 @@ export { useStopActions } from './useStopActions';
 
 // SOS Emergency
 export { useSOS } from './useSOS';
+
+// ActiveTripView adapter hook
+export { useActiveTripData } from './useActiveTripData';
+export type { UseActiveTripDataOptions, UseActiveTripDataResult } from './useActiveTripData';

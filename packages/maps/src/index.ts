@@ -71,6 +71,30 @@ export type {
   StopMarkerStatus,
 } from "./components/StaticRouteMap";
 
+// ActiveTripView - Global active trip component
+export {
+  ActiveTripView,
+  TripMapSection,
+  NextStopCard,
+  SpeedOverlay as ActiveTripSpeedOverlay,
+  ProgressOverlay as ActiveTripProgressOverlay,
+  CenterButton,
+} from "./components/ActiveTripView";
+export type {
+  ActiveTripData,
+  ActiveTripViewProps,
+  NextStopData,
+  NextStopCardProps,
+  DelayStatus,
+  FloatingButtonsContext,
+  LayoutMode,
+  TripMapSectionProps,
+  TripMapSectionRef,
+  SpeedOverlayProps,
+  ProgressOverlayProps,
+  CenterButtonProps,
+} from "./components/ActiveTripView";
+
 // Services
 export { geocodeAddress, reverseGeocode, clearGeocodeCache } from "./services/geocoding";
 export { calculateRoute, getRoutePolyline } from "./services/directions";

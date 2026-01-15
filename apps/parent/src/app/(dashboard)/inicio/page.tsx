@@ -1,23 +1,14 @@
 'use client';
 
-import { useState } from 'react';
 import { Users, Clock } from 'lucide-react';
 import { useAllChildrenTrips, useMyChildrenUpcomingTrips } from '@/hooks';
 import { LoadingState, EmptyState } from '@/components/core';
 import { GreetingHeader, UpcomingTripCard } from '@/components/modules/tracking';
-import { ExpandableTrackingCard } from '@/components/home/ExpandableTrackingCard';
-import { Id } from '../../../../../../convex/_generated/dataModel';
+import { StudentTrackingCard } from '@/components/home/ExpandableTrackingCard';
 
 export default function InicioPage() {
   const { children, isLoading, isEmpty } = useAllChildrenTrips();
   const { upcomingTrips, isLoading: upcomingLoading } = useMyChildrenUpcomingTrips(12);
-
-  // State to track which card is expanded (only one at a time)
-  const [expandedStudentId, setExpandedStudentId] = useState<Id<"students"> | null>(null);
-
-  const handleToggleExpand = (studentId: Id<"students">) => {
-    setExpandedStudentId((current) => (current === studentId ? null : studentId));
-  };
 
   if (isLoading) {
     return (
@@ -43,11 +34,9 @@ export default function InicioPage() {
       ) : (
         <div className="space-y-4">
           {children.map((child) => (
-            <ExpandableTrackingCard
+            <StudentTrackingCard
               key={child._id}
               student={child}
-              isExpanded={expandedStudentId === child._id}
-              onToggleExpand={() => handleToggleExpand(child._id)}
             />
           ))}
         </div>

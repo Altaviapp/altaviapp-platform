@@ -84,3 +84,7 @@ export type { AlertPreferences } from "./useAlertPreferences";
 
 // User Profile
 export { useProfile } from "./useProfile";
+
+// ActiveTripView adapter hook
+export { useActiveTripData } from "./useActiveTripData";
+export type { UseActiveTripDataResult } from "./useActiveTripData";

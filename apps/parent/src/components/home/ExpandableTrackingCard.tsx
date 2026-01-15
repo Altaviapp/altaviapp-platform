@@ -1,38 +1,30 @@
 "use client";
 
 /**
- * ExpandableTrackingCard Component
+ * StudentTrackingCard Component
  *
- * Enhanced student card with inline map expansion for live tracking.
- * Shows student info, trip progress, ETA, and expandable map view.
+ * Student card showing trip status and navigation to monitoring page.
+ * Replaces the old expandable map with a "Monitorear viaje" button.
  */
 
-import { useState, lazy, Suspense } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bus,
   MapPin,
   Clock,
-  ChevronDown,
-  ChevronUp,
   Bell,
   AlertTriangle,
+  Navigation,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStudentTracking } from "@/hooks/useMyStudents";
 import { NovedadContextButton } from "./NovedadContextButton";
 import { ProgressBar } from "../tracking/ProgressBar";
-import { FloatingStatusCard } from "../tracking/FloatingStatusCard";
 import { AlertPreferencesSheet } from "../settings/AlertPreferencesSheet";
 import { Id } from "../../../../../convex/_generated/dataModel";
 
-// Lazy load the map component for performance
-const LiveTrackingMap = lazy(() =>
-  import("../tracking/LiveTrackingMap").then((mod) => ({
-    default: mod.LiveTrackingMap,
-  }))
-);
-
-interface ExpandableTrackingCardProps {
+interface StudentTrackingCardProps {
   student: {
     _id: Id<"students">;
     firstName: string;
@@ -41,8 +33,6 @@ interface ExpandableTrackingCardProps {
     section?: string;
     photoUrl?: string | null;
   };
-  isExpanded: boolean;
-  onToggleExpand: () => void;
 }
 
 type TripStatus = "active" | "scheduled" | "at_home" | "at_school" | "completed";
@@ -87,32 +77,29 @@ const statusConfigs: Record<TripStatus, StatusConfig> = {
   },
 };
 
-export function ExpandableTrackingCard({
+export function StudentTrackingCard({
   student,
-  isExpanded,
-  onToggleExpand,
-}: ExpandableTrackingCardProps) {
+}: StudentTrackingCardProps) {
+  const router = useRouter();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const {
     tracking,
     hasActiveTrip,
     isLoading,
-    currentLocation,
-    route,
-    stops,
     studentStop,
-    vehicle,
-    driver,
-    school,
     completedStops,
     totalStops,
     currentStopIndex,
     etaMinutes,
     etaTime,
     delayStatus,
-    lastGPSUpdate,
   } = useStudentTracking(student._id);
+
+  // Navigate to monitoring page
+  const handleMonitorTrip = () => {
+    router.push(`/monitoreo/${student._id}`);
+  };
 
   // Determine status based on tracking data
   const getStatus = (): TripStatus => {
@@ -131,30 +118,6 @@ export function ExpandableTrackingCard({
 
   // Get initials for avatar fallback
   const initials = `${student.firstName[0] ?? ""}${student.lastName[0] ?? ""}`.toUpperCase();
-
-  // Prepare map data
-  const vehicleLocation = currentLocation
-    ? {
-        lat: currentLocation.latitude,
-        lng: currentLocation.longitude,
-        speed: currentLocation.speed,
-        heading: currentLocation.heading,
-        timestamp: currentLocation.timestamp,
-      }
-    : null;
-
-  const mapStops = stops.map((stop) => ({
-    id: stop.id.toString(),
-    name: stop.name,
-    lat: stop.lat,
-    lng: stop.lng,
-    scheduledTime: stop.scheduledTime ?? undefined,
-    completed: stop.completed,
-  }));
-
-  const schoolLocation = school
-    ? { lat: school.lat, lng: school.lng, name: school.name }
-    : undefined;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -274,27 +237,13 @@ export function ExpandableTrackingCard({
                   currentStopIndex={currentStopIndex}
                 />
 
-                {/* Expand/collapse button */}
+                {/* Monitor trip button */}
                 <button
-                  onClick={onToggleExpand}
-                  className={cn(
-                    "w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
-                    isExpanded
-                      ? "bg-gray-100 text-gray-700"
-                      : "bg-primary/10 text-primary hover:bg-primary/20"
-                  )}
+                  onClick={handleMonitorTrip}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all bg-primary text-white hover:bg-primary/90 active:scale-[0.98]"
                 >
-                  {isExpanded ? (
-                    <>
-                      <ChevronUp className="w-4 h-4" />
-                      Ocultar mapa
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="w-4 h-4" />
-                      Ver mapa en vivo
-                    </>
-                  )}
+                  <Navigation className="w-4 h-4" />
+                  Monitorear viaje
                 </button>
               </div>
             )}
@@ -310,51 +259,6 @@ export function ExpandableTrackingCard({
         </div>
       </div>
 
-      {/* Expandable map section */}
-      {isExpanded && hasActiveTrip && (
-        <div className="border-t border-gray-100">
-          {/* Map */}
-          <Suspense
-            fallback={
-              <div className="h-64 flex items-center justify-center bg-gray-50">
-                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-              </div>
-            }
-          >
-            <LiveTrackingMap
-              vehicleLocation={vehicleLocation}
-              stops={mapStops}
-              schoolLocation={schoolLocation}
-              studentStopId={studentStop?.id.toString()}
-              completedStopIndex={completedStops > 0 ? completedStops - 1 : undefined}
-              encodedPolyline={route?.optimizedPolyline ?? undefined}
-              height="280px"
-              autoCenter={true}
-              vehicleInfo={
-                vehicle && driver
-                  ? {
-                      plate: vehicle.licensePlate,
-                      driverName: driver.name,
-                    }
-                  : undefined
-              }
-            />
-          </Suspense>
-
-          {/* Floating status card */}
-          {driver && vehicle && (
-            <div className="p-3">
-              <FloatingStatusCard
-                driverName={driver.name}
-                driverPhone={driver.phone}
-                vehiclePlate={vehicle.licensePlate}
-                lastUpdated={lastGPSUpdate}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Alert Preferences Sheet */}
       <AlertPreferencesSheet
         studentId={student._id}
@@ -365,3 +269,6 @@ export function ExpandableTrackingCard({
     </div>
   );
 }
+
+// Backwards-compatible alias export
+export { StudentTrackingCard as ExpandableTrackingCard };

@@ -114,34 +114,38 @@ export const TripMapSection = forwardRef<TripMapSectionRef, TripMapSectionProps>
           className={`relative ${useFlexHeight ? "flex-1 min-h-0" : "flex-shrink-0"}`}
           style={useFlexHeight ? undefined : { height: typeof height === "number" ? `${height}px` : height }}
         >
-          <GoogleRouteMap
-            stops={data.stops}
-            currentStopIndex={data.currentStopIndex}
-            polyline={data.polyline}
-            vehiclePosition={data.vehiclePosition}
-            showVehicle={!!data.vehiclePosition}
-            animateVehicle
-            schoolPosition={data.schoolPosition}
-            schoolName={data.schoolName}
-            completedStopIndex={completedStopIndex}
-            showDifferentiatedPolyline={showDifferentiatedPolyline}
-            highlightedStopIndex={highlightedStopIndex}
-            autoFitBounds={autoFitBounds}
-            showZoomControl={false}
-            onStopClick={onStopClick}
-            onMapLoad={handleMapLoad}
-            style={{ width: "100%", height: "100%" }}
-            overlays={{
-              // Speed overlay (top-left)
-              topLeft: showSpeedOverlay && data.currentSpeed > 0 ? (
-                <SpeedOverlay speed={data.currentSpeed} showPulse />
-              ) : undefined,
-              // Progress overlay (top-right)
-              topRight: showProgressOverlay ? (
-                <ProgressOverlay current={data.completedStops} total={data.totalStops} />
-              ) : undefined,
-            }}
-          />
+          {/* Inner wrapper for absolute positioning when using flex height */}
+          <div className={useFlexHeight ? "absolute inset-0" : "h-full"}>
+            <GoogleRouteMap
+              stops={data.stops}
+              currentStopIndex={data.currentStopIndex}
+              polyline={data.polyline}
+              vehiclePosition={data.vehiclePosition}
+              showVehicle={!!data.vehiclePosition}
+              animateVehicle
+              schoolPosition={data.schoolPosition}
+              schoolName={data.schoolName}
+              completedStopIndex={completedStopIndex}
+              showDifferentiatedPolyline={showDifferentiatedPolyline}
+              highlightedStopIndex={highlightedStopIndex}
+              autoFitBounds={autoFitBounds}
+              showZoomControl={false}
+              onStopClick={onStopClick}
+              onMapLoad={handleMapLoad}
+              className="h-full"
+              style={{ width: "100%", height: "100%" }}
+              overlays={{
+                // Speed overlay (top-left)
+                topLeft: showSpeedOverlay && data.currentSpeed > 0 ? (
+                  <SpeedOverlay speed={data.currentSpeed} showPulse />
+                ) : undefined,
+                // Progress overlay (top-right)
+                topRight: showProgressOverlay ? (
+                  <ProgressOverlay current={data.completedStops} total={data.totalStops} />
+                ) : undefined,
+              }}
+            />
+          </div>
 
           {/* Floating buttons container - bottom of map */}
           {showFloatingButtons && (

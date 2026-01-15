@@ -16,13 +16,11 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { ActiveTripView, GoogleMapsProvider } from '@altaviapp/maps';
 
-import { useTripOperations, useCurrentPosition, useStopActions, useSOS, useActiveTripData } from '@/hooks';
+import { useTripOperations, useCurrentPosition, useStopActions, useActiveTripData } from '@/hooks';
 import type { GPSSourceType, GeofenceAlert } from '@/hooks';
 import { RelayModeModal } from '@/components/trip/RelayModeModal';
 import { IncidentReportModal } from '@/components/trip/IncidentReportModal';
 import { NextStopCard, type StudentWithStatus } from '@/components/trip/NextStopCard';
-import { SOSButton } from '@/components/trip/SOSButton';
-import { EmergencyContactsSheet } from '@/components/trip/EmergencyContactsSheet';
 import { TripCompletionModal } from '@/components/trip/TripCompletionModal';
 import { QuickActions } from '@/components/trip/QuickActions';
 import { CheckinSheet } from '@/components/checkin';
@@ -49,9 +47,6 @@ export default function ActiveTripPage() {
   // Check-in sheet state
   const [isCheckinOpen, setIsCheckinOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-
-  // SOS and Emergency contacts state
-  const [isEmergencyContactsOpen, setIsEmergencyContactsOpen] = useState(false);
 
   // Trip completion modal state
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
@@ -92,7 +87,6 @@ export default function ActiveTripPage() {
   // Additional hooks for actions
   const { completeTrip } = useTripOperations();
   const { getPosition } = useCurrentPosition();
-  const { triggerSOS, emergencyContacts } = useSOS(tripId || null);
   const {
     arriveAtStop,
     skipStop,
@@ -364,12 +358,6 @@ export default function ActiveTripPage() {
                 <span className="text-xs text-white/80">Ver</span>
               </Link>
             )}
-
-            {/* SOS Button */}
-            <SOSButton
-              onTrigger={triggerSOS}
-              onOpenContacts={() => setIsEmergencyContactsOpen(true)}
-            />
           </>
         )}
         renderSidePanel={() => (
@@ -470,27 +458,6 @@ export default function ActiveTripPage() {
           setSelectedStudentId(null);
         }}
         selectedStudentId={selectedStudentId}
-      />
-
-      {/* Emergency Contacts Sheet */}
-      <EmergencyContactsSheet
-        isOpen={isEmergencyContactsOpen}
-        onClose={() => setIsEmergencyContactsOpen(false)}
-        institutionName={convexTrip?.school?.name}
-        contacts={[
-          ...(emergencyContacts?.institution ? [{
-            type: 'institution' as const,
-            name: emergencyContacts.institution.name,
-            phone: emergencyContacts.institution.phone ?? '',
-          }] : []),
-          ...(emergencyContacts?.coordinators ?? []).map((c: any) => ({
-            type: 'coordinator' as const,
-            name: c.name,
-            role: c.role,
-            phone: c.phone ?? '',
-          })),
-        ]}
-        countryCode="EC"
       />
 
       {/* Trip Completion Modal */}

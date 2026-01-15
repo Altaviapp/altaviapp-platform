@@ -41,7 +41,7 @@ export default function LoginPage() {
     setIsLoading(true);
     setLoginError('');
 
-    const result = await login(data.email, data.password);
+    const result = await login(data.email, data.password, data.rememberMe);
 
     if (result.success) {
       if (result.requiresEmailVerification) {

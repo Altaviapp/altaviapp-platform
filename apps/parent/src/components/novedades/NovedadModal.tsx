@@ -262,29 +262,45 @@ export function NovedadModal({
         {typesLoading ? (
           <div className="text-sm text-gray-500">Cargando tipos...</div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
             {novedadTypes.map((type) => {
               const Icon = ICON_MAP[type.icon] ?? FileText;
               const colors = COLOR_CLASSES[type.color] ?? COLOR_CLASSES.gray!;
+              const isSelected = selectedTypeId === type._id;
               return (
                 <button
                   key={type._id}
                   type="button"
                   onClick={() => setSelectedTypeId(type._id)}
                   className={cn(
-                    'flex items-center gap-2 p-3 rounded-lg border-2 transition-colors text-left',
-                    selectedTypeId === type._id
-                      ? 'border-primary bg-primary/5'
-                      : 'border-gray-200 hover:border-gray-300'
+                    'w-full flex items-center gap-3 p-3 transition-all text-left',
+                    isSelected
+                      ? 'bg-primary/5'
+                      : 'hover:bg-gray-50'
                   )}
                 >
-                  <div className={cn('p-1.5 rounded-lg', colors.bg)}>
+                  {/* Radio indicator */}
+                  <div
+                    className={cn(
+                      'w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors',
+                      isSelected ? 'border-primary' : 'border-gray-300'
+                    )}
+                  >
+                    {isSelected && (
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  {/* Icon */}
+                  <div className={cn('p-2 rounded-lg flex-shrink-0', colors.bg)}>
                     <Icon className={cn('w-4 h-4', colors.text)} />
                   </div>
+                  {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-gray-900 line-clamp-1">{type.name}</span>
+                    <span className="text-sm font-medium text-gray-900">{type.name}</span>
                     {type.requiresApproval && (
-                      <span className="text-xs text-amber-600 block">Requiere aprobación</span>
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
+                        Requiere aprobación
+                      </span>
                     )}
                   </div>
                 </button>
@@ -293,6 +309,45 @@ export function NovedadModal({
           </div>
         )}
       </div>
+
+      {/* Selected Type Info Panel */}
+      {selectedType && (
+        <div className="mb-4 p-3 rounded-lg bg-gray-50 border border-gray-200">
+          {/* Description */}
+          {selectedType.description && (
+            <p className="text-sm text-gray-600 mb-3">{selectedType.description}</p>
+          )}
+          {/* Requirements badges */}
+          <div className="flex flex-wrap gap-2">
+            {selectedType.requiresApproval && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                <Clock className="w-3 h-3" />
+                Requiere aprobación
+              </span>
+            )}
+            {selectedType.evidenceRequired && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                <Upload className="w-3 h-3" />
+                Evidencia requerida
+              </span>
+            )}
+            {selectedType.reasonRequired && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                <FileText className="w-3 h-3" />
+                Motivo requerido
+              </span>
+            )}
+            {selectedType.durationType && selectedType.durationType !== 'single_day' && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
+                <Calendar className="w-3 h-3" />
+                {selectedType.durationType === 'permanent' ? 'Permanente' :
+                 selectedType.durationType === 'date_range' ? 'Rango de fechas' :
+                 selectedType.durationType === 'recurring' ? 'Recurrente' : 'Un día'}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Reason */}
       {selectedType && (

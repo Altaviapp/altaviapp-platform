@@ -112,3 +112,8 @@ export {
 export { useGeolocation } from "./hooks/useGeolocation";
 export { useAnimatedPosition } from "./hooks/useAnimatedPosition";
 export type { UseAnimatedPositionOptions } from "./hooks/useAnimatedPosition";
+export { useDirectionsPolyline } from "./hooks/useDirectionsPolyline";
+export type {
+  UseDirectionsPolylineOptions,
+  UseDirectionsPolylineResult,
+} from "./hooks/useDirectionsPolyline";

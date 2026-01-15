@@ -25,6 +25,7 @@ import type {
   VehiclePosition,
   DelayStatus,
 } from '@altaviapp/maps';
+import { useDirectionsPolyline } from '@altaviapp/maps';
 import { useStudentTracking } from './useMyStudents';
 import { Id } from '../../../../convex/_generated/dataModel';
 
@@ -105,14 +106,23 @@ export function useActiveTripData(
     });
   }, [stops, currentStopIndex]);
 
-  // Generate polyline from stops or use optimized route polyline
-  const polyline = useMemo((): LatLng[] => {
-    if (!stops || stops.length < 2) return [];
+  // Get stops as LatLng array for directions
+  const stopsForDirections = useMemo(() => {
+    if (!stops || stops.length === 0) return [];
     return stops.map((stop: any) => ({
       lat: stop.lat || stop.latitude,
       lng: stop.lng || stop.longitude,
     }));
   }, [stops]);
+
+  // Use real Google Directions polyline
+  const { polyline } = useDirectionsPolyline({
+    stops: stopsForDirections,
+    vehiclePosition: currentLocation
+      ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
+      : null,
+    enabled: stopsForDirections.length >= 2,
+  });
 
   // Find student's stop index
   const studentStopIndex = useMemo(() => {

@@ -23,6 +23,7 @@ import type {
   LatLng,
   VehiclePosition,
 } from '@altaviapp/maps';
+import { useDirectionsPolyline } from '@altaviapp/maps';
 import { useTrip, useTripStudents, useGPSTracking, useNovedadesForTrip, useConvexAuth } from '@/hooks';
 import type { GeofenceAlert, GPSSourceType } from '@/hooks';
 import { Id } from '../../../../convex/_generated/dataModel';
@@ -65,6 +66,10 @@ export interface UseActiveTripDataResult {
   tripStudents: ReturnType<typeof useTripStudents>['students'];
   /** Polyline for the route */
   polyline: LatLng[];
+  /** Whether using real Google Directions route */
+  isRealRoute: boolean;
+  /** Whether polyline is loading */
+  isLoadingRoute: boolean;
 }
 
 /**
@@ -133,14 +138,26 @@ export function useActiveTripData(
     });
   }, [tripStops]);
 
-  // Generate simple polyline from stops
-  const polyline = useMemo((): LatLng[] => {
-    if (tripStops.length < 2) return [];
+  // Get stops as LatLng array for directions
+  const stopsForDirections = useMemo(() => {
     return tripStops.map((stop: any) => ({
       lat: stop.latitude,
       lng: stop.longitude,
     }));
   }, [tripStops]);
+
+  // Use real Google Directions polyline
+  const {
+    polyline,
+    isLoading: isLoadingRoute,
+    isRealRoute,
+  } = useDirectionsPolyline({
+    stops: stopsForDirections,
+    vehiclePosition: gpsPosition
+      ? { lat: gpsPosition.latitude, lng: gpsPosition.longitude }
+      : null,
+    enabled: tripStops.length >= 2,
+  });
 
   // Calculate progress
   const stopsWithMeta = tripStops as Array<{
@@ -250,5 +267,7 @@ export function useActiveTripData(
     rawTrip: convexTrip,
     tripStudents,
     polyline,
+    isRealRoute,
+    isLoadingRoute,
   };
 }

@@ -121,9 +121,9 @@ export function ActiveTripView({
       {renderHeader && renderHeader()}
 
       {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Map section - takes remaining space */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           <TripMapSection
             ref={mapRef}
             data={data}
@@ -138,7 +138,6 @@ export function ActiveTripView({
             renderFloatingButtons={renderFloatingButtons}
             hideCenterButton={hideMapCenterButton}
             renderFooter={renderMapFooter}
-            className="flex-1"
           />
         </div>
 

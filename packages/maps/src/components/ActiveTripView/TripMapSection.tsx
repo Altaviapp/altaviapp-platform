@@ -104,12 +104,15 @@ export const TripMapSection = forwardRef<TripMapSectionRef, TripMapSectionProps>
     // Should we show the floating buttons container?
     const showFloatingButtons = !hideCenterButton || renderFloatingButtons;
 
+    // Determine if we should use flex-based sizing (for "100%" height in flex containers)
+    const useFlexHeight = height === "100%";
+
     return (
-      <div className={`flex flex-col ${className}`}>
+      <div className={`flex flex-col h-full ${className}`}>
         {/* Map container */}
         <div
-          className="relative flex-shrink-0"
-          style={{ height: typeof height === "number" ? `${height}px` : height }}
+          className={`relative ${useFlexHeight ? "flex-1 min-h-0" : "flex-shrink-0"}`}
+          style={useFlexHeight ? undefined : { height: typeof height === "number" ? `${height}px` : height }}
         >
           <GoogleRouteMap
             stops={data.stops}

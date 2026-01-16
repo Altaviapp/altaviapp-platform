@@ -46,6 +46,9 @@ export {
 } from './useProfile';
 export type { DriverProfile, MonitorProfile } from './useProfile';
 
+// User profile hook (for basic user data like name, phone)
+export { useUserProfile } from './useUserProfile';
+
 // Driver Routes hooks (for lazy trip creation)
 export {
   useDriverRoutesToday,

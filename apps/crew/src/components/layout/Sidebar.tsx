@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Truck, User, LogOut, Route, Calendar } from 'lucide-react';
+import { Home, Truck, User, LogOut, Route, Calendar, Bell, Clock, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConvexAuth } from '@/hooks';
 import type { UserRole } from '@/types';
@@ -13,13 +13,15 @@ interface NavItem {
   href: string;
 }
 
-// Simplified navigation - 4 main items
+// Simplified navigation - 6 main items
 // Check-in, Map, Students, Incidents are now within active trip context
 const navItems: NavItem[] = [
   { icon: Home, label: 'Inicio', href: '/dashboard' },
   { icon: Calendar, label: 'Calendario', href: '/calendar' },
   { icon: Route, label: 'Rutas', href: '/routes' },
+  { icon: Bell, label: 'Notificaciones', href: '/notifications' },
   { icon: User, label: 'Perfil', href: '/profile' },
+  { icon: Clock, label: 'Historial', href: '/historial' },
 ];
 
 interface SidebarProps {
@@ -142,8 +144,22 @@ export function Sidebar({ open = true, onClose }: SidebarProps) {
           })}
         </nav>
 
-        {/* Footer - Logout only (Settings now in Profile) */}
-        <div className="px-3 py-4 border-t border-primary-foreground/10 safe-area-pb">
+        {/* Footer - Settings and Logout */}
+        <div className="px-3 py-4 border-t border-primary-foreground/10 safe-area-pb space-y-1">
+          <Link
+            href="/settings"
+            onClick={onClose}
+            className={cn(
+              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+              'text-sm font-medium',
+              pathname === '/settings'
+                ? 'bg-primary-foreground/20 text-white'
+                : 'text-white/80 hover:bg-primary-foreground/10 hover:text-white'
+            )}
+          >
+            <Settings className="w-5 h-5 flex-shrink-0" />
+            <span>Configuracion</span>
+          </Link>
           <button
             onClick={handleLogout}
             className={cn(
@@ -153,7 +169,7 @@ export function Sidebar({ open = true, onClose }: SidebarProps) {
             )}
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
-            <span>Cerrar Sesión</span>
+            <span>Cerrar Sesion</span>
           </button>
         </div>
       </aside>

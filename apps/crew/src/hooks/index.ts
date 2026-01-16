@@ -60,12 +60,20 @@ export type { RouteForToday, NovedadForRoute, NovedadSummary, NovedadForDashboar
 export { useNovedadesConfirmation } from './useNovedadesConfirmation';
 
 // Incidents hooks (for reporting safety issues)
-export { useIncidentMutations } from './useIncidents';
+export { useIncidentMutations, useIncidentsByTrip } from './useIncidents';
 export type { IncidentType, IncidentSeverity, ReportIncidentInput } from './useIncidents';
 
 // Calendar hooks (for calendar view)
 export { useCalendarTrips } from './useCalendarTrips';
 export type { CalendarTrip } from './useCalendarTrips';
+
+// Projected trips hooks (for weekly calendar view)
+export {
+  useCrewProjectedTrips,
+  getWeekRange,
+  formatWeekRange,
+} from './useCrewProjectedTrips';
+export type { CrewProjectedTrip } from './useCrewProjectedTrips';
 
 // Notifications hooks
 export {

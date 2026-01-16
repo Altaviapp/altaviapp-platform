@@ -1050,3 +1050,231 @@ export const getMyChildrenUpcomingTrips = query({
     return results;
   },
 });
+
+// ============================================
+// Crew App Queries
+// ============================================
+
+/**
+ * Get projected trips for a crew member (driver or monitor) for calendar view
+ * Returns trips for routes where the user is assigned as driver or monitor
+ */
+export const getCrewProjectedTrips = query({
+  args: {
+    userId: v.id("users"),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Get driver profile for user
+    const driver = await ctx.db
+      .query("drivers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    // Get monitor profile for user
+    const monitor = await ctx.db
+      .query("monitors")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (!driver && !monitor) {
+      return [];
+    }
+
+    // Get routes where user is driver or monitor
+    const routesAsDriver = driver
+      ? await ctx.db
+          .query("routes")
+          .withIndex("by_driver", (q) => q.eq("driverId", driver._id))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect()
+      : [];
+
+    const routesAsMonitor = monitor
+      ? await ctx.db
+          .query("routes")
+          .withIndex("by_monitor", (q) => q.eq("monitorId", monitor._id))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect()
+      : [];
+
+    // Combine and dedupe routes, tracking role for each
+    const routeRoleMap = new Map<string, "driver" | "monitor" | "both">();
+    const routeMap = new Map<string, (typeof routesAsDriver)[0]>();
+
+    for (const route of routesAsDriver) {
+      routeRoleMap.set(route._id.toString(), "driver");
+      routeMap.set(route._id.toString(), route);
+    }
+
+    for (const route of routesAsMonitor) {
+      const existingRole = routeRoleMap.get(route._id.toString());
+      if (existingRole === "driver") {
+        routeRoleMap.set(route._id.toString(), "both");
+      } else if (!existingRole) {
+        routeRoleMap.set(route._id.toString(), "monitor");
+        routeMap.set(route._id.toString(), route);
+      }
+    }
+
+    const routes = Array.from(routeMap.values());
+
+    if (routes.length === 0) {
+      return [];
+    }
+
+    // Generate date range (max 28 days for 4 weeks)
+    const dates = generateDateRange(args.startDate, args.endDate, 28);
+
+    // Get existing trips in date range for these routes
+    const routeIds = routes.map((r) => r._id);
+    const existingTrips = await ctx.db
+      .query("trips")
+      .withIndex("by_date")
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("scheduledDate"), args.startDate),
+          q.lte(q.field("scheduledDate"), args.endDate)
+        )
+      )
+      .collect();
+
+    // Filter to only trips for our routes
+    const routeIdSet = new Set(routeIds.map((id) => id.toString()));
+    const relevantTrips = existingTrips.filter((t) =>
+      routeIdSet.has(t.routeId.toString())
+    );
+
+    const tripsByRouteDate = new Map<string, (typeof relevantTrips)[0]>();
+    for (const trip of relevantTrips) {
+      tripsByRouteDate.set(`${trip.routeId}:${trip.scheduledDate}`, trip);
+    }
+
+    // Get all student routes for these routes (to count students)
+    const allStudentRoutes = await Promise.all(
+      routeIds.map((routeId) =>
+        ctx.db
+          .query("studentRoutes")
+          .withIndex("by_route", (q) => q.eq("routeId", routeId))
+          .filter((q) => q.eq(q.field("isActive"), true))
+          .collect()
+      )
+    );
+    const studentRoutesByRoute = new Map<string, (typeof allStudentRoutes)[0]>();
+    routeIds.forEach((routeId, index) => {
+      studentRoutesByRoute.set(routeId.toString(), allStudentRoutes[index] || []);
+    });
+
+    // Get all student IDs for novedades query
+    const allStudentIds = new Set<string>();
+    for (const studentRoutes of allStudentRoutes) {
+      for (const sr of studentRoutes) {
+        allStudentIds.add(sr.studentId.toString());
+      }
+    }
+
+    // Get novedades for all these students
+    const studentIdArray = Array.from(allStudentIds);
+    const allNovedades = await Promise.all(
+      studentIdArray.map((studentIdStr) =>
+        ctx.db
+          .query("novedades")
+          .withIndex("by_student", (q) => q.eq("studentId", studentIdStr as Id<"students">))
+          .collect()
+      )
+    );
+    const novedadesFlat = allNovedades.flat();
+
+    // Build projected trips
+    const projectedTrips: {
+      date: string;
+      scheduledTime: string;
+      routeId: Id<"routes">;
+      routeName: string;
+      routeType: "pickup" | "dropoff";
+      vehiclePlate: string;
+      status: "projected" | "scheduled" | "in_progress" | "completed" | "cancelled";
+      tripId?: Id<"trips">;
+      studentCount: number;
+      novedadCount: number;
+      role: "driver" | "monitor" | "both";
+    }[] = [];
+
+    for (const route of routes) {
+      // Get vehicle info
+      const vehicle = await ctx.db.get(route.vehicleId);
+      const role = routeRoleMap.get(route._id.toString()) || "driver";
+      const studentRoutes = studentRoutesByRoute.get(route._id.toString()) || [];
+
+      for (const date of dates) {
+        // Check if route runs on this date
+        const recurrence = route.recurrence as {
+          type: "daily" | "weekly" | "monthly" | "one_time";
+          daysOfWeek?: string[];
+          dayOfWeek?: string;
+          dayOfMonth?: number;
+          specificDate?: string;
+        } | undefined;
+
+        if (!routeRunsOnDate(recurrence, date)) {
+          continue;
+        }
+
+        // Check for existing trip
+        const existingTrip = tripsByRouteDate.get(`${route._id}:${date}`);
+
+        // Count students active for this day (excluding excludeDays)
+        const dayName = getDayName(new Date(date + "T12:00:00"));
+        let activeStudentCount = 0;
+        const activeStudentIds = new Set<string>();
+
+        for (const sr of studentRoutes) {
+          if (sr.excludeDays && Array.isArray(sr.excludeDays)) {
+            if (sr.excludeDays.includes(dayName)) {
+              continue;
+            }
+          }
+          activeStudentCount++;
+          activeStudentIds.add(sr.studentId.toString());
+        }
+
+        // Count novedades for this route/date
+        let novedadCount = 0;
+        for (const nov of novedadesFlat) {
+          if (!activeStudentIds.has(nov.studentId.toString())) {
+            continue;
+          }
+          if (!novedadAppliesToDate(nov, date, route.type)) {
+            continue;
+          }
+          novedadCount++;
+        }
+
+        projectedTrips.push({
+          date,
+          scheduledTime: route.scheduledStartTime,
+          routeId: route._id,
+          routeName: route.name,
+          routeType: route.type,
+          vehiclePlate: vehicle?.licensePlate || "Sin placa",
+          status: (existingTrip?.status as "projected" | "scheduled" | "in_progress" | "completed" | "cancelled") || "projected",
+          tripId: existingTrip?._id,
+          studentCount: activeStudentCount,
+          novedadCount,
+          role,
+        });
+      }
+    }
+
+    // Sort by date, then by time
+    projectedTrips.sort((a, b) => {
+      if (a.date !== b.date) {
+        return a.date.localeCompare(b.date);
+      }
+      return a.scheduledTime.localeCompare(b.scheduledTime);
+    });
+
+    return projectedTrips;
+  },
+});

@@ -9,16 +9,21 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
-// Validators
+// Validators - 5 categorías principales + deprecadas para backwards compatibility
 const novedadTypeCategory = v.union(
-  v.literal("absence"),
+  // Nuevas categorías simplificadas
+  v.literal("absence"),              // No viaja (ausencia)
+  v.literal("third_party_pickup"),   // Tercero autorizado recibe en parada
+  v.literal("temporary_stop_change"),// Cambio de parada temporal
+  v.literal("address_change"),       // Cambio de domicilio permanente
+  v.literal("service_suspension"),   // Suspensión temporal del servicio
+  // DEPRECATED - mantener para backwards compatibility
   v.literal("pickup_change"),
   v.literal("stop_change"),
   v.literal("time_change"),
   v.literal("location_change"),
   v.literal("schedule_change"),
   v.literal("route_change"),
-  v.literal("service_suspension"),
   v.literal("other")
 );
 
@@ -97,7 +102,7 @@ export const getById = query({
 
 /**
  * Get a novedad type by code
- * Used internally when creating novedades with legacy type string
+ * @deprecated Use getById instead. Code field will be removed.
  */
 export const getByCode = query({
   args: {
@@ -110,11 +115,13 @@ export const getByCode = query({
       return null;
     }
 
+    // Search by code if it exists (for backwards compatibility)
     const types = await ctx.db
       .query("novedadTypes")
-      .withIndex("by_code", (q) =>
-        q.eq("institutionId", user.institutionId!).eq("code", code)
+      .withIndex("by_institution", (q) =>
+        q.eq("institutionId", user.institutionId!)
       )
+      .filter((q) => q.eq(q.field("code"), code))
       .first();
 
     return types;
@@ -154,11 +161,12 @@ export const getByCategory = query({
 /**
  * Create a new novedad type
  * Only admins can create types
+ * Note: code field is DEPRECATED and optional
  */
 export const create = mutation({
   args: {
     userId: v.id("users"),
-    code: v.string(),
+    code: v.optional(v.string()), // DEPRECATED - will be removed
     name: v.string(),
     description: v.string(),
     icon: v.string(),
@@ -187,16 +195,17 @@ export const create = mutation({
       throw new Error("Solo administradores pueden crear tipos de novedad");
     }
 
-    // Check if code already exists
-    const existing = await ctx.db
+    // Check for duplicate name (more user-friendly than code)
+    const existingByName = await ctx.db
       .query("novedadTypes")
-      .withIndex("by_code", (q) =>
-        q.eq("institutionId", user.institutionId!).eq("code", typeData.code)
+      .withIndex("by_institution", (q) =>
+        q.eq("institutionId", user.institutionId!)
       )
+      .filter((q) => q.eq(q.field("name"), typeData.name))
       .first();
 
-    if (existing) {
-      throw new Error(`Ya existe un tipo con el código "${typeData.code}"`);
+    if (existingByName) {
+      throw new Error(`Ya existe un tipo con el nombre "${typeData.name}"`);
     }
 
     // Get current max sortOrder
@@ -419,12 +428,13 @@ export const reorder = mutation({
 /**
  * Get type for novedad creation
  * Handles both new typeId-based and legacy type string
+ * Note: legacyType support is deprecated and will be removed
  */
 export const getTypeForNovedad = query({
   args: {
     userId: v.id("users"),
     typeId: v.optional(v.id("novedadTypes")),
-    legacyType: v.optional(v.string()),
+    legacyType: v.optional(v.string()), // @deprecated
   },
   handler: async (ctx, { userId, typeId, legacyType }) => {
     const user = await ctx.db.get(userId);
@@ -432,7 +442,7 @@ export const getTypeForNovedad = query({
       return null;
     }
 
-    // If typeId provided, use it directly
+    // If typeId provided, use it directly (preferred method)
     if (typeId) {
       const type = await ctx.db.get(typeId);
       if (type && type.institutionId === user.institutionId) {
@@ -441,17 +451,112 @@ export const getTypeForNovedad = query({
       return null;
     }
 
-    // If legacy type string, find matching type by code
+    // If legacy type string, find matching type by code (deprecated)
     if (legacyType) {
       const type = await ctx.db
         .query("novedadTypes")
-        .withIndex("by_code", (q) =>
-          q.eq("institutionId", user.institutionId!).eq("code", legacyType)
+        .withIndex("by_institution", (q) =>
+          q.eq("institutionId", user.institutionId!)
         )
+        .filter((q) => q.eq(q.field("code"), legacyType))
         .first();
       return type;
     }
 
     return null;
+  },
+});
+
+// ============================================
+// MIGRATION
+// ============================================
+
+// Mapping from old categories to new simplified categories
+const CATEGORY_MAPPING: Record<string, string> = {
+  // Keep these as-is
+  absence: "absence",
+  service_suspension: "service_suspension",
+  // Rename these
+  pickup_change: "third_party_pickup",
+  stop_change: "temporary_stop_change",
+  location_change: "address_change",
+  // These map to absence (no longer supported as separate)
+  time_change: "absence",
+  schedule_change: "service_suspension",
+  route_change: "address_change",
+  other: "absence",
+};
+
+/**
+ * Migrate existing novedadTypes and novedades to new category system
+ * Run with: npx convex run novedadTypes:migrateCategories
+ */
+export const migrateCategories = mutation({
+  args: {},
+  handler: async (ctx) => {
+    console.log("Starting novedadTypes migration...");
+
+    // Migrate novedadTypes first
+    const allTypes = await ctx.db.query("novedadTypes").collect();
+    let typesUpdated = 0;
+
+    for (const type of allTypes) {
+      const newCategory = CATEGORY_MAPPING[type.category];
+      if (newCategory && newCategory !== type.category) {
+        await ctx.db.patch(type._id, {
+          category: newCategory as any,
+          updatedAt: Date.now(),
+        });
+        typesUpdated++;
+      }
+    }
+
+    console.log(`novedadTypes migration: ${typesUpdated} updated`);
+
+    // Then migrate novedades
+    console.log("Starting novedades migration...");
+    const allNovedades = await ctx.db.query("novedades").collect();
+    let novedadesUpdated = 0;
+
+    for (const novedad of allNovedades) {
+      const currentSnapshot = novedad.typeCategorySnapshot;
+      let shouldUpdate = false;
+      let newSnapshot: string | undefined;
+
+      if (currentSnapshot) {
+        newSnapshot = CATEGORY_MAPPING[currentSnapshot];
+        if (newSnapshot && newSnapshot !== currentSnapshot) {
+          shouldUpdate = true;
+        }
+      } else if (novedad.type) {
+        const legacyMapping: Record<string, string> = {
+          absence: "absence",
+          parent_pickup: "third_party_pickup",
+          stop_change: "temporary_stop_change",
+          early_pickup: "absence",
+          late_arrival: "absence",
+        };
+        newSnapshot = legacyMapping[novedad.type];
+        if (newSnapshot) {
+          shouldUpdate = true;
+        }
+      }
+
+      if (shouldUpdate && newSnapshot) {
+        await ctx.db.patch(novedad._id, {
+          typeCategorySnapshot: newSnapshot,
+          updatedAt: Date.now(),
+        });
+        novedadesUpdated++;
+      }
+    }
+
+    console.log(`novedades migration: ${novedadesUpdated} updated`);
+    console.log("Migration complete!");
+
+    return {
+      novedadTypesUpdated: typesUpdated,
+      novedadesUpdated: novedadesUpdated,
+    };
   },
 });

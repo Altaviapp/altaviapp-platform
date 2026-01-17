@@ -16,12 +16,30 @@ import {
   User,
   ArrowRight,
   ArrowLeft,
+  Phone,
+  UserCheck,
+  Home,
 } from 'lucide-react';
-import { Modal, ModalFooter, Button, Textarea } from '@/components/core';
+import { Modal, ModalFooter, Button, Textarea, Input } from '@/components/core';
 import { useNovedadesMutations, useNovedadTypes, useEvidenceUpload } from '@/hooks';
 import type { AffectedRouteType, DurationType } from '@/hooks';
 import { cn } from '@/lib/utils';
 import type { Id } from '../../../../../convex/_generated/dataModel';
+import { GoogleMapsProvider, LocationPicker } from '@altaviapp/maps';
+import type { LatLng } from '@altaviapp/maps';
+
+// Category-specific field types
+interface AuthorizedPerson {
+  name: string;
+  phone: string;
+  relationship?: string;
+}
+
+interface TemporaryLocation {
+  latitude: number;
+  longitude: number;
+  address: string;
+}
 
 // Valid legacy types for backwards compatibility
 const LEGACY_TYPES = ['absence', 'parent_pickup', 'stop_change', 'early_pickup', 'late_arrival'] as const;
@@ -116,6 +134,14 @@ export function NovedadModal({
   const [error, setError] = useState<string>('');
   const [uploadProgress, setUploadProgress] = useState<string>('');
 
+  // Category-specific fields
+  const [authorizedPerson, setAuthorizedPerson] = useState<AuthorizedPerson>({
+    name: '',
+    phone: '',
+    relationship: '',
+  });
+  const [temporaryLocation, setTemporaryLocation] = useState<TemporaryLocation | null>(null);
+
   // Get selected type configuration
   const selectedType = useMemo(() => {
     if (!selectedTypeId) return null;
@@ -164,6 +190,9 @@ export function NovedadModal({
     setFiles([]);
     setError('');
     setUploadProgress('');
+    // Reset category-specific fields
+    setAuthorizedPerson({ name: '', phone: '', relationship: '' });
+    setTemporaryLocation(null);
     onClose();
   };
 
@@ -185,6 +214,23 @@ export function NovedadModal({
       return;
     }
 
+    // Category-specific validation
+    const category = selectedType?.category;
+
+    if (category === 'third_party_pickup' || category === 'pickup_change') {
+      if (!authorizedPerson.name.trim() || !authorizedPerson.phone.trim()) {
+        setError('Por favor indica el nombre y teléfono de la persona autorizada');
+        return;
+      }
+    }
+
+    if (category === 'temporary_stop_change' || category === 'stop_change') {
+      if (!temporaryLocation) {
+        setError('Por favor selecciona la nueva ubicación en el mapa');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -193,16 +239,27 @@ export function NovedadModal({
         ? (selectedType.code as LegacyNovedadType)
         : undefined;
 
-      // Create the novedad
+      // Create the novedad with category-specific fields
       const result = await createNovedad({
         studentId,
         type: legacyType,
         typeId: selectedTypeId as Id<'novedadTypes'>,
-        affectedRouteType: routeType, // Use the pre-filled route type
+        affectedRouteType: routeType,
         date,
         startDate: date,
         durationType: (selectedType?.durationType as DurationType) ?? 'single_day',
         reason: reason.trim() || 'Sin motivo especificado',
+        // Category-specific fields
+        ...(category === 'third_party_pickup' || category === 'pickup_change' ? {
+          authorizedPerson: {
+            name: authorizedPerson.name.trim(),
+            phone: authorizedPerson.phone.trim(),
+            relationship: authorizedPerson.relationship?.trim() || undefined,
+          },
+        } : {}),
+        ...(temporaryLocation && (category === 'temporary_stop_change' || category === 'stop_change') ? {
+          temporaryLocation,
+        } : {}),
       });
 
       // Upload evidence files
@@ -346,6 +403,96 @@ export function NovedadModal({
               </span>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Category-specific: Authorized Person (for third_party_pickup) */}
+      {selectedType && (selectedType.category === 'third_party_pickup' || selectedType.category === 'pickup_change') && (
+        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h4 className="text-sm font-medium text-blue-900 mb-3 flex items-center gap-2">
+            <UserCheck className="w-4 h-4" />
+            Persona Autorizada
+          </h4>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre completo <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={authorizedPerson.name}
+                onChange={(e) => setAuthorizedPerson(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Nombre de quien recibirá al estudiante"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Teléfono <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="tel"
+                  value={authorizedPerson.phone}
+                  onChange={(e) => setAuthorizedPerson(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="09XXXXXXXX"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Parentesco (opcional)
+              </label>
+              <input
+                type="text"
+                value={authorizedPerson.relationship || ''}
+                onChange={(e) => setAuthorizedPerson(prev => ({ ...prev, relationship: e.target.value }))}
+                placeholder="Ej: Abuelo, Tío, Vecino..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-blue-600 mt-2">
+            El equipo de transporte verificará la identidad de esta persona al entregar al estudiante.
+          </p>
+        </div>
+      )}
+
+      {/* Category-specific: Temporary Location (for temporary_stop_change) */}
+      {selectedType && (selectedType.category === 'temporary_stop_change' || selectedType.category === 'stop_change') && (
+        <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+          <h4 className="text-sm font-medium text-purple-900 mb-3 flex items-center gap-2">
+            <MapPin className="w-4 h-4" />
+            Nueva Ubicación Temporal <span className="text-red-500">*</span>
+          </h4>
+          <GoogleMapsProvider>
+            <LocationPicker
+              initialPosition={temporaryLocation ? { lat: temporaryLocation.latitude, lng: temporaryLocation.longitude } : undefined}
+              initialAddress={temporaryLocation?.address}
+              onLocationSelect={(location) => {
+                setTemporaryLocation({
+                  latitude: location.position.lat,
+                  longitude: location.position.lng,
+                  address: location.address,
+                });
+              }}
+              placeholder="Busca la dirección o selecciona en el mapa"
+              mapHeight="250px"
+              showAddressInput={true}
+            />
+          </GoogleMapsProvider>
+          {temporaryLocation && (
+            <div className="mt-2 p-2 bg-white rounded border border-purple-200">
+              <p className="text-sm text-gray-700">
+                <strong>Seleccionado:</strong> {temporaryLocation.address}
+              </p>
+            </div>
+          )}
+          <p className="text-xs text-purple-600 mt-2">
+            El administrador revisará y aprobará esta ubicación antes de aplicar el cambio.
+          </p>
         </div>
       )}
 

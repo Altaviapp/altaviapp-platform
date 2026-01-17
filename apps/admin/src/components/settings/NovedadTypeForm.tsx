@@ -26,7 +26,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   useNovedadTypeMutations,
-  CATEGORY_LABELS,
+  NEW_CATEGORY_LABELS,
   DURATION_LABELS,
   COLOR_OPTIONS,
   ICON_OPTIONS,
@@ -59,12 +59,11 @@ interface NovedadTypeFormProps {
 }
 
 const defaultFormData: NovedadTypeFormData = {
-  code: '',
   name: '',
   description: '',
   icon: 'FileText',
   color: 'gray',
-  category: 'other',
+  category: 'absence', // Default to absence (most common)
   durationType: 'single_day',
   requiresApproval: true,
   affectsTrips: true,
@@ -106,10 +105,6 @@ export function NovedadTypeForm({ initialData, mode }: NovedadTypeFormProps) {
     setSuccess(false);
 
     // Validation
-    if (!formData.code.trim()) {
-      setError('El código es requerido');
-      return;
-    }
     if (!formData.name.trim()) {
       setError('El nombre es requerido');
       return;
@@ -129,9 +124,7 @@ export function NovedadTypeForm({ initialData, mode }: NovedadTypeFormProps) {
           router.push('/settings/novedades');
         }, 1500);
       } else if (initialData?._id) {
-        // Don't include code in update - it's immutable
-        const { code, ...updateData } = formData;
-        await updateType(initialData._id, updateData);
+        await updateType(initialData._id, formData);
         setSuccess(true);
       }
     } catch (err) {
@@ -164,39 +157,18 @@ export function NovedadTypeForm({ initialData, mode }: NovedadTypeFormProps) {
       <div className="bg-white rounded-xl shadow p-6 space-y-4">
         <h3 className="text-lg font-semibold text-gray-900">Información Básica</h3>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          {/* Code */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Código <span className="text-error">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.code}
-              onChange={(e) => handleChange('code', e.target.value.toLowerCase().replace(/\s/g, '_'))}
-              disabled={mode === 'edit'}
-              placeholder="absence, parent_pickup, etc."
-              className={cn(
-                'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
-                mode === 'edit' && 'bg-gray-50 text-gray-500 cursor-not-allowed'
-              )}
-            />
-            <p className="text-xs text-gray-400 mt-1">Identificador único (sin espacios)</p>
-          </div>
-
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre <span className="text-error">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              placeholder="Ausencia, Recoge Padre, etc."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-            />
-          </div>
+        {/* Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Nombre <span className="text-error">*</span>
+          </label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => handleChange('name', e.target.value)}
+            placeholder="Ausencia, Recoge por Tercero, etc."
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          />
         </div>
 
         {/* Description */}
@@ -306,7 +278,7 @@ export function NovedadTypeForm({ initialData, mode }: NovedadTypeFormProps) {
         <h3 className="text-lg font-semibold text-gray-900">Clasificación</h3>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          {/* Category */}
+          {/* Category - Only show new simplified categories */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
             <select
@@ -314,7 +286,7 @@ export function NovedadTypeForm({ initialData, mode }: NovedadTypeFormProps) {
               onChange={(e) => handleChange('category', e.target.value as NovedadTypeCategory)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
-              {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+              {Object.entries(NEW_CATEGORY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>

@@ -12,16 +12,20 @@ import { api } from "../../../../convex/_generated/api";
 import { useConvexAuth } from "./useConvexAuth";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
-// Types for form data
+// Types for form data - 5 simplified categories
 export type NovedadTypeCategory =
-  | "absence"
+  | "absence"              // Ausencia
+  | "third_party_pickup"   // Recogida por tercero
+  | "temporary_stop_change"// Cambio de parada temporal
+  | "address_change"       // Cambio de domicilio
+  | "service_suspension"   // Suspensión temporal
+  // DEPRECATED - kept for backwards compatibility
   | "pickup_change"
   | "stop_change"
   | "time_change"
   | "location_change"
   | "schedule_change"
   | "route_change"
-  | "service_suspension"
   | "other";
 
 export type NovedadTypeDuration =
@@ -31,7 +35,7 @@ export type NovedadTypeDuration =
   | "recurring";
 
 export interface NovedadTypeFormData {
-  code: string;
+  // code: string; // REMOVED - code field is deprecated
   name: string;
   description: string;
   icon: string;
@@ -119,7 +123,7 @@ export function useNovedadTypeMutations() {
 
   const updateType = async (
     typeId: Id<"novedadTypes">,
-    data: Partial<Omit<NovedadTypeFormData, "code">>
+    data: Partial<NovedadTypeFormData>
   ) => {
     if (!userId) throw new Error("No autenticado");
     return updateMutation({ userId, typeId, ...data });
@@ -149,17 +153,31 @@ export function useNovedadTypeMutations() {
   };
 }
 
-// Helper constants for UI
+// Helper constants for UI - 5 simplified categories
 export const CATEGORY_LABELS: Record<NovedadTypeCategory, string> = {
-  absence: "Ausencias",
-  pickup_change: "Cambio de Recogida",
-  stop_change: "Cambio de Parada",
-  time_change: "Cambio de Horario",
-  location_change: "Cambio de Ubicación",
-  schedule_change: "Cambio de Horario Permanente",
-  route_change: "Cambio de Ruta",
+  // New simplified categories (show these first)
+  absence: "Ausencia",
+  third_party_pickup: "Recogida por Tercero",
+  temporary_stop_change: "Cambio de Parada Temporal",
+  address_change: "Cambio de Domicilio",
   service_suspension: "Suspensión de Servicio",
-  other: "Otro",
+  // DEPRECATED - kept for backwards compatibility
+  pickup_change: "(Deprecado) Cambio de Recogida",
+  stop_change: "(Deprecado) Cambio de Parada",
+  time_change: "(Deprecado) Cambio de Horario",
+  location_change: "(Deprecado) Cambio de Ubicación",
+  schedule_change: "(Deprecado) Cambio de Horario Permanente",
+  route_change: "(Deprecado) Cambio de Ruta",
+  other: "(Deprecado) Otro",
+};
+
+// New categories only (for dropdown in forms)
+export const NEW_CATEGORY_LABELS: Record<string, string> = {
+  absence: "Ausencia",
+  third_party_pickup: "Recogida por Tercero",
+  temporary_stop_change: "Cambio de Parada Temporal",
+  address_change: "Cambio de Domicilio",
+  service_suspension: "Suspensión de Servicio",
 };
 
 export const DURATION_LABELS: Record<NovedadTypeDuration, string> = {

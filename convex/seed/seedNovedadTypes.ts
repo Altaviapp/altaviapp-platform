@@ -12,214 +12,96 @@ import { v } from "convex/values";
 import { mutation, internalMutation } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 
-// Default novedad types to seed
+// SIMPLIFIED: 5 core novedad types
+// Each category has a specific workflow and affects trips differently
 const DEFAULT_NOVEDAD_TYPES = [
-  // Ausencias
+  // 1. AUSENCIA - El estudiante no viaja
   {
-    code: "absence",
+    code: "absence", // DEPRECATED - code field will be removed
     name: "Ausencia",
     description: "El estudiante no viajará en la fecha indicada",
     icon: "UserMinus",
     color: "red",
     category: "absence" as const,
     durationType: "single_day" as const,
-    requiresApproval: true,
+    requiresApproval: false, // Ausencias no requieren aprobación por defecto
     affectsTrips: true,
     affectsRouteCalculation: true,
     evidenceRequired: false,
     evidenceOptional: true,
-    reasonRequired: true,
+    reasonRequired: false, // Opcional dar razón
     minAdvanceHours: 2,
   },
-  {
-    code: "medical_leave",
-    name: "Ausencia Médica",
-    description: "Ausencia por motivos médicos (citas, enfermedad)",
-    icon: "Stethoscope",
-    color: "red",
-    category: "absence" as const,
-    durationType: "date_range" as const,
-    requiresApproval: true,
-    affectsTrips: true,
-    affectsRouteCalculation: true,
-    evidenceRequired: true,
-    evidenceOptional: false,
-    reasonRequired: true,
-    minAdvanceHours: 0,
-    allowedFileTypes: ["image/*", "application/pdf"],
-  },
 
-  // Cambios de recogida
+  // 2. RECOGIDA POR TERCERO - Otra persona recibe al estudiante en la parada
   {
-    code: "parent_pickup",
-    name: "Recoge Padre",
-    description: "El padre/tutor recogerá directamente al estudiante",
-    icon: "Car",
-    color: "blue",
-    category: "pickup_change" as const,
-    durationType: "single_day" as const,
-    requiresApproval: false,
-    affectsTrips: true,
-    affectsRouteCalculation: false,
-    evidenceRequired: false,
-    evidenceOptional: false,
-    reasonRequired: false,
-    minAdvanceHours: 1,
-  },
-  {
-    code: "authorized_pickup",
-    name: "Recoge Persona Autorizada",
-    description: "Una persona autorizada recogerá al estudiante",
+    code: "third_party_pickup",
+    name: "Recogida por Tercero",
+    description: "Una persona autorizada recibirá al estudiante en la parada (no el tutor)",
     icon: "UserCheck",
     color: "blue",
-    category: "pickup_change" as const,
+    category: "third_party_pickup" as const,
     durationType: "single_day" as const,
-    requiresApproval: true,
+    requiresApproval: true, // Requiere verificar la persona autorizada
     affectsTrips: true,
     affectsRouteCalculation: false,
     evidenceRequired: false,
-    evidenceOptional: true,
-    reasonRequired: true,
+    evidenceOptional: false,
+    reasonRequired: true, // Debe indicar nombre y teléfono de la persona
     minAdvanceHours: 2,
   },
 
-  // Cambios de parada
+  // 3. CAMBIO DE PARADA TEMPORAL - Ubicación diferente para fechas específicas
   {
-    code: "stop_change_temp",
+    code: "temporary_stop_change",
     name: "Cambio de Parada Temporal",
-    description: "El estudiante será recogido/dejado en otra parada por hoy",
+    description: "El estudiante será recogido/dejado en una ubicación diferente temporalmente",
     icon: "MapPin",
     color: "purple",
-    category: "stop_change" as const,
+    category: "temporary_stop_change" as const,
     durationType: "single_day" as const,
-    requiresApproval: true,
+    requiresApproval: true, // Requiere aprobar la nueva ubicación
     affectsTrips: true,
-    affectsRouteCalculation: false,
+    affectsRouteCalculation: true, // Puede afectar la ruta
     evidenceRequired: false,
     evidenceOptional: false,
     reasonRequired: true,
-    minAdvanceHours: 4,
-  },
-  {
-    code: "stop_change_perm",
-    name: "Cambio de Parada Permanente",
-    description: "El estudiante cambiará de parada de forma permanente",
-    icon: "MapPinned",
-    color: "purple",
-    category: "stop_change" as const,
-    durationType: "permanent" as const,
-    requiresApproval: true,
-    affectsTrips: true,
-    affectsRouteCalculation: true,
-    evidenceRequired: false,
-    evidenceOptional: true,
-    reasonRequired: true,
-    minAdvanceHours: 24,
+    minAdvanceHours: 24, // 24 horas mínimo para poder planificar
   },
 
-  // Cambios de horario
+  // 4. CAMBIO DE DOMICILIO - Cambio permanente de dirección
   {
-    code: "early_pickup",
-    name: "Salida Temprana",
-    description: "El estudiante saldrá antes del horario regular",
-    icon: "Clock",
-    color: "yellow",
-    category: "time_change" as const,
-    durationType: "single_day" as const,
-    requiresApproval: true,
-    affectsTrips: true,
-    affectsRouteCalculation: false,
-    evidenceRequired: false,
-    evidenceOptional: true,
-    reasonRequired: true,
-    minAdvanceHours: 2,
-  },
-  {
-    code: "late_arrival",
-    name: "Llegada Tarde",
-    description: "El estudiante llegará tarde al punto de recogida",
-    icon: "AlarmClock",
-    color: "yellow",
-    category: "time_change" as const,
-    durationType: "single_day" as const,
-    requiresApproval: true,
-    affectsTrips: true,
-    affectsRouteCalculation: false,
-    evidenceRequired: false,
-    evidenceOptional: false,
-    reasonRequired: true,
-    minAdvanceHours: 1,
-  },
-
-  // Cambio de ubicación
-  {
-    code: "location_change",
+    code: "address_change",
     name: "Cambio de Domicilio",
-    description: "El estudiante cambiará de dirección de residencia",
+    description: "El estudiante cambiará de dirección de residencia de forma permanente",
     icon: "Home",
     color: "indigo",
-    category: "location_change" as const,
+    category: "address_change" as const,
     durationType: "permanent" as const,
-    requiresApproval: true,
+    requiresApproval: true, // Requiere aprobar y posiblemente reasignar ruta
     affectsTrips: true,
     affectsRouteCalculation: true,
     evidenceRequired: false,
     evidenceOptional: true,
     reasonRequired: true,
-    minAdvanceHours: 48,
+    minAdvanceHours: 48, // 48 horas para planificar cambio de ruta
   },
 
-  // Cambios de horario permanente
-  {
-    code: "schedule_change",
-    name: "Cambio de Horario",
-    description: "El estudiante cambiará su horario de servicio de forma permanente",
-    icon: "Calendar",
-    color: "green",
-    category: "schedule_change" as const,
-    durationType: "recurring" as const,
-    requiresApproval: true,
-    affectsTrips: true,
-    affectsRouteCalculation: false,
-    evidenceRequired: false,
-    evidenceOptional: false,
-    reasonRequired: true,
-    minAdvanceHours: 48,
-  },
-
-  // Cambio de ruta
-  {
-    code: "route_change",
-    name: "Cambio de Ruta",
-    description: "El estudiante cambiará a una ruta diferente",
-    icon: "Route",
-    color: "orange",
-    category: "route_change" as const,
-    durationType: "permanent" as const,
-    requiresApproval: true,
-    affectsTrips: true,
-    affectsRouteCalculation: true,
-    evidenceRequired: false,
-    evidenceOptional: false,
-    reasonRequired: true,
-    minAdvanceHours: 48,
-  },
-
-  // Suspensión de servicio
+  // 5. SUSPENSIÓN TEMPORAL - Pausa del servicio por un período
   {
     code: "service_suspension",
-    name: "Suspensión de Servicio",
-    description: "Suspensión temporal del servicio de transporte",
+    name: "Suspensión Temporal de Servicio",
+    description: "Pausar el servicio de transporte por un período determinado",
     icon: "Ban",
     color: "gray",
     category: "service_suspension" as const,
     durationType: "date_range" as const,
-    requiresApproval: true,
+    requiresApproval: false, // No requiere aprobación, es decisión del padre
     affectsTrips: true,
     affectsRouteCalculation: true,
     evidenceRequired: false,
     evidenceOptional: true,
-    reasonRequired: true,
+    reasonRequired: true, // Debe indicar el motivo
     minAdvanceHours: 24,
   },
 ];
@@ -250,12 +132,13 @@ export const seedForInstitution = mutation({
       const typeData = DEFAULT_NOVEDAD_TYPES[i];
       if (!typeData) continue;
 
-      // Check if type with this code already exists
+      // Check if type with this name already exists (replaced code check with name)
       const existing = await ctx.db
         .query("novedadTypes")
-        .withIndex("by_code", (q) =>
-          q.eq("institutionId", institutionId).eq("code", typeData.code)
+        .withIndex("by_institution", (q) =>
+          q.eq("institutionId", institutionId)
         )
+        .filter((q) => q.eq(q.field("name"), typeData.name))
         .first();
 
       if (existing) {
@@ -278,7 +161,7 @@ export const seedForInstitution = mutation({
           institutionId,
           ...typeData,
           maxEvidenceFiles: typeData.evidenceRequired || typeData.evidenceOptional ? 5 : undefined,
-          allowedFileTypes: typeData.allowedFileTypes ?? (typeData.evidenceRequired || typeData.evidenceOptional ? ["image/*", "application/pdf"] : undefined),
+          allowedFileTypes: typeData.evidenceRequired || typeData.evidenceOptional ? ["image/*", "application/pdf"] : undefined,
           isSystemType: true,
           isActive: true,
           sortOrder: i + 1,
@@ -322,11 +205,13 @@ export const seedForAllInstitutions = mutation({
         const typeData = DEFAULT_NOVEDAD_TYPES[i];
         if (!typeData) continue;
 
+        // Check by name instead of code (code is deprecated)
         const existing = await ctx.db
           .query("novedadTypes")
-          .withIndex("by_code", (q) =>
-            q.eq("institutionId", institution._id).eq("code", typeData.code)
+          .withIndex("by_institution", (q) =>
+            q.eq("institutionId", institution._id)
           )
+          .filter((q) => q.eq(q.field("name"), typeData.name))
           .first();
 
         if (existing) {
@@ -339,7 +224,7 @@ export const seedForAllInstitutions = mutation({
             institutionId: institution._id,
             ...typeData,
             maxEvidenceFiles: typeData.evidenceRequired || typeData.evidenceOptional ? 5 : undefined,
-            allowedFileTypes: typeData.allowedFileTypes ?? (typeData.evidenceRequired || typeData.evidenceOptional ? ["image/*", "application/pdf"] : undefined),
+            allowedFileTypes: typeData.evidenceRequired || typeData.evidenceOptional ? ["image/*", "application/pdf"] : undefined,
             isSystemType: true,
             isActive: true,
             sortOrder: i + 1,

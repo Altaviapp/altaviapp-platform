@@ -24,11 +24,23 @@ const STOP_CHANGE_MIN_HOURS = 48;
 function getTypeLabel(type: string | undefined | null): string {
   if (!type) return "Novedad";
   const labels: Record<string, string> = {
+    // New simplified categories
     absence: "Ausencia",
-    parent_pickup: "Recogida por padre",
-    stop_change: "Cambio de parada",
-    early_pickup: "Salida temprana",
-    late_arrival: "Llegada tarde",
+    third_party_pickup: "Recogida por Tercero",
+    temporary_stop_change: "Cambio de Parada Temporal",
+    address_change: "Cambio de Domicilio",
+    service_suspension: "Suspensión de Servicio",
+    // Legacy types (for backwards compatibility)
+    parent_pickup: "Recogida por Tercero",
+    pickup_change: "Recogida por Tercero",
+    stop_change: "Cambio de Parada",
+    time_change: "Cambio de Horario",
+    location_change: "Cambio de Domicilio",
+    schedule_change: "Cambio de Horario",
+    route_change: "Cambio de Ruta",
+    early_pickup: "Salida Temprana",
+    late_arrival: "Llegada Tarde",
+    other: "Otro",
   };
   return labels[type] || type;
 }
@@ -92,8 +104,30 @@ export const create = mutation({
     startDate: v.optional(v.string()), // YYYY-MM-DD (new)
     endDate: v.optional(v.string()), // YYYY-MM-DD (new, for ranges)
     recurringDays: v.optional(v.array(v.number())), // 0-6 for recurring
-    // Stop change
+    // Stop change (legacy)
     newStopId: v.optional(v.id("routeStops")),
+    // Temporary location (temporary_stop_change)
+    temporaryLocation: v.optional(v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+      address: v.string(),
+    })),
+    // Authorized person (third_party_pickup)
+    authorizedPerson: v.optional(v.object({
+      name: v.string(),
+      phone: v.string(),
+      relationship: v.optional(v.string()),
+    })),
+    // Location change (address_change)
+    locationChange: v.optional(v.object({
+      previousLatitude: v.number(),
+      previousLongitude: v.number(),
+      previousAddress: v.string(),
+      newLatitude: v.number(),
+      newLongitude: v.number(),
+      newAddress: v.string(),
+      distanceChange: v.number(),
+    })),
     // Time
     time: v.optional(v.string()), // HH:mm
     // Content
@@ -159,23 +193,56 @@ export const create = mutation({
       effectiveCategory = novedadType.category;
       requiresApproval = novedadType.requiresApproval;
     } else if (args.type) {
-      // Legacy type - map to category
+      // Legacy type - map to NEW simplified categories
       const legacyTypeToCategory: Record<string, string> = {
         absence: "absence",
-        parent_pickup: "pickup_change",
-        stop_change: "stop_change",
-        early_pickup: "time_change",
-        late_arrival: "time_change",
+        parent_pickup: "third_party_pickup", // Updated: pickup_change -> third_party_pickup
+        stop_change: "temporary_stop_change", // Updated: stop_change -> temporary_stop_change
+        early_pickup: "absence", // DEPRECATED: time changes no longer supported, treat as absence
+        late_arrival: "absence", // DEPRECATED: time changes no longer supported, treat as absence
       };
-      effectiveCategory = legacyTypeToCategory[args.type] || "other";
-      requiresApproval = args.type !== "parent_pickup";
+      effectiveCategory = legacyTypeToCategory[args.type] || "absence";
+      requiresApproval = args.type === "stop_change"; // Only stop change requires approval by default
     } else {
       throw new Error("Debe especificar el tipo de novedad");
     }
 
-    // Determine effective dates
+    // ============================================
+    // CATEGORY-SPECIFIC VALIDATION
+    // ============================================
+
+    // Validate third_party_pickup - requires authorized person info
+    if (effectiveCategory === "third_party_pickup" || effectiveCategory === "pickup_change") {
+      if (!args.authorizedPerson?.name || !args.authorizedPerson?.phone) {
+        throw new Error("Debe especificar el nombre y teléfono de la persona autorizada");
+      }
+    }
+
+    // Validate temporary_stop_change - requires location
+    if (effectiveCategory === "temporary_stop_change") {
+      // Can use either temporaryLocation (new) or newStopId (legacy)
+      if (!args.temporaryLocation && !args.newStopId) {
+        throw new Error("Debe especificar la nueva ubicación temporal");
+      }
+    }
+
+    // Validate address_change - requires location change info
+    if (effectiveCategory === "address_change" || effectiveCategory === "location_change") {
+      if (!args.locationChange) {
+        throw new Error("Debe especificar la nueva dirección de domicilio");
+      }
+    }
+
+    // Determine effective dates (needed for service_suspension validation)
     const effectiveStartDate = args.startDate || args.date;
     const effectiveDurationType = args.durationType || "single_day";
+
+    // Validate service_suspension - requires date range
+    if (effectiveCategory === "service_suspension") {
+      if (!args.endDate && effectiveDurationType !== "permanent") {
+        throw new Error("Debe especificar la fecha de fin para la suspensión temporal");
+      }
+    }
 
     if (!effectiveStartDate) {
       throw new Error("Debe especificar la fecha");
@@ -277,8 +344,12 @@ export const create = mutation({
       endDate: args.endDate,
       recurringDays: args.recurringDays,
       date: args.date || effectiveStartDate, // Legacy field, keep populated
-      // Other fields
+      // Category-specific fields
       newStopId: args.newStopId,
+      temporaryLocation: args.temporaryLocation,
+      authorizedPerson: args.authorizedPerson,
+      locationChange: args.locationChange,
+      // Other fields
       time: args.time,
       reason: args.reason,
       status: initialStatus,

@@ -113,26 +113,41 @@ async function generateTripStudents(
       .collect();
 
     // Determine student status based on novedades
-    let status: "scheduled" | "absent" | "parent_pickup" | "stop_changed" = "scheduled";
+    let status: "scheduled" | "absent" | "third_party_pickup" | "stop_changed" | "parent_pickup" = "scheduled";
     let stopId = sr.stopId;
     let originalStopId: Id<"routeStops"> | undefined = undefined;
     let novedadId: Id<"novedades"> | undefined = undefined;
 
-    // Process novedades (priority: absence > parent_pickup > stop_change)
+    // Process novedades using typeCategorySnapshot (new system) with legacy fallback
+    // Priority: absence/service_suspension > third_party_pickup > stop_change
     for (const novedad of novedades) {
-      if (novedad.type === "absence") {
+      // Use typeCategorySnapshot (new system) or fall back to legacy type
+      const category = novedad.typeCategorySnapshot || novedad.type;
+
+      // Absence categories take highest priority
+      if (category === "absence" || category === "service_suspension") {
         status = "absent";
         novedadId = novedad._id;
-        break; // Absence takes priority
-      } else if (novedad.type === "parent_pickup") {
-        status = "parent_pickup";
+        break; // Absence takes priority, stop processing
+      }
+      // Third party pickup (new category) or legacy parent_pickup
+      else if (category === "third_party_pickup" || category === "pickup_change" || category === "parent_pickup") {
+        status = "third_party_pickup";
         novedadId = novedad._id;
-      } else if (novedad.type === "stop_change" && status === "scheduled") {
+        // Don't break - stop_change could still override if more specific
+      }
+      // Stop change categories
+      else if ((category === "temporary_stop_change" || category === "stop_change") && status === "scheduled") {
         status = "stop_changed";
         originalStopId = sr.stopId;
+        // Use temporaryLocation if available (new system), otherwise fall back to newStopId
+        // Note: temporaryLocation doesn't have a stopId, so we keep original stop for now
+        // TODO: In the future, find nearest stop from temporaryLocation coordinates
         stopId = novedad.newStopId || sr.stopId;
         novedadId = novedad._id;
       }
+      // address_change is handled differently (updates student record, not trip)
+      // time_change, schedule_change, route_change, other - informational only
     }
 
     // Create tripStudent entry
@@ -2148,8 +2163,8 @@ export const getTripHistoryForStudent = query({
       routeId: Id<"routes">;
       status: string;
       scheduledDate: string;
-      startedAt?: number;
-      completedAt?: number;
+      startTime?: number;
+      endTime?: number;
     }> = [];
 
     for (const routeId of routeIds) {
@@ -2205,8 +2220,8 @@ export const getTripHistoryForStudent = query({
           status: trip.status,
           driverName,
           studentStatus: tripStudent?.status ?? "scheduled",
-          startedAt: trip.startedAt,
-          completedAt: trip.completedAt,
+          startedAt: trip.startTime,
+          completedAt: trip.endTime,
         };
       })
     );

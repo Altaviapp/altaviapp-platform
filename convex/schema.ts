@@ -615,7 +615,7 @@ export default defineSchema({
     institutionId: v.id("institutions"),
 
     // Identificación
-    code: v.string(),                    // "absence", "parent_pickup", "medical_leave"
+    code: v.optional(v.string()),        // DEPRECATED - será eliminado
     name: v.string(),                    // "Ausencia", "Cita Médica"
     description: v.string(),             // Texto de ayuda para padres
 
@@ -624,16 +624,21 @@ export default defineSchema({
     color: v.string(),                   // Color Tailwind: "red", "blue", "yellow"
 
     // Categoría de comportamiento - determina cómo afecta al viaje
+    // Simplificado a 5 categorías principales
     category: v.union(
-      v.literal("absence"),              // No viaja
-      v.literal("pickup_change"),        // Recoge otra persona
-      v.literal("stop_change"),          // Parada diferente
-      v.literal("time_change"),          // Horario diferente
-      v.literal("location_change"),      // Cambio de domicilio
-      v.literal("schedule_change"),      // Cambio permanente de horario
-      v.literal("route_change"),         // Cambio de ruta
-      v.literal("service_suspension"),   // Suspensión temporal
-      v.literal("other")                 // Otros (no afecta automáticamente)
+      v.literal("absence"),              // No viaja (ausencia)
+      v.literal("third_party_pickup"),   // Tercero autorizado recibe en parada
+      v.literal("temporary_stop_change"),// Cambio de parada temporal
+      v.literal("address_change"),       // Cambio de domicilio permanente
+      v.literal("service_suspension"),   // Suspensión temporal del servicio
+      // DEPRECATED - mantener para backwards compatibility, migrar después
+      v.literal("pickup_change"),
+      v.literal("stop_change"),
+      v.literal("time_change"),
+      v.literal("location_change"),
+      v.literal("schedule_change"),
+      v.literal("route_change"),
+      v.literal("other")
     ),
 
     // Duración permitida para este tipo
@@ -682,10 +687,11 @@ export default defineSchema({
 
     // Estado del estudiante para este viaje
     status: v.union(
-      v.literal("scheduled"),      // Programado normalmente
-      v.literal("absent"),         // No viajará (novedad de ausencia)
-      v.literal("parent_pickup"),  // Padre recoge directamente
-      v.literal("stop_changed")    // Cambio de parada temporal
+      v.literal("scheduled"),        // Programado normalmente
+      v.literal("absent"),           // No viajará (novedad de ausencia)
+      v.literal("third_party_pickup"), // Tercero autorizado recibe en parada
+      v.literal("stop_changed"),     // Cambio de parada temporal
+      v.literal("parent_pickup")     // DEPRECATED - usar third_party_pickup
     ),
 
     // Si hay cambio de parada, guardar la original
@@ -748,7 +754,7 @@ export default defineSchema({
     // Para cambio de parada
     newStopId: v.optional(v.id("routeStops")),
 
-    // CAMBIOS DE UBICACIÓN (nuevo)
+    // CAMBIOS DE UBICACIÓN (permanente - address_change)
     locationChange: v.optional(v.object({
       previousLatitude: v.number(),
       previousLongitude: v.number(),
@@ -760,7 +766,21 @@ export default defineSchema({
       suggestedStopId: v.optional(v.id("routeStops")),
     })),
 
-    // Para early_pickup/late_arrival - hora específica
+    // UBICACIÓN TEMPORAL (temporary_stop_change)
+    temporaryLocation: v.optional(v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+      address: v.string(),
+    })),
+
+    // PERSONA AUTORIZADA (third_party_pickup)
+    authorizedPerson: v.optional(v.object({
+      name: v.string(),
+      phone: v.string(),
+      relationship: v.optional(v.string()),
+    })),
+
+    // Para early_pickup/late_arrival - hora específica (DEPRECATED)
     time: v.optional(v.string()),        // HH:mm format
 
     // Razón del padre

@@ -2,20 +2,19 @@
 
 import Link from 'next/link';
 import { Menu, Bell } from 'lucide-react';
-import { useConvexAuth } from '@/hooks';
+import { useConvexAuth, useUnreadCount } from '@/hooks';
 
 interface HeaderProps {
   title: string;
   onMenuClick?: () => void;
-  notificationCount?: number;
 }
 
 export function Header({
   title,
   onMenuClick,
-  notificationCount = 0,
 }: HeaderProps) {
   const { user } = useConvexAuth();
+  const { count: notificationCount } = useUnreadCount();
 
   // Get user initials
   const userInitials = user?.name

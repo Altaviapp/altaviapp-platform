@@ -53,6 +53,7 @@ export function useStudentMutations() {
   const updateStudent = useMutation(api.students.updateStudent);
   const deactivateStudent = useMutation(api.students.deactivateStudent);
   const regenerateQRCode = useMutation(api.students.regenerateQRCode);
+  const inviteSecondaryGuardianMutation = useMutation(api.students.inviteSecondaryGuardian);
 
   return {
     createStudent: async (data: {
@@ -104,11 +105,21 @@ export function useStudentMutations() {
         parentEmail: string;
         parentName: string;
         emergencyContact: string;
+        emergencyContactSecondary: string;
         isActive: boolean;
       }>
     ) => {
       if (!userId) throw new Error("Not authenticated");
       return updateStudent({ userId, studentId, ...data });
+    },
+
+    inviteSecondaryGuardian: async (
+      studentId: Id<"students">,
+      email: string,
+      name: string
+    ) => {
+      if (!userId) throw new Error("Not authenticated");
+      return inviteSecondaryGuardianMutation({ userId, studentId, email, name });
     },
 
     deactivateStudent: async (studentId: Id<"students">) => {

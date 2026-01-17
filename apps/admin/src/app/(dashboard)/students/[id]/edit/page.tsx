@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, MapPin, QrCode, Download, Printer } from 'lucide-react';
+import { Loader2, MapPin, QrCode, Download, Printer, Users, UserPlus, Mail, CheckCircle, X, AlertCircle } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import { PageHeader } from '@/components/shared';
 import { FormSection, FormField, FormFieldRow, FormActions } from '@/components/forms';
@@ -43,10 +43,20 @@ export default function EditStudentPage() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
 
+  // Guardian invitation state
+  const [showGuardianModal, setShowGuardianModal] = useState(false);
+  const [guardianEmail, setGuardianEmail] = useState('');
+  const [guardianName, setGuardianName] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteResult, setInviteResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
   // Real data from Convex
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { student, isLoading, notFound } = useStudent(studentId as any);
-  const { updateStudent } = useStudentMutations();
+  const { updateStudent, inviteSecondaryGuardian } = useStudentMutations();
   const { grades: institutionGrades } = useInstitutionGrades();
 
   // Convert grades array to select options
@@ -124,6 +134,41 @@ export default function EditStudentPage() {
 
   const handleCancel = () => {
     router.push(`/students/${studentId}`);
+  };
+
+  // Handle guardian invitation
+  const handleInviteGuardian = async () => {
+    if (!guardianEmail.trim() || !guardianName.trim()) {
+      setInviteResult({ success: false, message: 'Por favor complete todos los campos' });
+      return;
+    }
+
+    setInviteLoading(true);
+    setInviteResult(null);
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await inviteSecondaryGuardian(studentId as any, guardianEmail, guardianName);
+      setInviteResult({
+        success: true,
+        message: result.message,
+      });
+      // Reset form after success
+      setTimeout(() => {
+        setShowGuardianModal(false);
+        setGuardianEmail('');
+        setGuardianName('');
+        setInviteResult(null);
+      }, 2000);
+    } catch (error) {
+      console.error('Error inviting guardian:', error);
+      setInviteResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error al enviar invitación',
+      });
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   // QR Code functions
@@ -282,35 +327,84 @@ export default function EditStudentPage() {
           />
         </FormSection>
 
-        {/* Padre/Tutor */}
-        <FormSection title="Padre/Tutor">
-          <FormField
-            label="Nombre del Padre/Tutor"
-            name="parentName"
-            value={formData.parentName}
-            onChange={handleChange('parentName')}
-            required
-          />
+        {/* Tutores */}
+        <FormSection
+          title="Tutores"
+          description="Gestiona los tutores que tienen acceso a la información del estudiante."
+        >
+          {/* Tutor Principal */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-5 h-5 text-primary" />
+              <h4 className="text-sm font-semibold text-gray-900">Tutor Principal</h4>
+              <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">Principal</span>
+            </div>
 
-          <FormFieldRow cols={2}>
             <FormField
-              label="Teléfono"
-              name="parentPhone"
-              type="tel"
-              value={formData.parentPhone}
-              onChange={handleChange('parentPhone')}
-              placeholder="+593XXXXXXXXX"
+              label="Nombre del Tutor"
+              name="parentName"
+              value={formData.parentName}
+              onChange={handleChange('parentName')}
               required
             />
-            <FormField
-              label="Email"
-              name="parentEmail"
-              type="email"
-              value={formData.parentEmail}
-              onChange={handleChange('parentEmail')}
-              required
-            />
-          </FormFieldRow>
+
+            <FormFieldRow cols={2}>
+              <FormField
+                label="Teléfono"
+                name="parentPhone"
+                type="tel"
+                value={formData.parentPhone}
+                onChange={handleChange('parentPhone')}
+                placeholder="+593XXXXXXXXX"
+                required
+              />
+              <FormField
+                label="Email"
+                name="parentEmail"
+                type="email"
+                value={formData.parentEmail}
+                onChange={handleChange('parentEmail')}
+                required
+              />
+            </FormFieldRow>
+          </div>
+
+          {/* Tutor Secundario */}
+          <div className="border-t border-gray-200 pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-gray-400" />
+                <h4 className="text-sm font-semibold text-gray-900">Tutor Secundario</h4>
+              </div>
+            </div>
+
+            {student.secondaryParentEmail ? (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{student.secondaryParentEmail}</p>
+                    <p className="text-xs text-green-600">Tutor secundario configurado</p>
+                  </div>
+                  <span className="ml-auto px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Secundario</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Agrega un segundo tutor (cónyuge, abuelo, etc.) para que también pueda ver la información y recibir notificaciones del estudiante.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowGuardianModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Invitar Tutor Secundario
+                </button>
+              </div>
+            )}
+          </div>
         </FormSection>
 
         {/* Estado */}
@@ -403,6 +497,113 @@ export default function EditStudentPage() {
           />
         </div>
       </form>
+
+      {/* Guardian Invitation Modal */}
+      {showGuardianModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              setShowGuardianModal(false);
+              setGuardianEmail('');
+              setGuardianName('');
+              setInviteResult(null);
+            }}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <button
+              onClick={() => {
+                setShowGuardianModal(false);
+                setGuardianEmail('');
+                setGuardianName('');
+                setInviteResult(null);
+              }}
+              className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Invitar Tutor Secundario</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                El tutor recibirá un email con instrucciones para crear su cuenta y acceder a la información del estudiante.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre completo <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  placeholder="Ej: María García"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={guardianEmail}
+                  onChange={(e) => setGuardianEmail(e.target.value)}
+                  placeholder="Ej: maria@email.com"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+            </div>
+
+            {inviteResult && (
+              <div
+                className={`mt-4 p-3 rounded-lg flex items-center gap-2 ${
+                  inviteResult.success
+                    ? 'bg-green-50 border border-green-200 text-green-700'
+                    : 'bg-red-50 border border-red-200 text-red-700'
+                }`}
+              >
+                {inviteResult.success ? (
+                  <CheckCircle className="w-5 h-5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5" />
+                )}
+                <span className="text-sm">{inviteResult.message}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGuardianModal(false);
+                  setGuardianEmail('');
+                  setGuardianName('');
+                  setInviteResult(null);
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleInviteGuardian}
+                disabled={!guardianEmail.trim() || !guardianName.trim() || inviteLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {inviteLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4" />
+                )}
+                Enviar Invitación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </GoogleMapsProvider>
   );

@@ -226,12 +226,31 @@ export function useTripHistory(studentId: Id<"students"> | null, daysLimit?: num
 }
 
 // ============================================
+// INSTITUTION GRADES
+// ============================================
+
+export function useInstitutionGrades() {
+  const { userId, institutionId } = useConvexAuth();
+
+  const result = useQuery(
+    api.institutions.getInstitutionGrades,
+    userId && institutionId ? { userId, institutionId } : "skip"
+  );
+
+  return {
+    grades: result?.grades ?? [],
+    isCustom: result?.isCustom ?? false,
+    isLoading: result === undefined,
+  };
+}
+
+// ============================================
 // STUDENT MUTATIONS (Edit & Photo)
 // ============================================
 
 export function useStudentMutations() {
   const { userId } = useConvexAuth();
-  const updateByParentMutation = useMutation(api.students.updateStudentByParent);
+  const updateStudentMutation = useMutation(api.students.updateStudent);
   const generateUploadUrlMutation = useMutation(api.students.generatePhotoUploadUrl);
   const savePhotoMutation = useMutation(api.students.saveStudentPhoto);
   const deletePhotoMutation = useMutation(api.students.deleteStudentPhoto);
@@ -239,17 +258,26 @@ export function useStudentMutations() {
 
   const updateStudent = async (
     studentId: Id<"students">,
-    data: {
-      emergencyContactSecondary?: string;
-      address?: string;
-      parentPhone?: string;
-    }
+    data: Partial<{
+      firstName: string;
+      lastName: string;
+      grade: string;
+      dateOfBirth: number;
+      address: string;
+      homeLatitude: number;
+      homeLongitude: number;
+      parentPhone: string;
+      parentEmail: string;
+      parentName: string;
+      emergencyContact: string;
+      emergencyContactSecondary: string;
+    }>
   ) => {
     if (!userId) {
       throw new Error("Usuario no autenticado");
     }
 
-    return await updateByParentMutation({
+    return await updateStudentMutation({
       userId,
       studentId,
       ...data,

@@ -19,6 +19,7 @@ export {
   useStudentWithPhoto,
   useStudentMutations,
   useTripHistory,
+  useInstitutionGrades,
 } from "./useMyStudents";
 
 // Aggregated children + trips
@@ -74,6 +75,7 @@ export type { TripEventType } from "./useTripEvents";
 export {
   useTrip,
   useActiveTripForStudent,
+  useTripStatus,
 } from "./useTrips";
 
 // Alert Preferences

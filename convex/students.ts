@@ -220,17 +220,41 @@ export const updateStudent = mutation({
     parentEmail: v.optional(v.string()),
     parentName: v.optional(v.string()),
     emergencyContact: v.optional(v.string()),
+    emergencyContactSecondary: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await verifyRole(ctx, args.userId, "admin");
+    const currentUser = await verifyUser(ctx, args.userId);
 
     const student = await ctx.db.get(args.studentId);
     if (!student) {
       throw new Error("Estudiante no encontrado");
     }
 
-    await verifyInstitutionAccess(ctx, args.userId, student.institutionId);
+    // Verify access: admin has institution access, parent must be guardian of this student
+    const isAdmin = currentUser.role === "admin" || currentUser.role === "super_admin";
+    const isParent = currentUser.role === "parent";
+
+    if (isAdmin) {
+      await verifyInstitutionAccess(ctx, args.userId, student.institutionId);
+    } else if (isParent) {
+      // Parent must be primary or secondary guardian
+      const userEmail = currentUser.email?.toLowerCase();
+      const isPrimaryGuardian = userEmail === student.parentEmail.toLowerCase();
+      const isSecondaryGuardian = student.secondaryParentEmail &&
+        userEmail === student.secondaryParentEmail.toLowerCase();
+
+      if (!isPrimaryGuardian && !isSecondaryGuardian) {
+        throw new Error("No tienes permiso para editar este estudiante");
+      }
+
+      // Also verify institution for multi-tenant isolation
+      if (student.institutionId !== currentUser.institutionId) {
+        throw new Error("No tienes permiso para editar este estudiante");
+      }
+    } else {
+      throw new Error("No tienes permiso para editar estudiantes");
+    }
 
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
 
@@ -245,6 +269,7 @@ export const updateStudent = mutation({
     if (args.parentEmail !== undefined) updates.parentEmail = args.parentEmail.toLowerCase();
     if (args.parentName !== undefined) updates.parentName = args.parentName;
     if (args.emergencyContact !== undefined) updates.emergencyContact = args.emergencyContact;
+    if (args.emergencyContactSecondary !== undefined) updates.emergencyContactSecondary = args.emergencyContactSecondary;
     if (args.isActive !== undefined) updates.isActive = args.isActive;
 
     await ctx.db.patch(args.studentId, updates);

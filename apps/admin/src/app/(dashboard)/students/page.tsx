@@ -1,30 +1,24 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { GraduationCap, Plus, QrCode, MapPin, Download, Upload } from 'lucide-react';
+import { GraduationCap, Plus, MapPin, Upload } from 'lucide-react';
 import { Badge } from '@/components/core';
 import { PageHeader, SearchFilter, DataTable, StatsGrid, type Column, type StatItem } from '@/components/shared';
 import { getInitials } from '@/lib/format';
 import { useStudents } from '@/hooks';
-import { cn } from '@/lib/utils';
 
 /**
  * Students Page
  *
  * Manages all students in the institution.
- * Features: search, grade filter, status filter, QR codes.
+ * Features: search, grade filter, status filter.
  *
  * PRD Reference: Students Module
  */
 
-const GRADE_FILTERS = ['Todos', '1ro', '2do', '3ro', '4to', '5to', '6to', '7mo', '8vo', '9no', '10mo'];
-
 export default function StudentsPage() {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState('Todos');
+  const [selectedGrade, setSelectedGrade] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
   // Use real hook
@@ -33,6 +27,15 @@ export default function StudentsPage() {
     statusFilter === 'inactive' ? { isActive: false } :
     undefined
   );
+
+  // Extract unique grades from students
+  const availableGrades = useMemo(() => {
+    const grades = new Set<string>();
+    students.forEach((student) => {
+      if (student.grade) grades.add(student.grade);
+    });
+    return Array.from(grades).sort();
+  }, [students]);
 
   // Filter students based on search and grade
   const filteredStudents = useMemo(() => {
@@ -44,9 +47,7 @@ export default function StudentsPage() {
         student.parentEmail?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         student.parentName?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesGrade =
-        selectedGrade === 'Todos' ||
-        student.grade?.toLowerCase().includes(selectedGrade.toLowerCase().replace('ro', '').replace('do', '').replace('to', '').replace('mo', '').replace('vo', '').replace('no', ''));
+      const matchesGrade = !selectedGrade || student.grade === selectedGrade;
 
       return matchesSearch && matchesGrade;
     });
@@ -117,28 +118,6 @@ export default function StudentsPage() {
         </Badge>
       ),
     },
-    {
-      key: 'qr',
-      header: 'QR',
-      align: 'center',
-      render: (student) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (student.qrCode) router.push(`/students/${student._id}/qr`);
-          }}
-          className={cn(
-            'p-2 rounded-lg transition-colors',
-            student.qrCode
-              ? 'hover:bg-gray-100 text-primary'
-              : 'text-gray-300 cursor-not-allowed'
-          )}
-          disabled={!student.qrCode}
-        >
-          <QrCode className="w-5 h-5" />
-        </button>
-      ),
-    },
   ];
 
   return (
@@ -148,12 +127,6 @@ export default function StudentsPage() {
         title="Gestión de Estudiantes"
         subtitle="Administra los estudiantes de la institución"
         actions={[
-          {
-            label: 'Exportar',
-            icon: Download,
-            variant: 'secondary',
-            onClick: () => {/* TODO: Export */},
-          },
           {
             label: 'Importar CSV',
             href: '/students/import',
@@ -174,47 +147,35 @@ export default function StudentsPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Search */}
-          <SearchFilter
-            searchValue={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchPlaceholder="Buscar por nombre, email..."
-            filters={[
-              {
-                key: 'status',
-                label: 'Todos los estados',
-                value: statusFilter,
-                options: [
-                  { value: 'active', label: 'Activos' },
-                  { value: 'inactive', label: 'Inactivos' },
-                ],
-              },
-            ]}
-            onFilterChange={(key, value) => {
-              if (key === 'status') setStatusFilter(value);
-            }}
-            className="flex-1"
-          />
-
-          {/* Grade Filter Chips */}
-          <div className="flex gap-2 overflow-x-auto pb-2 lg:pb-0">
-            {GRADE_FILTERS.map((grade) => (
-              <button
-                key={grade}
-                onClick={() => setSelectedGrade(grade)}
-                className={cn(
-                  'px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-                  selectedGrade === grade
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                )}
-              >
-                {grade}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SearchFilter
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Buscar por nombre, email..."
+          filters={[
+            {
+              key: 'status',
+              label: 'Todos los estados',
+              value: statusFilter,
+              options: [
+                { value: 'active', label: 'Activos' },
+                { value: 'inactive', label: 'Inactivos' },
+              ],
+            },
+            {
+              key: 'grade',
+              label: 'Todos los grados',
+              value: selectedGrade,
+              options: availableGrades.map((grade) => ({
+                value: grade,
+                label: grade,
+              })),
+            },
+          ]}
+          onFilterChange={(key, value) => {
+            if (key === 'status') setStatusFilter(value);
+            if (key === 'grade') setSelectedGrade(value);
+          }}
+        />
       </div>
 
       {/* Students Table */}

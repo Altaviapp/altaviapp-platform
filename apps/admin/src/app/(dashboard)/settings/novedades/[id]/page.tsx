@@ -92,7 +92,6 @@ export default function EditNovedadTypePage({ params }: PageProps) {
         mode="edit"
         initialData={{
           _id: type._id,
-          code: type.code,
           name: type.name,
           description: type.description,
           icon: type.icon,

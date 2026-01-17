@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   FileText,
@@ -80,6 +81,7 @@ const COLOR_CLASSES: Record<string, { bg: string; text: string }> = {
  * Features: list types, toggle active, reorder, create/edit types.
  */
 export default function NovedadesSettingsPage() {
+  const router = useRouter();
   const [showInactive, setShowInactive] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
@@ -292,10 +294,10 @@ export default function NovedadesSettingsPage() {
                 key={type._id}
                 className="transition-colors"
               >
-                {/* Main Row - Clickable to expand */}
+                {/* Main Row - Clickable to edit */}
                 <div
                   className="flex items-center gap-3 p-4 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => setExpandedId(isExpanded ? null : type._id)}
+                  onClick={() => router.push(`/settings/novedades/${type._id}`)}
                 >
                   {/* Reorder */}
                   <div className="flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
@@ -360,13 +362,13 @@ export default function NovedadesSettingsPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <Link
-                      href={`/settings/novedades/${type._id}`}
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : type._id)}
                       className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="Editar"
+                      title="Ver detalles"
                     >
-                      <Pencil className="w-4 h-4" />
-                    </Link>
+                      <Info className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleToggleActive(type._id)}
                       disabled={isLoading}
@@ -408,8 +410,8 @@ export default function NovedadesSettingsPage() {
                   <div className="px-4 pb-4 bg-gray-50">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-gray-100">
                       <div>
-                        <p className="text-xs font-medium text-gray-400 uppercase mb-1">Código</p>
-                        <p className="text-sm font-mono text-gray-700">{type.code}</p>
+                        <p className="text-xs font-medium text-gray-400 uppercase mb-1">Categoría</p>
+                        <p className="text-sm text-gray-700">{CATEGORY_LABELS[type.category as keyof typeof CATEGORY_LABELS] || type.category}</p>
                       </div>
                       <div>
                         <p className="text-xs font-medium text-gray-400 uppercase mb-1">Requiere Aprobación</p>

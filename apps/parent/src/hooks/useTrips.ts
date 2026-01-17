@@ -51,3 +51,25 @@ export function useActiveTripForStudent(studentId: Id<"students"> | null) {
     hasActiveTrip: result !== null && result !== undefined,
   };
 }
+
+// ============================================
+// TRIP STATUS (Lightweight)
+// ============================================
+
+export function useTripStatus(tripId: string | null) {
+  const { userId } = useConvexAuth();
+
+  const result = useQuery(
+    api.trips.getTripBasicInfo,
+    userId && tripId
+      ? { userId, tripId: tripId as Id<"trips"> }
+      : "skip"
+  );
+
+  return {
+    tripStatus: result,
+    isLoading: result === undefined,
+    isActive: result?.status === "in_progress",
+    isCompleted: result?.status === "completed",
+  };
+}

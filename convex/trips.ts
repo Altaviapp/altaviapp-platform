@@ -368,6 +368,38 @@ export const getTrip = query({
 });
 
 /**
+ * Get basic trip info (lightweight query for status checks)
+ * Used by parent app to determine if trip is active or completed
+ */
+export const getTripBasicInfo = query({
+  args: {
+    userId: v.id("users"),
+    tripId: v.id("trips"),
+  },
+  handler: async (ctx, args) => {
+    const trip = await ctx.db.get(args.tripId);
+    if (!trip) {
+      return null;
+    }
+
+    const route = await ctx.db.get(trip.routeId);
+    if (!route) {
+      return null;
+    }
+
+    await verifyInstitutionAccess(ctx, args.userId, route.institutionId);
+
+    return {
+      _id: trip._id,
+      status: trip.status,
+      scheduledDate: trip.scheduledDate,
+      routeName: route.name,
+      routeType: route.type,
+    };
+  },
+});
+
+/**
  * List trips
  */
 export const listTrips = query({
@@ -1943,6 +1975,8 @@ async function notifyParentsOfTripStart(
         category: "trip_update",
         read: false,
         createdAt: now,
+        relatedEntityType: "trip",
+        relatedEntityId: tripId.toString(),
       });
     }
   }

@@ -30,7 +30,7 @@ interface TripData {
   routeName: string;
   status: string;
   driverName: string;
-  studentStatus: 'scheduled' | 'absent' | 'parent_pickup' | 'stop_changed';
+  studentStatus: 'scheduled' | 'absent' | 'parent_pickup' | 'stop_changed' | 'third_party_pickup';
   startedAt?: number;
   completedAt?: number;
 }
@@ -380,9 +380,11 @@ export default function HistorialPage() {
                       ? 'bg-orange-50 text-orange-700'
                       : trip.studentStatus === 'parent_pickup'
                         ? 'bg-blue-50 text-blue-700'
-                        : trip.studentStatus === 'stop_changed'
-                          ? 'bg-purple-50 text-purple-700'
-                          : 'bg-gray-50 text-gray-600'
+                        : trip.studentStatus === 'third_party_pickup'
+                          ? 'bg-blue-50 text-blue-700'
+                          : trip.studentStatus === 'stop_changed'
+                            ? 'bg-purple-50 text-purple-700'
+                            : 'bg-gray-50 text-gray-600'
                   )}>
                     {trip.studentStatus === 'absent' && (
                       <>
@@ -394,6 +396,12 @@ export default function HistorialPage() {
                       <>
                         <User className="w-3.5 h-3.5" />
                         Recogido por padre
+                      </>
+                    )}
+                    {trip.studentStatus === 'third_party_pickup' && (
+                      <>
+                        <User className="w-3.5 h-3.5" />
+                        Recogida por tercero
                       </>
                     )}
                     {trip.studentStatus === 'stop_changed' && (

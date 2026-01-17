@@ -123,6 +123,7 @@ export {
   useNovedadTypesByCategory,
   useNovedadTypeMutations,
   CATEGORY_LABELS,
+  NEW_CATEGORY_LABELS,
   DURATION_LABELS,
   COLOR_OPTIONS,
   ICON_OPTIONS,

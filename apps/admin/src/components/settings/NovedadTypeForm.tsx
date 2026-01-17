@@ -288,7 +288,7 @@ export function NovedadTypeForm({ initialData, mode }: NovedadTypeFormProps) {
             >
               {Object.entries(NEW_CATEGORY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {label as string}
                 </option>
               ))}
             </select>

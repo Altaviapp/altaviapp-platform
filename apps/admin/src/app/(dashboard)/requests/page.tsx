@@ -28,8 +28,10 @@ import {
   Paperclip,
   Image as ImageIcon,
   ExternalLink,
+  History,
+  Filter,
 } from 'lucide-react';
-import { Badge, Card, CardContent, Modal, Tabs, TabsList, Tab, TabsPanel, Button, Textarea } from '@/components/core';
+import { Badge, Card, CardContent, Modal, Tabs, TabsList, Tab, TabsPanel, Button, Textarea, Select } from '@/components/core';
 import { PageHeader, StatsGrid, type StatItem } from '@/components/shared';
 import { LoadingState, EmptyState } from '@/components/core/states';
 import {
@@ -38,6 +40,7 @@ import {
   useIncidents,
   useConvexAuth,
   useNovedadTypes,
+  useNovedades,
   CATEGORY_LABELS,
   DURATION_LABELS,
 } from '@/hooks';
@@ -47,12 +50,12 @@ import { cn } from '@/lib/utils';
  * Requests Page
  *
  * Manages novedades and incidents.
- * Features: tabs, review modal, approve/reject actions.
+ * Features: tabs, review modal, approve/reject actions, history view.
  *
  * PRD Reference: Requests Module
  */
 
-type TabType = 'novedades' | 'incidentes';
+type TabType = 'novedades' | 'historial' | 'incidentes';
 
 // Icon mapping for dynamic types
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -121,12 +124,31 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'warning' | 'info'
   closed: { label: 'Cerrado', variant: 'default' },
 };
 
+// Status filter options for history
+const STATUS_OPTIONS = [
+  { value: '', label: 'Todos los estados' },
+  { value: 'pending', label: 'Pendiente' },
+  { value: 'approved', label: 'Aprobado' },
+  { value: 'rejected', label: 'Rechazado' },
+  { value: 'acknowledged', label: 'Recibido' },
+  { value: 'applied', label: 'Aplicado' },
+  { value: 'cancelled', label: 'Cancelado' },
+  { value: 'expired', label: 'Expirado' },
+];
+
 export default function RequestsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('novedades');
   const { isAuthenticated } = useConvexAuth();
 
+  // History filter state
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('');
+
   // Data hooks
   const { novedades, isLoading: loadingNovedades } = usePendingNovedades();
+  const { novedades: allNovedades, isLoading: loadingAllNovedades } = useNovedades({
+    status: historyStatusFilter as any || undefined,
+    limit: 100,
+  });
   const { approveNovedad, rejectNovedad, isReady: novedadReady } = useNovedadReviewMutations();
   const { incidents, isLoading: loadingIncidents } = useIncidents({ status: 'open' });
   const { types: novedadTypes } = useNovedadTypes(false); // Include inactive for display
@@ -137,23 +159,25 @@ export default function RequestsPage() {
   const [isReviewing, setIsReviewing] = useState(false);
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | null>(null);
 
-  const isLoading = loadingNovedades || loadingIncidents;
+  const isLoading = loadingNovedades || loadingIncidents || loadingAllNovedades;
 
   // Create a map of novedadTypes for quick lookup
   const novedadTypesMap = useMemo(() => {
     const map: Record<string, { label: string; icon: React.ElementType; color: string }> = {};
     for (const type of novedadTypes) {
-      map[type.code] = {
+      const typeConfig = {
         label: type.name,
         icon: ICON_MAP[type.icon] ?? FileText,
         color: COLOR_MAP[type.color] ?? 'text-gray-600',
       };
+      // Map by code if it exists (for backwards compatibility)
+      if (type.code) {
+        map[type.code] = typeConfig;
+      }
       // Also map by ID for typeId-based novedades
-      map[type._id] = {
-        label: type.name,
-        icon: ICON_MAP[type.icon] ?? FileText,
-        color: COLOR_MAP[type.color] ?? 'text-gray-600',
-      };
+      map[type._id] = typeConfig;
+      // Also map by category for category-based lookups
+      map[type.category] = typeConfig;
     }
     return map;
   }, [novedadTypes]);
@@ -219,8 +243,8 @@ export default function RequestsPage() {
     <div className="space-y-6">
       {/* Header */}
       <PageHeader
-        title="Gestión de Solicitudes"
-        subtitle="Revisa y aprueba novedades e incidentes"
+        title="Novedades"
+        subtitle="Gestiona las novedades reportadas por los padres"
       />
 
       {/* Stats */}
@@ -233,9 +257,18 @@ export default function RequestsPage() {
             <Tab value="novedades">
               <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4" />
-                <span>Novedades del Día</span>
+                <span>Pendientes</span>
                 {novedades.length > 0 && (
                   <Badge variant="warning">{novedades.length}</Badge>
+                )}
+              </div>
+            </Tab>
+            <Tab value="historial">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4" />
+                <span>Historial</span>
+                {allNovedades.length > 0 && (
+                  <Badge variant="default">{allNovedades.length}</Badge>
                 )}
               </div>
             </Tab>
@@ -298,6 +331,105 @@ export default function RequestsPage() {
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
                                 Para: {new Date(effectiveDate + 'T12:00:00').toLocaleDateString('es-EC', {
+                                  weekday: 'short',
+                                  day: 'numeric',
+                                  month: 'short',
+                                })}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {formatTimeAgo(novedad.createdAt)}
+                            </span>
+                            {hasAttachments && (
+                              <span className="flex items-center gap-1 text-primary">
+                                <Paperclip className="w-3.5 h-3.5" />
+                                {novedad.attachments.length}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </TabsPanel>
+
+          {/* Historial Tab */}
+          <TabsPanel value="historial">
+            <CardContent className="p-0">
+              {/* Filter bar */}
+              <div className="p-4 border-b border-gray-100 flex items-center gap-4">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Filter className="w-4 h-4" />
+                  <span>Filtrar por estado:</span>
+                </div>
+                <select
+                  value={historyStatusFilter}
+                  onChange={(e) => setHistoryStatusFilter(e.target.value)}
+                  className="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {loadingAllNovedades ? (
+                <div className="p-8 text-center text-gray-500">
+                  <Clock className="w-8 h-8 mx-auto mb-2 animate-spin" />
+                  <p>Cargando historial...</p>
+                </div>
+              ) : allNovedades.length === 0 ? (
+                <EmptyState
+                  icon={History}
+                  title="No hay novedades"
+                  description={historyStatusFilter ? "No hay novedades con este estado" : "Aún no se han creado novedades"}
+                />
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {allNovedades.map((novedad: any) => {
+                    const typeConfig = getTypeConfig(novedad);
+                    const TypeIcon = typeConfig.icon;
+                    const hasAttachments = novedad.attachments && novedad.attachments.length > 0;
+                    const effectiveDate = novedad.startDate || novedad.date;
+
+                    return (
+                      <button
+                        key={novedad._id}
+                        onClick={() => {
+                          setSelectedItem({ ...novedad, itemType: 'novedad' });
+                          setReviewNotes('');
+                        }}
+                        className="w-full p-4 flex items-start gap-4 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <div className="p-3 rounded-lg bg-gray-50">
+                          <TypeIcon className={cn('w-5 h-5', typeConfig.color)} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-gray-900">{novedad.studentName}</h3>
+                            <span className="text-xs text-gray-500">{novedad.studentGrade}</span>
+                            <Badge variant={STATUS_CONFIG[novedad.status]?.variant ?? 'default'}>
+                              {STATUS_CONFIG[novedad.status]?.label ?? novedad.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">{typeConfig.label}</p>
+                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">{novedad.reason}</p>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                            <span className="flex items-center gap-1">
+                              <User className="w-3.5 h-3.5" />
+                              {novedad.createdByName}
+                            </span>
+                            {effectiveDate && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5" />
+                                {new Date(effectiveDate + 'T12:00:00').toLocaleDateString('es-EC', {
                                   weekday: 'short',
                                   day: 'numeric',
                                   month: 'short',

@@ -224,7 +224,7 @@ export function NovedadModal({
       }
     }
 
-    if (category === 'temporary_stop_change' || category === 'stop_change') {
+    if (['temporary_stop_change', 'stop_change'].includes(category ?? '')) {
       if (!temporaryLocation) {
         setError('Por favor selecciona la nueva ubicación en el mapa');
         return;
@@ -257,7 +257,7 @@ export function NovedadModal({
             relationship: authorizedPerson.relationship?.trim() || undefined,
           },
         } : {}),
-        ...(temporaryLocation && (category === 'temporary_stop_change' || category === 'stop_change') ? {
+        ...(temporaryLocation && ['temporary_stop_change', 'stop_change'].includes(category ?? '') ? {
           temporaryLocation,
         } : {}),
       });
@@ -402,6 +402,10 @@ export function NovedadModal({
                  selectedType.durationType === 'recurring' ? 'Recurrente' : 'Un día'}
               </span>
             )}
+            {/* Debug: show category - TODO: remove after fixing novedades issue */}
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+              cat: {selectedType.category || 'N/A'}
+            </span>
           </div>
         </div>
       )}
@@ -461,7 +465,7 @@ export function NovedadModal({
       )}
 
       {/* Category-specific: Temporary Location (for temporary_stop_change) */}
-      {selectedType && (selectedType.category === 'temporary_stop_change' || selectedType.category === 'stop_change') && (
+      {selectedType && ['temporary_stop_change', 'stop_change'].includes(selectedType.category) && (
         <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
           <h4 className="text-sm font-medium text-purple-900 mb-3 flex items-center gap-2">
             <MapPin className="w-4 h-4" />

@@ -15,16 +15,21 @@ import { useConvexAuth } from "./useConvexAuth";
 export type NovedadType = "absence" | "parent_pickup" | "stop_change" | "early_pickup" | "late_arrival";
 export type AffectedRouteType = "pickup" | "dropoff" | "both";
 
-// Category types for dynamic novedad types
+// Category types for dynamic novedad types (simplified 5-category system)
 export type NovedadCategory =
-  | "absence"
+  // New simplified categories
+  | "absence"              // Ausencia
+  | "third_party_pickup"   // Recogida por tercero
+  | "temporary_stop_change"// Cambio de parada temporal
+  | "address_change"       // Cambio de domicilio permanente
+  | "service_suspension"   // Suspensión temporal de servicio
+  // Deprecated categories (for backwards compatibility)
   | "pickup_change"
   | "stop_change"
   | "time_change"
   | "location_change"
   | "schedule_change"
   | "route_change"
-  | "service_suspension"
   | "other";
 
 export type DurationType = "single_day" | "date_range" | "permanent" | "recurring";
@@ -45,6 +50,26 @@ export interface CreateNovedadInput {
   startDate?: string; // YYYY-MM-DD
   endDate?: string; // YYYY-MM-DD (for date_range)
   durationType?: DurationType;
+  // Category-specific fields
+  authorizedPerson?: {
+    name: string;
+    phone: string;
+    relationship?: string;
+  };
+  temporaryLocation?: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  };
+  locationChange?: {
+    previousLatitude: number;
+    previousLongitude: number;
+    previousAddress: string;
+    newLatitude: number;
+    newLongitude: number;
+    newAddress: string;
+    distanceChange: number;
+  };
 }
 
 // ============================================

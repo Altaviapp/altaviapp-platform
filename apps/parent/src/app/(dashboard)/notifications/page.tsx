@@ -1,12 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Bell, Check, MapPin, Bus, AlertTriangle, CheckCircle, Clock, Calendar, Settings, ChevronDown, Info, AlertCircle, BellOff, CheckCheck } from 'lucide-react';
+import { Bell, Check, Bus, AlertTriangle, CheckCircle, Clock, Calendar, Info, AlertCircle, BellOff, CheckCheck, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
-import { useNotifications, useUnreadCount, useNotificationMutations, useMyStudents } from '@/hooks';
-import { LoadingState, EmptyState, Card, Badge, Button } from '@/components/core';
-import { PageHeader } from '@/components/shared';
+import { useNotifications, useUnreadCount, useNotificationMutations } from '@/hooks';
+import { LoadingState, Badge } from '@/components/core';
 
 const filters = [
   { value: 'all', label: 'Todas' },
@@ -102,10 +100,7 @@ function formatTime(timestamp: number): string {
 }
 
 export default function NotificationsPage() {
-  const { students } = useMyStudents();
   const [selectedFilter, setSelectedFilter] = useState('all');
-  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string }>({ id: 'all', name: 'Todos' });
-  const [showStudentSelector, setShowStudentSelector] = useState(false);
 
   const { notifications, isLoading, isEmpty } = useNotifications({
     unreadOnly: selectedFilter === 'unread',
@@ -113,11 +108,6 @@ export default function NotificationsPage() {
   });
   const { count: unreadCount } = useUnreadCount();
   const { markAsRead, markAllAsRead } = useNotificationMutations();
-
-  const studentOptions = useMemo(() => [
-    { id: 'all', name: 'Todos' },
-    ...students.map((s) => ({ id: s._id, name: `${s.firstName} ${s.lastName}` })),
-  ], [students]);
 
   const groupedNotifications = useMemo(() => groupNotificationsByDate(notifications as any[]), [notifications]);
 
@@ -140,10 +130,9 @@ export default function NotificationsPage() {
   if (isLoading) {
     return (
       <div className="space-y-4 pb-20">
-        <PageHeader
-          title="Notificaciones"
-          subtitle="Centro de notificaciones"
-        />
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-gray-900">Notificaciones</h1>
+        </div>
         <LoadingState message="Cargando notificaciones..." />
       </div>
     );
@@ -151,93 +140,50 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-4 pb-20">
-      {/* Header with Settings */}
-      <PageHeader
-        title="Notificaciones"
-        badge={unreadCount > 0 ? <Badge variant="info">{unreadCount} sin leer</Badge> : undefined}
-        actions={[
-          ...(unreadCount > 0 ? [{
-            label: 'Marcar todas',
-            onClick: handleMarkAllAsRead,
-            variant: 'secondary' as const,
-          }] : []),
-          {
-            label: '',
-            icon: Settings,
-            href: '/settings',
-            variant: 'secondary' as const,
-          },
-        ]}
-      />
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-gray-900">Notificaciones</h1>
+          {unreadCount > 0 && (
+            <Badge variant="info">{unreadCount} sin leer</Badge>
+          )}
+        </div>
+        {unreadCount > 0 && (
+          <button
+            onClick={handleMarkAllAsRead}
+            className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+          >
+            Marcar todas
+          </button>
+        )}
+      </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-        <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-xl">
-          {filters.map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => setSelectedFilter(filter.value)}
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200',
-                selectedFilter === filter.value
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              {filter.label}
-              {filter.value === 'unread' && unreadCount > 0 && (
-                <span className={cn(
-                  'ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full transition-colors',
-                  selectedFilter === 'unread'
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-gray-200 text-gray-600'
-                )}>
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Student Filter */}
-        {students.length > 1 && (
-          <div className="relative ml-auto">
-            <button
-              onClick={() => setShowStudentSelector(!showStudentSelector)}
-              className={cn(
-                'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200',
-                showStudentSelector
-                  ? 'bg-primary/10 text-primary'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              )}
-            >
-              {selectedStudent.name}
-              <ChevronDown className={cn('w-4 h-4 transition-transform duration-200', showStudentSelector && 'rotate-180')} />
-            </button>
-
-            {showStudentSelector && (
-              <div className="absolute top-full right-0 mt-2 bg-white rounded-xl border border-gray-100 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.1)] z-10 overflow-hidden min-w-[160px] animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200">
-                {studentOptions.map((student) => (
-                  <button
-                    key={student.id}
-                    onClick={() => {
-                      setSelectedStudent(student);
-                      setShowStudentSelector(false);
-                    }}
-                    className={cn(
-                      'w-full px-4 py-3 text-left text-sm font-medium transition-colors duration-150',
-                      selectedStudent.id === student.id
-                        ? 'bg-primary/5 text-primary'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    )}
-                  >
-                    {student.name}
-                  </button>
-                ))}
-              </div>
+      <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-xl w-fit">
+        {filters.map((filter) => (
+          <button
+            key={filter.value}
+            onClick={() => setSelectedFilter(filter.value)}
+            className={cn(
+              'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200',
+              selectedFilter === filter.value
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
             )}
-          </div>
-        )}
+          >
+            {filter.label}
+            {filter.value === 'unread' && unreadCount > 0 && (
+              <span className={cn(
+                'ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full transition-colors',
+                selectedFilter === 'unread'
+                  ? 'bg-primary/10 text-primary'
+                  : 'bg-gray-200 text-gray-600'
+              )}>
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Empty State */}
@@ -335,18 +281,9 @@ export default function NotificationsPage() {
                         </div>
                         <p className="text-[13px] text-gray-500 mt-1.5 leading-relaxed">{notification.message}</p>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
-                          {(notification.category === 'trip_update' || notification.category === 'eta') && (
-                            <Link
-                              href="/inicio"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-info bg-info/5 hover:bg-info/10 rounded-lg transition-colors duration-150"
-                            >
-                              <MapPin className="w-3.5 h-3.5" />
-                              Ver en mapa
-                            </Link>
-                          )}
-                          {!notification.read && (
+                        {/* Mark as read button */}
+                        {!notification.read && (
+                          <div className="mt-3 pt-3 border-t border-gray-100">
                             <button
                               onClick={() => handleMarkAsRead(notification._id)}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-150"
@@ -354,8 +291,8 @@ export default function NotificationsPage() {
                               <CheckCheck className="w-3.5 h-3.5" />
                               Marcar como leída
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -267,9 +267,10 @@ export const create = mutation({
       }
     }
 
-    // Validate stop change requirements (legacy or category-based)
-    const isStopChange = effectiveCategory === "stop_change" || args.type === "stop_change";
-    if (isStopChange) {
+    // Validate stop change requirements (legacy category - stop_change)
+    // Note: temporary_stop_change is already validated above
+    const isLegacyStopChange = effectiveCategory === "stop_change" || args.type === "stop_change";
+    if (isLegacyStopChange) {
       if (!novedadType?.minAdvanceHours) {
         // Legacy validation
         const requestDate = new Date(effectiveStartDate);
@@ -283,14 +284,17 @@ export const create = mutation({
         }
       }
 
-      if (!args.newStopId) {
-        throw new Error("Debe especificar la nueva parada para cambios de parada");
+      // Accept either temporaryLocation (new) or newStopId (legacy)
+      if (!args.temporaryLocation && !args.newStopId) {
+        throw new Error("Debe especificar la nueva ubicación para cambios de parada");
       }
 
-      // Verify new stop exists and is valid
-      const newStop = await ctx.db.get(args.newStopId);
-      if (!newStop || !newStop.isActive) {
-        throw new Error("La parada seleccionada no es válida");
+      // Verify new stop exists and is valid (only if using legacy newStopId)
+      if (args.newStopId) {
+        const newStop = await ctx.db.get(args.newStopId);
+        if (!newStop || !newStop.isActive) {
+          throw new Error("La parada seleccionada no es válida");
+        }
       }
     }
 

@@ -12,7 +12,8 @@
  * - US-005 - Step 2 - Student list with pagination
  */
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useQuery } from 'convex/react';
 import { MapPin, Users, Clock, Calendar } from 'lucide-react';
 import {
   GoogleMapsProvider,
@@ -20,7 +21,8 @@ import {
 } from '@altaviapp/maps';
 import type { MarkerInfo, LatLng } from '@altaviapp/maps';
 import { cn } from '@/lib/utils';
-import { useInstitution } from '@/hooks';
+import { useInstitution, useConvexAuth } from '@/hooks';
+import { api } from '../../../../../../convex/_generated/api';
 import type { BulkWizardStep1Data, BulkWizardStep2Data, BulkWizardStep2Filters } from './BulkRouteWizard';
 import { StudentList, type StudentFilters } from './StudentList';
 
@@ -48,7 +50,9 @@ export function Step2StudentSelection({
   onValidChange,
 }: Step2StudentSelectionProps) {
   const { institution } = useInstitution();
+  const { userId, institutionId } = useConvexAuth();
   const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
+  const prevSelectedIdsRef = useRef<string[]>([]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -111,6 +115,18 @@ export function Step2StudentSelection({
     [onChange]
   );
 
+  // Query selected students' map data
+  const studentsMapData = useQuery(
+    api.routes.getStudentsMapData,
+    userId && institutionId && data.selectedStudentIds.length > 0
+      ? {
+          userId,
+          institutionId,
+          studentIds: data.selectedStudentIds,
+        }
+      : 'skip'
+  );
+
   // School location from institution
   const schoolLocation: LatLng | null = useMemo(() => {
     if (institution?.schoolLatitude && institution?.schoolLongitude) {
@@ -122,11 +138,11 @@ export function Step2StudentSelection({
     return null;
   }, [institution?.schoolLatitude, institution?.schoolLongitude]);
 
-  // School marker always visible
+  // Build markers: school + selected students
   const markers: MarkerInfo[] = useMemo(() => {
     const result: MarkerInfo[] = [];
 
-    // School marker
+    // School marker (always visible)
     if (schoolLocation) {
       result.push({
         id: 'school',
@@ -136,11 +152,25 @@ export function Step2StudentSelection({
       });
     }
 
-    // Student markers will be added in US-008
-    // For now, just show the school marker
+    // Student markers (blue markers for selected students with GPS)
+    if (studentsMapData?.students) {
+      for (const student of studentsMapData.students) {
+        if (student.hasGps && student.homeLatitude && student.homeLongitude) {
+          result.push({
+            id: student.id,
+            type: 'student',
+            position: {
+              lat: student.homeLatitude,
+              lng: student.homeLongitude,
+            },
+            title: student.fullName,
+          });
+        }
+      }
+    }
 
     return result;
-  }, [schoolLocation, institution?.name]);
+  }, [schoolLocation, institution?.name, studentsMapData?.students]);
 
   // Map center defaults to school location
   const mapCenter = schoolLocation || { lat: -0.1807, lng: -78.4678 }; // Default to Quito
@@ -149,6 +179,35 @@ export function Step2StudentSelection({
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     setMapRef(map);
   }, []);
+
+  // Auto-fit map bounds when selection changes
+  useEffect(() => {
+    if (!mapRef || markers.length === 0) return;
+
+    // Check if selection actually changed
+    const currentIds = data.selectedStudentIds.slice().sort().join(',');
+    const prevIds = prevSelectedIdsRef.current.slice().sort().join(',');
+
+    if (currentIds === prevIds && markers.length === 1) {
+      // No change in selection and only school marker
+      return;
+    }
+
+    prevSelectedIdsRef.current = data.selectedStudentIds;
+
+    // Only fit bounds if we have more than just the school marker
+    if (markers.length > 1) {
+      const bounds = new google.maps.LatLngBounds();
+      for (const marker of markers) {
+        bounds.extend(marker.position);
+      }
+      mapRef.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });
+    } else if (schoolLocation) {
+      // If only school marker, center on school
+      mapRef.setCenter(schoolLocation);
+      mapRef.setZoom(13);
+    }
+  }, [mapRef, markers, data.selectedStudentIds, schoolLocation]);
 
   // Calculate selected count
   const selectedCount = data.selectedStudentIds.length;
@@ -183,6 +242,7 @@ export function Step2StudentSelection({
               zoom={13}
               markers={markers}
               onMapLoad={handleMapLoad}
+              showInfoWindow={true}
               style={{ height: '100%', minHeight: '300px' }}
             />
           </div>

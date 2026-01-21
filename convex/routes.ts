@@ -1001,6 +1001,247 @@ export const getBulkWizardFleetSummary = query({
 });
 
 /**
+ * Get unassigned students for bulk route creation (Step 2)
+ *
+ * Returns paginated list of students without route assignment for the selected type.
+ * Supports filtering by:
+ * - Name search
+ * - Grade
+ * - Parent/guardian name
+ * - GPS availability
+ *
+ * PRD Reference: US-005 - Step 2 - Student list with pagination
+ * PRD Reference: US-006 - Step 2 - Student filters and search
+ */
+export const getUnassignedStudents = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    routeType: v.union(v.literal("pickup"), v.literal("dropoff")),
+    filters: v.optional(v.object({
+      search: v.optional(v.string()),
+      grade: v.optional(v.string()),
+      parentName: v.optional(v.string()),
+      hasGps: v.optional(v.boolean()),
+    })),
+    page: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const page = args.page || 1;
+    const limit = args.limit || 20;
+    const offset = (page - 1) * limit;
+
+    // 1. Get all active students
+    const allStudents = await ctx.db
+      .query("students")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // 2. Get all routes of the specified type to find students with routes
+    const routes = await ctx.db
+      .query("routes")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("type"), args.routeType)
+        )
+      )
+      .collect();
+
+    // 3. Get all active studentRoutes for routes of this type
+    const studentsWithRoutes = new Set<string>();
+    for (const route of routes) {
+      const studentRoutes = await ctx.db
+        .query("studentRoutes")
+        .withIndex("by_route", (q) => q.eq("routeId", route._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+
+      for (const sr of studentRoutes) {
+        studentsWithRoutes.add(sr.studentId);
+      }
+    }
+
+    // 4. Filter students without route assignment
+    let studentsWithoutRoute = allStudents.filter(
+      (s) => !studentsWithRoutes.has(s._id)
+    );
+
+    // 5. Apply additional filters
+    const filters = args.filters;
+    if (filters) {
+      // Search by name
+      if (filters.search && filters.search.trim()) {
+        const searchLower = filters.search.toLowerCase().trim();
+        studentsWithoutRoute = studentsWithoutRoute.filter((s) => {
+          const fullName = `${s.firstName} ${s.lastName}`.toLowerCase();
+          return fullName.includes(searchLower);
+        });
+      }
+
+      // Filter by grade
+      if (filters.grade && filters.grade.trim()) {
+        studentsWithoutRoute = studentsWithoutRoute.filter(
+          (s) => s.grade === filters.grade
+        );
+      }
+
+      // Filter by parent/guardian name
+      if (filters.parentName && filters.parentName.trim()) {
+        studentsWithoutRoute = studentsWithoutRoute.filter(
+          (s) => s.parentName === filters.parentName
+        );
+      }
+
+      // Filter by GPS availability (default: only with GPS)
+      if (filters.hasGps !== undefined) {
+        if (filters.hasGps) {
+          studentsWithoutRoute = studentsWithoutRoute.filter(
+            (s) => s.homeLatitude !== undefined && s.homeLongitude !== undefined
+          );
+        } else {
+          // Show all students regardless of GPS
+        }
+      } else {
+        // Default: only students with GPS
+        studentsWithoutRoute = studentsWithoutRoute.filter(
+          (s) => s.homeLatitude !== undefined && s.homeLongitude !== undefined
+        );
+      }
+    } else {
+      // No filters provided - default to GPS-only
+      studentsWithoutRoute = studentsWithoutRoute.filter(
+        (s) => s.homeLatitude !== undefined && s.homeLongitude !== undefined
+      );
+    }
+
+    // Sort by name
+    studentsWithoutRoute.sort((a, b) => {
+      const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+      const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    // 6. Calculate total count before pagination
+    const totalCount = studentsWithoutRoute.length;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    // 7. Apply pagination
+    const paginatedStudents = studentsWithoutRoute.slice(offset, offset + limit);
+
+    // 8. Map to response format
+    const students = paginatedStudents.map((s) => ({
+      id: s._id,
+      firstName: s.firstName,
+      lastName: s.lastName,
+      fullName: `${s.firstName} ${s.lastName}`,
+      grade: s.grade,
+      address: s.address,
+      abbreviatedAddress: s.address.length > 30 ? s.address.substring(0, 30) + "..." : s.address,
+      hasGps: s.homeLatitude !== undefined && s.homeLongitude !== undefined,
+      homeLatitude: s.homeLatitude,
+      homeLongitude: s.homeLongitude,
+    }));
+
+    return {
+      students,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  },
+});
+
+/**
+ * Get filter options for unassigned students (Step 2)
+ *
+ * Returns unique grades and parent names from students without route assignment
+ * for populating filter dropdowns.
+ *
+ * PRD Reference: US-006 - Step 2 - Student filters and search
+ */
+export const getStudentFilterOptions = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    routeType: v.union(v.literal("pickup"), v.literal("dropoff")),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    // 1. Get all active students
+    const allStudents = await ctx.db
+      .query("students")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // 2. Get all routes of the specified type to find students with routes
+    const routes = await ctx.db
+      .query("routes")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("type"), args.routeType)
+        )
+      )
+      .collect();
+
+    // 3. Get all active studentRoutes for routes of this type
+    const studentsWithRoutes = new Set<string>();
+    for (const route of routes) {
+      const studentRoutes = await ctx.db
+        .query("studentRoutes")
+        .withIndex("by_route", (q) => q.eq("routeId", route._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+
+      for (const sr of studentRoutes) {
+        studentsWithRoutes.add(sr.studentId);
+      }
+    }
+
+    // 4. Filter students without route assignment
+    const studentsWithoutRoute = allStudents.filter(
+      (s) => !studentsWithRoutes.has(s._id)
+    );
+
+    // 5. Extract unique grades and parent names
+    const gradesSet = new Set<string>();
+    const parentNamesSet = new Set<string>();
+
+    for (const student of studentsWithoutRoute) {
+      if (student.grade) {
+        gradesSet.add(student.grade);
+      }
+      if (student.parentName) {
+        parentNamesSet.add(student.parentName);
+      }
+    }
+
+    // 6. Sort and return
+    const grades = Array.from(gradesSet).sort((a, b) => a.localeCompare(b, 'es'));
+    const parentNames = Array.from(parentNamesSet).sort((a, b) => a.localeCompare(b, 'es'));
+
+    return {
+      grades,
+      parentNames,
+    };
+  },
+});
+
+/**
  * Migration: Fix route durations that were stored in seconds instead of minutes
  * Only run once per institution to correct existing data
  */
@@ -1039,5 +1280,164 @@ export const fixRouteDurations = mutation({
       routesChecked: routes.length,
       routesFixed: fixedCount,
     };
+  },
+});
+
+/**
+ * Get all filtered student IDs for bulk selection (Step 2)
+ *
+ * Returns all student IDs matching the current filters without pagination.
+ * Used for "Seleccionar todos" button functionality.
+ *
+ * PRD Reference: US-007 - Step 2 - Student selection functionality
+ */
+export const getAllFilteredStudentIds = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    routeType: v.union(v.literal("pickup"), v.literal("dropoff")),
+    filters: v.optional(v.object({
+      search: v.optional(v.string()),
+      grade: v.optional(v.string()),
+      parentName: v.optional(v.string()),
+      hasGps: v.optional(v.boolean()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    // 1. Get all active students
+    const allStudents = await ctx.db
+      .query("students")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // 2. Get all routes of the specified type to find students with routes
+    const routes = await ctx.db
+      .query("routes")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("type"), args.routeType)
+        )
+      )
+      .collect();
+
+    // 3. Get all active studentRoutes for routes of this type
+    const studentsWithRoutes = new Set<string>();
+    for (const route of routes) {
+      const studentRoutes = await ctx.db
+        .query("studentRoutes")
+        .withIndex("by_route", (q) => q.eq("routeId", route._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+
+      for (const sr of studentRoutes) {
+        studentsWithRoutes.add(sr.studentId);
+      }
+    }
+
+    // 4. Filter students without route assignment
+    let studentsWithoutRoute = allStudents.filter(
+      (s) => !studentsWithRoutes.has(s._id)
+    );
+
+    // 5. Apply additional filters
+    const filters = args.filters;
+    if (filters) {
+      // Search by name
+      if (filters.search && filters.search.trim()) {
+        const searchLower = filters.search.toLowerCase().trim();
+        studentsWithoutRoute = studentsWithoutRoute.filter((s) => {
+          const fullName = `${s.firstName} ${s.lastName}`.toLowerCase();
+          return fullName.includes(searchLower);
+        });
+      }
+
+      // Filter by grade
+      if (filters.grade && filters.grade.trim()) {
+        studentsWithoutRoute = studentsWithoutRoute.filter(
+          (s) => s.grade === filters.grade
+        );
+      }
+
+      // Filter by parent/guardian name
+      if (filters.parentName && filters.parentName.trim()) {
+        studentsWithoutRoute = studentsWithoutRoute.filter(
+          (s) => s.parentName === filters.parentName
+        );
+      }
+
+      // Filter by GPS availability (default: only with GPS)
+      if (filters.hasGps !== undefined) {
+        if (filters.hasGps) {
+          studentsWithoutRoute = studentsWithoutRoute.filter(
+            (s) => s.homeLatitude !== undefined && s.homeLongitude !== undefined
+          );
+        }
+        // If hasGps is false, show all students regardless of GPS
+      } else {
+        // Default: only students with GPS
+        studentsWithoutRoute = studentsWithoutRoute.filter(
+          (s) => s.homeLatitude !== undefined && s.homeLongitude !== undefined
+        );
+      }
+    } else {
+      // No filters provided - default to GPS-only
+      studentsWithoutRoute = studentsWithoutRoute.filter(
+        (s) => s.homeLatitude !== undefined && s.homeLongitude !== undefined
+      );
+    }
+
+    // Return just the IDs
+    return {
+      studentIds: studentsWithoutRoute.map((s) => s._id),
+      totalCount: studentsWithoutRoute.length,
+    };
+  },
+});
+
+/**
+ * Get student map data for visualization
+ *
+ * Returns coordinates and names for selected students to display on the map.
+ * Used in Step 2 of bulk route creation wizard.
+ *
+ * PRD Reference: US-008 - Step 2 - Map visualization of selected students
+ */
+export const getStudentsMapData = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    studentIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    if (args.studentIds.length === 0) {
+      return { students: [] };
+    }
+
+    // Fetch all students for this institution
+    const allStudents = await ctx.db
+      .query("students")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .collect();
+
+    // Filter to only selected students and map to required data
+    const studentIdSet = new Set(args.studentIds);
+    const students = allStudents
+      .filter((s) => studentIdSet.has(s._id))
+      .map((s) => ({
+        id: s._id,
+        fullName: `${s.firstName} ${s.lastName}`,
+        homeLatitude: s.homeLatitude,
+        homeLongitude: s.homeLongitude,
+        hasGps: s.homeLatitude !== undefined && s.homeLongitude !== undefined,
+      }));
+
+    return { students };
   },
 });

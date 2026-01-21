@@ -8,10 +8,12 @@
  * - Progress indicator during creation
  * - Success screen with navigation options
  * - Error handling with retry capability
+ * - Optional trip generation for next 7 days
  *
  * PRD References:
  * - US-025 - Step 6 - Final review display
  * - US-027 - Step 6 - Save progress and success feedback
+ * - US-028 - Optional trip generation after route creation
  */
 
 import { useState, useEffect } from 'react';
@@ -34,6 +36,7 @@ import {
   ChevronUp,
   Edit3,
   Clock,
+  CalendarPlus,
 } from 'lucide-react';
 import { api } from '../../../../../../convex/_generated/api';
 import { cn } from '@/lib/utils';
@@ -61,9 +64,11 @@ interface SaveResult {
   routesCreated: number;
   studentsAssigned: number;
   errors: Array<{ routeName: string; error: string }>;
+  tripsGenerated?: number;
+  tripErrors?: Array<{ routeName: string; date: string; error: string }>;
 }
 
-type SaveStatus = 'idle' | 'saving' | 'success' | 'partial_success' | 'error';
+type SaveStatus = 'idle' | 'saving' | 'success' | 'partial_success' | 'error' | 'prompt_trips' | 'generating_trips';
 
 // Day labels mapping
 const DAY_LABELS: Record<string, string> = {
@@ -97,8 +102,13 @@ export function Step6Confirmation({
   // Collapsible route state for showing stops
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
 
-  // Mutation
+  // Mutations
   const createBulkRoutes = useMutation(api.routes.createBulkRoutes);
+  const createTrip = useMutation(api.trips.createTrip);
+
+  // Store created route IDs for trip generation
+  const [createdRouteIds, setCreatedRouteIds] = useState<Id<'routes'>[]>([]);
+  const [tripProgress, setTripProgress] = useState({ current: 0, total: 0 });
 
   // Get routes with their assignments
   const routes = step4Data.generatedRoutes;
@@ -263,17 +273,19 @@ export function Step6Confirmation({
       };
 
       setSaveResult(saveRes);
+      setCreatedRouteIds(result.routeIds || []);
 
       if (result.errors.length === 0 && result.success) {
-        setSaveStatus('success');
+        // Show trip generation prompt instead of going directly to success
+        setSaveStatus('prompt_trips');
       } else if (result.routesCreated > 0) {
-        setSaveStatus('partial_success');
+        // Partial success - still offer trip generation for created routes
+        setSaveStatus('prompt_trips');
       } else {
         setSaveStatus('error');
         setSaveError('No se pudo crear ninguna ruta');
+        onSaveComplete(saveRes);
       }
-
-      onSaveComplete(saveRes);
     } catch (err) {
       console.error('Error creating bulk routes:', err);
       setSaveError(err instanceof Error ? err.message : 'Error al crear las rutas');
@@ -286,6 +298,111 @@ export function Step6Confirmation({
     setSaveStatus('idle');
     setSaveError(null);
     setSaveResult(null);
+  };
+
+  // Get the next 7 days that match the route's recurrence
+  const getNextDaysForTrips = (): string[] => {
+    const dates: string[] = [];
+    const today = new Date();
+    const recurrenceDays = step1Data.operationType === 'daily'
+      ? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+      : step1Data.selectedDays;
+
+    // Map day names to JavaScript day numbers (0=Sunday, 1=Monday, etc.)
+    const dayMap: Record<string, number> = {
+      sunday: 0,
+      monday: 1,
+      tuesday: 2,
+      wednesday: 3,
+      thursday: 4,
+      friday: 5,
+      saturday: 6,
+    };
+
+    const recurrenceDayNumbers = recurrenceDays.map((d) => dayMap[d]);
+
+    // Get next 7 days, filtering by recurrence days
+    for (let i = 1; i <= 14 && dates.length < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const dayOfWeek = date.getDay();
+
+      if (recurrenceDayNumbers.includes(dayOfWeek)) {
+        const dateStr = date.toISOString().split('T')[0];
+        if (dateStr) {
+          dates.push(dateStr);
+        }
+      }
+    }
+
+    return dates;
+  };
+
+  // Handle trip generation
+  const handleGenerateTrips = async () => {
+    if (!userId || createdRouteIds.length === 0) return;
+
+    setSaveStatus('generating_trips');
+    const dates = getNextDaysForTrips();
+    const totalTrips = createdRouteIds.length * dates.length;
+    setTripProgress({ current: 0, total: totalTrips });
+
+    let tripsGenerated = 0;
+    const tripErrors: Array<{ routeName: string; date: string; error: string }> = [];
+    let current = 0;
+
+    for (const routeId of createdRouteIds) {
+      // Find route name for error messages
+      const routeIndex = createdRouteIds.indexOf(routeId);
+      const routeName = routes[routeIndex]?.name || `Ruta ${routeIndex + 1}`;
+
+      for (const date of dates) {
+        try {
+          await createTrip({
+            userId,
+            routeId,
+            scheduledDate: date,
+          });
+          tripsGenerated++;
+        } catch (err) {
+          // Don't fail the whole flow, just record the error
+          tripErrors.push({
+            routeName,
+            date,
+            error: err instanceof Error ? err.message : 'Error desconocido',
+          });
+        }
+        current++;
+        setTripProgress({ current, total: totalTrips });
+      }
+    }
+
+    // Update save result with trip info
+    const updatedResult: SaveResult = {
+      ...saveResult!,
+      tripsGenerated,
+      tripErrors: tripErrors.length > 0 ? tripErrors : undefined,
+    };
+    setSaveResult(updatedResult);
+
+    if (tripErrors.length === 0) {
+      setSaveStatus('success');
+    } else if (tripsGenerated > 0) {
+      setSaveStatus('partial_success');
+    } else {
+      // Even if all trips fail, routes were created successfully
+      setSaveStatus('success');
+    }
+
+    onSaveComplete(updatedResult);
+  };
+
+  // Skip trip generation
+  const handleSkipTrips = () => {
+    setSaveStatus('success');
+    if (saveResult) {
+      onSaveComplete(saveResult);
+    }
   };
 
   // Navigate to routes list
@@ -328,7 +445,7 @@ export function Step6Confirmation({
           </p>
 
           {/* Stats */}
-          <div className="flex justify-center gap-8 mt-6">
+          <div className="flex justify-center gap-8 mt-6 flex-wrap">
             <div className="text-center">
               <div className="text-3xl font-bold text-gray-900">
                 {saveResult?.routesCreated || 0}
@@ -341,8 +458,40 @@ export function Step6Confirmation({
               </div>
               <div className="text-sm text-gray-500">Estudiantes asignados</div>
             </div>
+            {saveResult?.tripsGenerated !== undefined && saveResult.tripsGenerated > 0 && (
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900">
+                  {saveResult.tripsGenerated}
+                </div>
+                <div className="text-sm text-gray-500">Viajes generados</div>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Trip Errors List (if any) */}
+        {saveResult?.tripErrors && saveResult.tripErrors.length > 0 && (
+          <div className="bg-warning/10 border border-warning/20 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle className="w-5 h-5 text-warning" />
+              <span className="font-medium text-warning">
+                {saveResult.tripErrors.length} viaje{saveResult.tripErrors.length !== 1 ? 's' : ''} no pudieron ser generados
+              </span>
+            </div>
+            <ul className="space-y-1 max-h-32 overflow-y-auto">
+              {saveResult.tripErrors.slice(0, 10).map((err, index) => (
+                <li key={index} className="text-sm text-gray-600">
+                  <span className="font-medium">{err.routeName}</span> ({err.date}): {err.error}
+                </li>
+              ))}
+              {saveResult.tripErrors.length > 10 && (
+                <li className="text-sm text-gray-400 italic">
+                  ... y {saveResult.tripErrors.length - 10} errores mas
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
 
         {/* Errors List (for partial success) */}
         {saveResult?.errors && saveResult.errors.length > 0 && (
@@ -408,6 +557,100 @@ export function Step6Confirmation({
             className="h-full bg-primary transition-all duration-300"
             style={{
               width: `${saveProgress.total > 0 ? (saveProgress.current / saveProgress.total) * 100 : 0}%`,
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Render trip generation prompt
+  if (saveStatus === 'prompt_trips') {
+    return (
+      <div className="space-y-6">
+        {/* Success Banner */}
+        <div className="bg-success/10 border border-success/20 rounded-xl p-6 text-center">
+          <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">
+            ¡Rutas creadas exitosamente!
+          </h3>
+          <p className="text-gray-600">
+            Se crearon {saveResult?.routesCreated || 0} rutas con {saveResult?.studentsAssigned || 0} estudiantes asignados.
+          </p>
+        </div>
+
+        {/* Trip Generation Prompt */}
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 text-center">
+          <CalendarPlus className="w-12 h-12 text-primary mx-auto mb-4" />
+          <h4 className="text-xl font-semibold text-gray-900 mb-2">
+            ¿Generar viajes para los proximos 7 dias?
+          </h4>
+          <p className="text-gray-600 mb-6">
+            Puedes crear automaticamente los viajes programados para los proximos dias de operacion.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              type="button"
+              onClick={handleGenerateTrips}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            >
+              <CalendarPlus className="w-5 h-5" />
+              Si, generar viajes
+            </button>
+            <button
+              type="button"
+              onClick={handleSkipTrips}
+              className="flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-600 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+            >
+              No, mas tarde
+            </button>
+          </div>
+        </div>
+
+        {/* Route creation errors if any */}
+        {saveResult?.errors && saveResult.errors.length > 0 && (
+          <div className="bg-warning/10 border border-warning/20 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle className="w-5 h-5 text-warning" />
+              <span className="font-medium text-warning">
+                {saveResult.errors.length} ruta{saveResult.errors.length !== 1 ? 's' : ''} no pudieron ser creadas
+              </span>
+            </div>
+            <ul className="space-y-2">
+              {saveResult.errors.map((err, index) => (
+                <li key={index} className="text-sm text-gray-600">
+                  <span className="font-medium">{err.routeName}:</span> {err.error}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Render generating trips state
+  if (saveStatus === 'generating_trips') {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 space-y-6">
+        <Loader2 className="w-16 h-16 text-primary animate-spin" />
+        <div className="text-center">
+          <h3 className="text-xl font-bold text-gray-900 mb-2">
+            Generando viajes...
+          </h3>
+          <p className="text-gray-500">
+            {tripProgress.current} de {tripProgress.total} viajes creados
+          </p>
+          <p className="text-sm text-gray-400 mt-2">
+            Esto puede tomar unos segundos
+          </p>
+        </div>
+        {/* Progress bar */}
+        <div className="w-64 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{
+              width: `${tripProgress.total > 0 ? (tripProgress.current / tripProgress.total) * 100 : 0}%`,
             }}
           />
         </div>

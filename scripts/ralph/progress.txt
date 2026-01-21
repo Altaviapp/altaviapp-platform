@@ -276,3 +276,24 @@
   - originalStopsOrder stored on modal open to support undo functionality
   - CSS feedback: border-primary/border-dashed for drop target, opacity-50 for dragged item
 ---
+
+## 2026-01-21 - US-025
+- Verified Step 6 final review display component meets all acceptance criteria
+- Files already implemented:
+  - apps/admin/src/components/routes/bulk-wizard/Step6Confirmation.tsx (US-025 features complete)
+- **Acceptance criteria verified:**
+  - Step6Confirmation component created with comprehensive final review layout
+  - Card grid layout: grid-cols-1 md:grid-cols-2 lg:grid-cols-3 for 2-3 column display
+  - Each card shows: route name, vehicle/driver/monitor assignment status, stops count, students count
+  - Recurrence reminder: formatOperationDays() returns "Diario (Lunes a Viernes)" or comma-separated day names
+  - Crear Rutas button: bg-primary text-lg styling, prominently placed at bottom
+  - Atras button: handled by parent BulkRouteWizard via navigation buttons
+  - Typecheck passes: verified with pnpm type-check
+- **Learnings for future iterations:**
+  - Step6Confirmation uses collapsible route cards with expandedRouteId state for showing stops
+  - Summary header shows: routes, students, stops, duration, crew count
+  - Edit buttons allow jumping to specific steps via onEditStep prop
+  - DAY_LABELS mapping converts english day names to Spanish (monday -> Lunes)
+  - buildMutationRoutes prepares data for createBulkRoutes Convex mutation
+  - Component already includes save functionality from US-027 (will be marked separately)
+---

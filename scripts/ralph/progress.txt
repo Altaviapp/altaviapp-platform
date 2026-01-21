@@ -317,3 +317,23 @@
   - Preventing conflicts proactively (via filtering available options) is better UX than just warning about conflicts
   - DriverOption interface includes: hasValidLicense, licenseExpired, licenseExpiry (timestamp)
 ---
+
+## 2026-01-21 - US-026
+- Verified createBulkRoutes mutation already implemented and committed (commit 6f8b1a0)
+- Files already in place:
+  - convex/routes.ts (createBulkRoutes mutation at lines 1493-1684)
+- **Acceptance criteria verified:**
+  - createBulkRoutes mutation created in convex/routes.ts with proper PRD reference comment
+  - Input: institutionId, userId, recurrence (shared), routes[] with stops containing studentIds array
+  - Follows createRouteWithStops pattern: creates route, then routeStops, then studentRoutes
+  - Recurrence applied from args.recurrence to each route (line 1621)
+  - Returns: { success, routesCreated, studentsAssigned, routeIds[], errors[] }
+  - Partial failure handling: try-catch per route with continue, errors collected in array
+  - Typecheck passes
+- **Learnings for future iterations:**
+  - Bulk mutation uses studentIds array per stop (vs createRouteWithStops which has single studentId)
+  - Validation per route: vehicle, driver, monitor, all students must belong to institution
+  - routeStudentCount tracks total students assigned per route for final studentsAssigned count
+  - createdRouteIds array collects successful route IDs for return value
+  - success: routesCreated > 0 means partial success is still considered success
+---

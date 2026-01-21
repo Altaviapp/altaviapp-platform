@@ -32,6 +32,7 @@ import { WizardStepIndicator, type WizardStep } from './WizardStepIndicator';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2StudentSelection } from './Step2StudentSelection';
 import { Step3VehicleCalculation } from './Step3VehicleCalculation';
+import { Step4RouteReview } from './Step4RouteReview';
 
 // Step definitions
 const WIZARD_STEPS: WizardStep[] = [
@@ -325,7 +326,15 @@ export function BulkRouteWizard() {
               onValidChange={(valid) => setStepValid(3, valid)}
             />
           );
-        // Steps 4-6 will be added in future user stories
+        case 4:
+          return (
+            <Step4RouteReview
+              data={wizardState.step4}
+              onChange={(data) => updateStepData('step4', data)}
+              onValidChange={(valid) => setStepValid(4, valid)}
+            />
+          );
+        // Steps 5-6 will be added in future user stories
         default:
           return (
             <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">

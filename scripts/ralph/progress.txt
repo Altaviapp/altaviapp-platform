@@ -337,3 +337,26 @@
   - createdRouteIds array collects successful route IDs for return value
   - success: routesCreated > 0 means partial success is still considered success
 ---
+
+## 2026-01-21 - US-027
+- Verified Step 6 Save progress and success feedback already implemented
+- Files already in place:
+  - apps/admin/src/components/routes/bulk-wizard/Step6Confirmation.tsx (committed in 3e74b31)
+  - convex/routes.ts (createBulkRoutes mutation already verified in US-026)
+- **Acceptance criteria verified:**
+  - Crear Rutas button shows Loader2 spinner and disables during save (saveStatus === 'saving' state)
+  - Progress text: "Creando rutas... X de Y rutas procesadas" with progress bar UI
+  - createBulkRoutes mutation called with buildMutationRoutes() and buildRecurrence() data
+  - Success state shows green Alert with routesCreated and studentsAssigned counts
+  - Ver Rutas button navigates to /routes, Crear Mas button calls onReset()
+  - Partial failure (partial_success status) shows warning with errors list in collapsible section
+  - Typecheck passes
+- **Learnings for future iterations:**
+  - SaveStatus type: 'idle' | 'saving' | 'success' | 'partial_success' | 'error'
+  - saveProgress state: { current, total } for progress bar and text
+  - buildMutationRoutes() transforms wizard GeneratedRoute[] to mutation input format
+  - buildRecurrence() maps step1Data.operationType + selectedDays to recurrence object
+  - Three distinct UI states: review (idle), saving (spinner + progress), result (success/error)
+  - handleSaveComplete callback notifies parent to hide navigation buttons
+  - Error retry via handleRetry() resets status to 'idle'
+---

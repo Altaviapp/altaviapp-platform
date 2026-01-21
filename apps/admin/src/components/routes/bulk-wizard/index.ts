@@ -10,6 +10,7 @@ export type {
   BulkWizardStep5Data,
   BulkWizardStep6Data,
   GeneratedRoute,
+  RouteAssignment,
 } from './BulkRouteWizard';
 
 export { WizardStepIndicator } from './WizardStepIndicator';
@@ -23,3 +24,18 @@ export { FleetSummary } from './FleetSummary';
 
 export { StudentList } from './StudentList';
 export type { StudentListItem, StudentFilters } from './StudentList';
+
+export { RouteDetailModal } from './RouteDetailModal';
+export type {
+  RouteStop,
+  StudentInfo,
+  VehicleOption,
+} from './RouteDetailModal';
+
+export { Step3VehicleCalculation } from './Step3VehicleCalculation';
+
+export { Step4RouteReview } from './Step4RouteReview';
+
+export { Step5Assignment } from './Step5Assignment';
+
+export { Step6Confirmation } from './Step6Confirmation';

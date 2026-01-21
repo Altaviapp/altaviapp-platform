@@ -69,6 +69,35 @@ export function Step2StudentSelection({
     [data.selectedStudentIds, onChange]
   );
 
+  // Handle select page - add all page students to selection (avoiding duplicates)
+  const handleSelectPage = useCallback(
+    (studentIds: string[]) => {
+      const currentSelection = new Set(data.selectedStudentIds);
+      for (const id of studentIds) {
+        currentSelection.add(id);
+      }
+      onChange({ selectedStudentIds: Array.from(currentSelection) });
+    },
+    [data.selectedStudentIds, onChange]
+  );
+
+  // Handle select all - add all filtered students to selection (avoiding duplicates)
+  const handleSelectAll = useCallback(
+    (studentIds: string[]) => {
+      const currentSelection = new Set(data.selectedStudentIds);
+      for (const id of studentIds) {
+        currentSelection.add(id);
+      }
+      onChange({ selectedStudentIds: Array.from(currentSelection) });
+    },
+    [data.selectedStudentIds, onChange]
+  );
+
+  // Handle clear selection - deselect all students
+  const handleClearSelection = useCallback(() => {
+    onChange({ selectedStudentIds: [] });
+  }, [onChange]);
+
   // Handle total count changes from the list
   const handleTotalCountChange = useCallback((count: number) => {
     setTotalStudentCount(count);
@@ -224,6 +253,9 @@ export function Step2StudentSelection({
                 onFiltersChange={handleFiltersChange}
                 selectedStudentIds={data.selectedStudentIds}
                 onStudentSelect={handleStudentSelect}
+                onSelectPage={handleSelectPage}
+                onSelectAll={handleSelectAll}
+                onClearSelection={handleClearSelection}
                 onTotalCountChange={handleTotalCountChange}
               />
             ) : (

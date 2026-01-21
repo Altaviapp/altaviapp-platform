@@ -360,3 +360,25 @@
   - handleSaveComplete callback notifies parent to hide navigation buttons
   - Error retry via handleRetry() resets status to 'idle'
 ---
+## 2026-01-21 - US-018
+- Integrated RouteDetailModal with Step4RouteReview component
+- Files changed:
+  - apps/admin/src/components/routes/bulk-wizard/Step4RouteReview.tsx (added modal state and integration)
+  - apps/admin/src/components/routes/bulk-wizard/RouteDetailModal.tsx (already existed, verified complete)
+- **Acceptance criteria verified:**
+  - Ver Detalle button opens modal via handleViewDetails -> setDetailModalOpen(true)
+  - Modal shows dedicated map area (placeholder for US-017 polyline rendering)
+  - Stops list in order with students assigned to each stop (line 733-888)
+  - Editable route name input field at top (line 646-650)
+  - Vehicle selector dropdown using vehicles from generated routes (modalVehicles useMemo)
+  - Guardar Cambios and Descartar buttons at bottom (line 994-1016)
+  - Modal content scrollable via flex-1 overflow-y-auto container (line 725)
+  - Typecheck passes
+- **Learnings for future iterations:**
+  - Modal state pattern: detailModalOpen (boolean) + detailRouteId (string|null)
+  - detailRoute derived via useMemo find from generatedRoutes
+  - modalVehicles built from unique vehicle IDs in all routes
+  - modalStudentsMap built from all routes' stops (studentId -> StudentInfo)
+  - RouteDetailModal requires routeType to be non-empty: use fallback `routeType || 'pickup'`
+  - Remove unused imports to pass typecheck (useAuth was imported but not used)
+---

@@ -313,8 +313,8 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "RouteDetailModal integrated with Step4RouteReview. Ver Detalle button opens modal, map placeholder ready for US-017 polyline rendering."
     },
     {
       "id": "US-019",

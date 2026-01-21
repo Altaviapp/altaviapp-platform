@@ -1441,3 +1441,362 @@ export const getStudentsMapData = query({
     return { students };
   },
 });
+
+/**
+ * Get vehicles for bulk route creation (Step 3)
+ *
+ * Returns active vehicles with valid status for route assignment.
+ * Each vehicle shows plate, brand/model, capacity, and status.
+ *
+ * PRD Reference: US-010 - Step 3 - Layout and vehicle list display
+ */
+export const getVehiclesForBulkCreation = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    // Get all active vehicles for the institution
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("status"), "active")
+        )
+      )
+      .collect();
+
+    // Map to required fields for Step 3 display
+    return vehicles.map((v) => ({
+      id: v._id,
+      licensePlate: v.licensePlate,
+      brand: v.brand,
+      model: v.model,
+      capacity: v.capacity,
+      status: v.status,
+    }));
+  },
+});
+
+/**
+ * Create multiple routes in bulk (from bulk route wizard)
+ *
+ * Creates multiple routes with stops and student assignments in a single mutation.
+ * Handles partial failures: continues creating remaining routes if one fails.
+ *
+ * PRD Reference: US-026 - Bulk route creation Convex mutation
+ */
+export const createBulkRoutes = mutation({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    // Recurrence settings (applied to all routes)
+    recurrence: v.optional(
+      v.object({
+        type: v.union(
+          v.literal("daily"),
+          v.literal("weekly"),
+          v.literal("monthly"),
+          v.literal("one_time")
+        ),
+        daysOfWeek: v.optional(v.array(v.string())),
+        dayOfWeek: v.optional(v.string()),
+        dayOfMonth: v.optional(v.number()),
+        specificDate: v.optional(v.string()),
+      })
+    ),
+    // Array of routes to create
+    routes: v.array(
+      v.object({
+        name: v.string(),
+        type: v.union(v.literal("pickup"), v.literal("dropoff")),
+        vehicleId: v.id("vehicles"),
+        driverId: v.id("drivers"),
+        monitorId: v.optional(v.id("monitors")),
+        scheduledStartTime: v.string(),
+        scheduledEndTime: v.string(),
+        schoolArrivalTime: v.optional(v.string()),
+        schoolDepartureTime: v.optional(v.string()),
+        optimizedPolyline: v.optional(v.string()),
+        estimatedDuration: v.optional(v.number()),
+        estimatedDistance: v.optional(v.number()),
+        isActive: v.optional(v.boolean()),
+        // Stops with student assignments
+        stops: v.array(
+          v.object({
+            name: v.string(),
+            address: v.string(),
+            latitude: v.number(),
+            longitude: v.number(),
+            scheduledTime: v.string(),
+            estimatedArrivalTime: v.optional(v.string()),
+            durationFromPrevious: v.optional(v.number()),
+            order: v.number(),
+            geofenceRadius: v.optional(v.number()),
+            studentIds: v.array(v.id("students")),
+          })
+        ),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    await verifyRole(ctx, args.userId, "admin");
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const now = Date.now();
+    const errors: Array<{ routeName: string; error: string }> = [];
+    let routesCreated = 0;
+    let studentsAssigned = 0;
+    const createdRouteIds: Id<"routes">[] = [];
+
+    // Process each route
+    for (const routeData of args.routes) {
+      try {
+        // Verify vehicle belongs to institution
+        const vehicle = await ctx.db.get(routeData.vehicleId);
+        if (!vehicle || vehicle.institutionId !== args.institutionId) {
+          errors.push({
+            routeName: routeData.name,
+            error: "Vehículo no válido para esta institución",
+          });
+          continue;
+        }
+
+        // Verify driver belongs to institution
+        const driver = await ctx.db.get(routeData.driverId);
+        if (!driver || driver.institutionId !== args.institutionId) {
+          errors.push({
+            routeName: routeData.name,
+            error: "Conductor no válido para esta institución",
+          });
+          continue;
+        }
+
+        // Verify monitor if provided
+        if (routeData.monitorId) {
+          const monitor = await ctx.db.get(routeData.monitorId);
+          if (!monitor || monitor.institutionId !== args.institutionId) {
+            errors.push({
+              routeName: routeData.name,
+              error: "Monitor no válido para esta institución",
+            });
+            continue;
+          }
+        }
+
+        // Verify all students belong to institution
+        let studentsValid = true;
+        for (const stop of routeData.stops) {
+          for (const studentId of stop.studentIds) {
+            const student = await ctx.db.get(studentId);
+            if (!student || student.institutionId !== args.institutionId) {
+              errors.push({
+                routeName: routeData.name,
+                error: `Estudiante inválido: ${studentId}`,
+              });
+              studentsValid = false;
+              break;
+            }
+          }
+          if (!studentsValid) break;
+        }
+        if (!studentsValid) continue;
+
+        // 1. Create the route
+        const routeId = await ctx.db.insert("routes", {
+          institutionId: args.institutionId,
+          name: routeData.name,
+          type: routeData.type,
+          vehicleId: routeData.vehicleId,
+          driverId: routeData.driverId,
+          monitorId: routeData.monitorId,
+          scheduledStartTime: routeData.scheduledStartTime,
+          scheduledEndTime: routeData.scheduledEndTime,
+          schoolArrivalTime: routeData.schoolArrivalTime,
+          schoolDepartureTime: routeData.schoolDepartureTime,
+          recurrence: args.recurrence,
+          optimizedPolyline: routeData.optimizedPolyline,
+          estimatedDuration: routeData.estimatedDuration,
+          estimatedDistance: routeData.estimatedDistance,
+          isActive: routeData.isActive ?? true,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        createdRouteIds.push(routeId);
+
+        // 2. Create route stops and student assignments
+        let routeStudentCount = 0;
+        for (const stop of routeData.stops) {
+          const stopId = await ctx.db.insert("routeStops", {
+            routeId,
+            name: stop.name,
+            address: stop.address,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
+            scheduledTime: stop.scheduledTime,
+            estimatedArrivalTime: stop.estimatedArrivalTime,
+            durationFromPrevious: stop.durationFromPrevious,
+            order: stop.order,
+            geofenceRadius: stop.geofenceRadius ?? 100,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+          });
+
+          // 3. Create student-route assignments for each student in this stop
+          for (const studentId of stop.studentIds) {
+            await ctx.db.insert("studentRoutes", {
+              studentId,
+              routeId,
+              stopId,
+              isActive: true,
+              createdAt: now,
+              updatedAt: now,
+            });
+            routeStudentCount++;
+          }
+        }
+
+        routesCreated++;
+        studentsAssigned += routeStudentCount;
+      } catch (error) {
+        // Catch any unexpected errors and continue with remaining routes
+        errors.push({
+          routeName: routeData.name,
+          error: error instanceof Error ? error.message : "Error desconocido",
+        });
+      }
+    }
+
+    return {
+      success: routesCreated > 0,
+      routesCreated,
+      studentsAssigned,
+      routeIds: createdRouteIds,
+      errors,
+    };
+  },
+});
+
+/**
+ * Get unassigned student details for Step 4 of bulk route creation
+ *
+ * Returns full details for students not assigned to any route,
+ * used to display in the unassigned students panel.
+ *
+ * PRD Reference: US-021 - Step 4 - Unassigned students panel
+ */
+export const getUnassignedStudentDetails = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    studentIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    if (args.studentIds.length === 0) {
+      return { students: [] };
+    }
+
+    // Fetch all students for this institution
+    const allStudents = await ctx.db
+      .query("students")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .collect();
+
+    // Filter to only requested students and map to required data
+    const studentIdSet = new Set(args.studentIds);
+    const students = allStudents
+      .filter((s) => studentIdSet.has(s._id))
+      .map((s) => ({
+        id: s._id,
+        fullName: `${s.firstName} ${s.lastName}`,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        grade: s.grade,
+        address: s.address,
+        homeLatitude: s.homeLatitude,
+        homeLongitude: s.homeLongitude,
+        hasGps: s.homeLatitude !== undefined && s.homeLongitude !== undefined,
+      }));
+
+    return { students };
+  },
+});
+
+/**
+ * Get drivers and monitors for Step 5 crew assignment
+ *
+ * Returns available drivers (with valid licenses) and monitors
+ * for assigning to generated routes in bulk route creation.
+ *
+ * PRD Reference: US-023 - Step 5 - Vehicle and personnel assignment
+ */
+export const getCrewForBulkAssignment = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    const now = Date.now();
+
+    // Get all active drivers
+    const drivers = await ctx.db
+      .query("drivers")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Enrich drivers with user data and license status
+    const enrichedDrivers = await Promise.all(
+      drivers.map(async (driver) => {
+        const user = await ctx.db.get(driver.userId);
+        const licenseExpired = driver.licenseExpiry ? driver.licenseExpiry < now : true;
+        return {
+          id: driver._id,
+          userId: driver.userId,
+          name: user?.name || "Conductor desconocido",
+          phone: driver.phone || user?.phone,
+          licenseNumber: driver.licenseNumber,
+          licenseExpiry: driver.licenseExpiry,
+          licenseExpired,
+          hasValidLicense: !licenseExpired && !!driver.licenseNumber,
+        };
+      })
+    );
+
+    // Get all active monitors
+    const monitors = await ctx.db
+      .query("monitors")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Enrich monitors with user data
+    const enrichedMonitors = await Promise.all(
+      monitors.map(async (monitor) => {
+        const user = await ctx.db.get(monitor.userId);
+        return {
+          id: monitor._id,
+          userId: monitor.userId,
+          name: user?.name || "Monitor desconocido",
+          phone: monitor.phone || user?.phone,
+          firstAidCertified: monitor.firstAidCertified,
+        };
+      })
+    );
+
+    return {
+      drivers: enrichedDrivers,
+      monitors: enrichedMonitors,
+    };
+  },
+});

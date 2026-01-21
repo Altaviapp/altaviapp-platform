@@ -320,10 +320,18 @@ export function BulkRouteWizard() {
         case 3:
           return (
             <Step3VehicleCalculation
-              selectedStudentCount={wizardState.step2.selectedStudentIds.length}
+              step1Data={wizardState.step1}
+              selectedStudentIds={wizardState.step2.selectedStudentIds}
               data={wizardState.step3}
               onChange={(data) => updateStepData('step3', data)}
               onValidChange={(valid) => setStepValid(3, valid)}
+              onCalculationComplete={(routes, unassignedIds) => {
+                updateStepData('step4', {
+                  generatedRoutes: routes,
+                  unassignedStudentIds: unassignedIds,
+                });
+              }}
+              onAdvanceToStep4={() => setCurrentStep(4)}
             />
           );
         case 4:

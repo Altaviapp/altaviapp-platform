@@ -295,8 +295,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented MultiRouteMap component with 10-color palette, polylines, stop markers with order labels, school marker with building icon, InfoWindows for stops and polylines, and auto bounds fitting"
     },
     {
       "id": "US-018",
@@ -364,8 +364,8 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented UnassignedStudentsPanel and UnassignedStudentRow components with collapsible accordion UI and route/stop assignment dropdown"
     },
     {
       "id": "US-022",
@@ -485,8 +485,8 @@
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in Step6Confirmation.tsx with prompt_trips and generating_trips states"
     }
   ]
 }

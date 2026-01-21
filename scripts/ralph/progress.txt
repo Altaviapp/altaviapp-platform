@@ -8,6 +8,8 @@
 - Use existing RouteOptimizer pattern for Google Directions API calls
 - Spanish language for all UI text (Ecuador/Colombia localization)
 - Brand colors: primary #042940, accent #DBF227
+- For multi-route map visualization: import GoogleMap, Marker, Polyline, InfoWindow from @react-google-maps/api
+- Use decodePolyline from @altaviapp/maps to convert encoded polyline to LatLng[] array
 
 - PageHeader component supports multiple action buttons with variant styling
 - WizardStepIndicator can be reused for multi-step wizards (responsive, mobile-friendly)
@@ -381,4 +383,77 @@
   - modalStudentsMap built from all routes' stops (studentId -> StudentInfo)
   - RouteDetailModal requires routeType to be non-empty: use fallback `routeType || 'pickup'`
   - Remove unused imports to pass typecheck (useAuth was imported but not used)
+---
+
+## 2026-01-21 - US-028
+- Implemented optional trip generation after route creation
+- Files changed:
+  - apps/admin/src/components/routes/bulk-wizard/Step6Confirmation.tsx (added trip generation flow)
+- **Acceptance criteria verified:**
+  - After successful route creation, shows prompt dialog (prompt_trips state)
+  - Prompt text: "¿Generar viajes para los próximos 7 días?" with CalendarPlus icon
+  - Sí button: calls createTrip mutation for each route for next 7 operation days
+  - Uses existing createTrip mutation from trips.ts via api.trips.createTrip
+  - Shows count of trips generated in final success message (tripsGenerated stat in success banner)
+  - No button: skips trip generation, proceeds to success state
+  - Handles trip generation errors separately: tripErrors array, doesn't fail whole flow
+  - Typecheck passes
+- **Learnings for future iterations:**
+  - Extended SaveStatus type with 'prompt_trips' and 'generating_trips' states
+  - Extended SaveResult interface with tripsGenerated and tripErrors fields
+  - getNextDaysForTrips() function calculates next 7 operation days based on recurrence
+  - dayMap maps day names to JS day numbers (0=Sunday through 6=Saturday)
+  - Trip generation uses createdRouteIds returned from createBulkRoutes mutation
+  - Trip errors shown in separate warning banner, limited to first 10 with count for remaining
+  - CalendarPlus icon from lucide-react used for trip generation UI
+---
+
+## 2026-01-21 - US-021
+- Implemented Step 4 Unassigned students panel with assignment functionality
+- Files changed:
+  - apps/admin/src/components/routes/bulk-wizard/Step4RouteReview.tsx (added UnassignedStudentsPanel, UnassignedStudentRow components and handleAssignStudent handler)
+- **Acceptance criteria verified:**
+  - Collapsible panel with accordion UI showing unassigned students if count > 0
+  - Panel header shows count: "X estudiantes sin asignar" with UserX warning icon
+  - Each student shows fullName and address (truncated to 40 chars) with Home icon
+  - Students without GPS show "Sin GPS" warning text
+  - Asignar button opens dropdown to select route (with student counts) and stop
+  - Stop selector includes "Nueva parada (ubicacion del estudiante)" option
+  - After assignment, student moves to selected route/stop via handleAssignStudent
+  - Summary header "Sin asignar" count updates automatically (uses unassignedStudentIds.length)
+  - Typecheck passes
+- **Learnings for future iterations:**
+  - useConvexAuth hook (not useAuth) is the correct import in admin app for userId
+  - getUnassignedStudentDetails query was already implemented in convex/routes.ts (line 1694)
+  - UnassignedStudent interface: id, fullName, firstName, lastName, grade, address, homeLatitude, homeLongitude, hasGps
+  - Assignment to existing stop: add studentId to stop.studentIds array
+  - Assignment to new stop: create stop object with student's homeLatitude/homeLongitude
+  - Dropdown ref pattern with mousedown event listener for click-outside-to-close
+---
+
+## 2026-01-21 - US-017
+- Implemented Step 4 multi-route map visualization with polylines and stop markers
+- Files changed:
+  - apps/admin/src/components/routes/bulk-wizard/Step4RouteReview.tsx (added MultiRouteMap component, updated RouteCard with routeColor)
+- **Acceptance criteria verified:**
+  - 10-color palette defined: primary blue, red, teal, yellow, purple, orange, navy, green, pink, cyan
+  - Each visible route draws polyline in assigned color via Polyline component from @react-google-maps/api
+  - Stop markers shown with route color using google.maps.SymbolPath.CIRCLE and order number label
+  - School marker uses distinct building icon (SCHOOL_ICON_PATH constant with fill color #042940)
+  - Click stop marker shows InfoWindow with student names (limited to 5 with "+X mas" overflow)
+  - Click polyline shows InfoWindow with route name
+  - Map auto-fits bounds to show all visible routes using LatLngBounds and fitBounds with 50px padding
+  - Typecheck passes
+- **Learnings for future iterations:**
+  - Import GoogleMap, Marker, Polyline, InfoWindow from @react-google-maps/api (not from @altaviapp/maps)
+  - useGoogleMapsContext provides { isLoaded, loadError } for loading state handling
+  - decodePolyline from @altaviapp/maps converts encoded polyline string to LatLng[] array
+  - MAPS_CONFIG.mapStyles from @altaviapp/maps for consistent map styling
+  - routeColorMap pattern: Map<routeId, color> for consistent color assignment across components
+  - prevVisibleIdsRef pattern: track previous visible IDs to trigger fitBounds only when selection changes
+  - Stop marker label: { text: String(order), color: '#FFFFFF', fontWeight: 'bold', fontSize: '10px' }
+  - Marker zIndex pattern: 1000 for school, 100 + order for stops (prevents overlap issues)
+  - InfoWindow data types: StopInfoWindowData (includes studentNames), PolylineInfoWindowData (routeName only)
+  - RouteCard updated with routeColor prop: checkbox, number badge, and stat icons styled with route color
+  - Type safety for array access: use ?? fallback or check element exists before accessing
 ---

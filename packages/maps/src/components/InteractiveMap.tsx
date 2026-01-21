@@ -1,6 +1,6 @@
 "use client";
 
-import { GoogleMap, Marker, Polyline } from "@react-google-maps/api";
+import { GoogleMap, Marker, Polyline, InfoWindow } from "@react-google-maps/api";
 import { useCallback, useState, useMemo } from "react";
 import { MAPS_CONFIG } from "../config/maps-config";
 import { useGoogleMapsContext, MapsLoadingState, MapsErrorState } from "./GoogleMapsProvider";
@@ -17,6 +17,8 @@ export type InteractiveMapProps = {
   onMapLoad?: (map: google.maps.Map) => void;
   className?: string;
   style?: React.CSSProperties;
+  /** Enable InfoWindow popups on marker click (shows marker title) */
+  showInfoWindow?: boolean;
 };
 
 const defaultContainerStyle = {
@@ -27,7 +29,7 @@ const defaultContainerStyle = {
 // Marker colors by type
 const markerColors: Record<string, string> = {
   stop: "#042940", // Primary blue
-  student: "#DBF227", // Accent lime
+  student: "#3B82F6", // Info blue (for map visualization)
   vehicle: "#3B82F6", // Info blue
   school: "#10B981", // Success green
 };
@@ -43,9 +45,11 @@ export function InteractiveMap({
   onMapLoad,
   className,
   style,
+  showInfoWindow = false,
 }: InteractiveMapProps) {
   const { isLoaded, loadError } = useGoogleMapsContext();
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [selectedMarker, setSelectedMarker] = useState<MarkerInfo | null>(null);
 
   const containerStyle = useMemo(
     () => ({ ...defaultContainerStyle, ...style }),
@@ -76,13 +80,20 @@ export function InteractiveMap({
   );
 
   const handleMarkerClick = useCallback(
-    (markerId: string) => {
+    (markerId: string, marker?: MarkerInfo) => {
+      if (showInfoWindow && marker) {
+        setSelectedMarker(marker);
+      }
       if (onMarkerClick) {
         onMarkerClick(markerId);
       }
     },
-    [onMarkerClick]
+    [onMarkerClick, showInfoWindow]
   );
+
+  const handleInfoWindowClose = useCallback(() => {
+    setSelectedMarker(null);
+  }, []);
 
   const handleMarkerDragEnd = useCallback(
     (markerId: string, e: google.maps.MapMouseEvent) => {
@@ -135,7 +146,7 @@ export function InteractiveMap({
             } : undefined}
             title={marker.title}
             draggable={marker.draggable}
-            onClick={() => handleMarkerClick(marker.id)}
+            onClick={() => handleMarkerClick(marker.id, marker)}
             onDragEnd={(e) => handleMarkerDragEnd(marker.id, e)}
             icon={marker.type ? {
               path: google.maps.SymbolPath.CIRCLE,
@@ -147,6 +158,20 @@ export function InteractiveMap({
             } : undefined}
           />
         ))}
+
+        {/* InfoWindow for selected marker */}
+        {showInfoWindow && selectedMarker && (
+          <InfoWindow
+            position={selectedMarker.position}
+            onCloseClick={handleInfoWindowClose}
+          >
+            <div className="px-1 py-0.5">
+              <p className="font-medium text-gray-900 text-sm">
+                {selectedMarker.title || selectedMarker.id}
+              </p>
+            </div>
+          </InfoWindow>
+        )}
 
         {/* Render polyline for route */}
         {polyline && polyline.length > 1 && (

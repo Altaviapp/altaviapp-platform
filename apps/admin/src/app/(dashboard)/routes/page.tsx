@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, Plus, Users, Bus, Clock, GraduationCap, CheckCircle } from 'lucide-react';
+import { MapPin, Plus, Users, Bus, Clock, GraduationCap, CheckCircle, Layers } from 'lucide-react';
 import { Badge } from '@/components/core';
 import { PageHeader, SearchFilter, DataTable, StatsGrid, type Column, type StatItem } from '@/components/shared';
 import { useRoutes } from '@/hooks';
@@ -153,6 +153,12 @@ export default function RoutesPage() {
         title="Gestión de Rutas"
         subtitle="Administra las rutas de transporte escolar"
         actions={[
+          {
+            label: 'Creación Masiva',
+            href: '/routes/bulk-create',
+            icon: Layers,
+            variant: 'secondary',
+          },
           {
             label: 'Nueva Ruta',
             href: '/routes/new',

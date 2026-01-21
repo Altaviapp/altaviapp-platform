@@ -1,0 +1,492 @@
+{
+  "project": "Altaviapp",
+  "branchName": "ralph/bulk-route-creation",
+  "description": "Rutas - Creación Masiva: 6-step wizard for bulk route creation during institution onboarding with Google Maps optimization",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create bulk route wizard page structure",
+      "description": "As a developer, I need the page structure and navigation for the 6-step bulk route creation wizard.",
+      "acceptanceCriteria": [
+        "Create page at apps/admin/src/app/(dashboard)/routes/bulk-create/page.tsx",
+        "Create BulkRouteWizard component at apps/admin/src/components/routes/bulk-wizard/BulkRouteWizard.tsx with step state (1-6)",
+        "Create WizardStepIndicator component showing current step and progress",
+        "Add Siguiente (next) and Atrás (back) navigation buttons",
+        "Add link from routes list page: button 'Creación Masiva' linking to /routes/bulk-create",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Step 1 - Route type and schedule selection",
+      "description": "As a coordinator, I need to define the basic parameters for the routes I'm creating.",
+      "acceptanceCriteria": [
+        "Create Step1BasicInfo component in bulk-wizard folder",
+        "Radio buttons for route type: Recogida (casa→colegio) or Entrega (colegio→casa)",
+        "Time picker for target time (arrival for pickup, departure for dropoff)",
+        "Radio buttons for operation days: Diario or Días específicos",
+        "Checkbox group for days of week when Días específicos selected",
+        "Form validation: type and time are required",
+        "Store selections in wizard state via props/callbacks",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Step 1 - Fleet and student summary display",
+      "description": "As a coordinator, I need to see a summary of available resources before proceeding.",
+      "acceptanceCriteria": [
+        "Create Convex query getOnboardingStats(institutionId, routeType) returning vehicle/driver/monitor/student counts",
+        "Query active vehicles, active drivers with valid licenses, active monitors",
+        "Query students without route assignment for selected type",
+        "Display summary cards in Step1BasicInfo: X vehículos, Y conductores, Z monitores, W estudiantes sin ruta",
+        "Disable Siguiente button if no students without routes available",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Step 2 - Split view layout with map",
+      "description": "As a coordinator, I need a split view with map on left and student panel on right.",
+      "acceptanceCriteria": [
+        "Create Step2StudentSelection component with 50/50 split layout (flex or grid)",
+        "Left side: InteractiveMap or GoogleRouteMap showing school marker",
+        "Right side: Panel with route summary header and student list area below",
+        "Route summary shows: type, target time, operation days from Step 1",
+        "Counter showing X de Y estudiantes seleccionados",
+        "Use responsive layout: stack vertically on mobile (md breakpoint)",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Step 2 - Student list with pagination",
+      "description": "As a coordinator, I need to see available students in a paginated list.",
+      "acceptanceCriteria": [
+        "Create Convex query getUnassignedStudents(institutionId, routeType, filters, page, limit)",
+        "Display 20 students per page with pagination controls (prev/next, page number)",
+        "Each student row shows: name, grade, abbreviated address (first 30 chars), GPS indicator",
+        "GPS indicator: green checkmark if homeLatitude/homeLongitude exist, red X if missing",
+        "Default filter: only students with GPS coordinates (hasGps: true)",
+        "Loading skeleton while fetching",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Step 2 - Student filters and search",
+      "description": "As a coordinator, I need to filter and search students to find specific groups.",
+      "acceptanceCriteria": [
+        "Search input filtering by student name with 300ms debounce",
+        "Dropdown filter by grade/year (populated from institution grades)",
+        "Dropdown filter by parent/guardian (from students.parentId)",
+        "Toggle filter Solo con ubicación GPS (default: on)",
+        "Filters combine with AND logic",
+        "Reset filters button clears all filters",
+        "Pagination resets to page 1 when any filter changes",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Step 2 - Student selection functionality",
+      "description": "As a coordinator, I need to select students for route assignment.",
+      "acceptanceCriteria": [
+        "Checkbox on each student row for individual selection",
+        "Seleccionar página button selects all visible students on current page",
+        "Seleccionar todos button selects all filtered students across all pages",
+        "Limpiar selección button deselects all selected students",
+        "Selected students have highlighted background (bg-primary/10 or similar)",
+        "Selection count updates in header counter in real-time",
+        "Selected student IDs stored in wizard state array",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Step 2 - Map visualization of selected students",
+      "description": "As a coordinator, I need to see selected students appear on the map.",
+      "acceptanceCriteria": [
+        "School marker always visible using institution coordinates",
+        "When student selected, blue marker appears at homeLatitude/homeLongitude",
+        "When student deselected, marker disappears from map",
+        "All student markers use same blue color in this step",
+        "Click marker shows student name in InfoWindow popup",
+        "Map auto-fits bounds to show all markers plus school when selection changes",
+        "Map supports zoom and pan interaction",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Step 2 - Selection validation and confirmation",
+      "description": "As a coordinator, I need to validate and confirm my student selection.",
+      "acceptanceCriteria": [
+        "Warning banner (yellow Alert) if any selected students lack GPS coordinates",
+        "Display total selected count prominently before Confirmar Estudiantes button",
+        "Confirmar Estudiantes button disabled if selectedStudents.length === 0",
+        "Atrás button returns to Step 1 preserving Step 1 form data",
+        "Confirmar Estudiantes proceeds to Step 3 with selected student IDs",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Step 3 - Layout and vehicle list display",
+      "description": "As a coordinator, I need to see selected students summary and available vehicles.",
+      "acceptanceCriteria": [
+        "Create Step3VehicleCalculation component",
+        "Header showing X estudiantes seleccionados para asignar a rutas",
+        "List active vehicles with valid documents from Convex query",
+        "Each vehicle row shows: plate, brand/model, capacity, status badge",
+        "Checkbox on each vehicle to include in calculation",
+        "Running total: Capacidad seleccionada: X / Y estudiantes",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Already implemented in Step3VehicleCalculation.tsx"
+    },
+    {
+      "id": "US-011",
+      "title": "Step 3 - Capacity validation and parameters",
+      "description": "As a coordinator, I need capacity feedback and optional calculation parameters.",
+      "acceptanceCriteria": [
+        "Warning banner (yellow) when total vehicle capacity < selected students",
+        "Success indicator (green checkmark) when capacity >= students",
+        "Collapsible Parámetros Avanzados section (default collapsed)",
+        "Number input: Radio de agrupación (default 100m, min 50, max 500)",
+        "Number input: Tiempo máximo de ruta (default 60 min, min 30, max 120)",
+        "Radio: Priorizar: Menos paradas vs Menor distancia total",
+        "Store all parameters in wizard state",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Already implemented in Step3VehicleCalculation.tsx"
+    },
+    {
+      "id": "US-012",
+      "title": "Route clustering algorithm service",
+      "description": "As a system, I need to cluster students into route groups by proximity.",
+      "acceptanceCriteria": [
+        "Create clusterStudentsForRoutes function in apps/admin/src/services/routeClustering.ts",
+        "Input: students with coordinates, vehicle capacities, school location, groupingRadius",
+        "Use k-means or distance-based clustering to group students",
+        "Number of clusters = number of vehicles selected",
+        "Students within groupingRadius share a stop (use first student location)",
+        "Balance student count across clusters respecting capacity",
+        "Return: array of { vehicleId, students[], stops[] } objects",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Google Maps route optimization integration",
+      "description": "As a system, I need to optimize stop order using Google Directions API.",
+      "acceptanceCriteria": [
+        "Create optimizeRouteOrder function in apps/admin/src/services/routeOptimization.ts",
+        "Use existing packages/maps directions service or create wrapper",
+        "Call Directions API with waypoints and optimize:true",
+        "For pickup: origin=first stop, destination=school",
+        "For dropoff: origin=school, destination=last stop",
+        "Return: optimized stop order, encoded polyline, total duration, total distance",
+        "Handle API errors: return original order with error flag",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Step 3 - Calculate routes button and flow",
+      "description": "As a coordinator, I need to trigger route calculation and see progress.",
+      "acceptanceCriteria": [
+        "Calcular Rutas button disabled until at least one vehicle selected",
+        "Button shows loading spinner during calculation",
+        "Progress text: Calculando rutas... (puede tomar unos segundos)",
+        "Call clustering service then optimization service for each cluster",
+        "On success: store generated routes in wizard state, proceed to Step 4",
+        "On error (insufficient capacity): show error with unassigned count",
+        "On API error: show retry button with error message",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Step 4 - Split view with route cards",
+      "description": "As a coordinator, I need to see generated routes in card format with map.",
+      "acceptanceCriteria": [
+        "Create Step4ReviewRoutes component with split layout",
+        "Left: Google Map (empty initially)",
+        "Right: Summary header + scrollable list of route cards",
+        "Summary: X rutas generadas, Y estudiantes asignados, Z sin asignar",
+        "Warning banner if unassigned students > 0",
+        "Route cards show: auto-name, vehicle plate, stops count, students count, time, distance",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Implemented Step4RouteReview.tsx with split view (1/3 route cards, 2/3 map)"
+    },
+    {
+      "id": "US-016",
+      "title": "Step 4 - Route card selection and map toggle",
+      "description": "As a coordinator, I need to toggle route visibility on the map.",
+      "acceptanceCriteria": [
+        "Checkbox on each route card to toggle map visibility",
+        "Seleccionar todas button checks all route cards",
+        "Deseleccionar todas button unchecks all route cards",
+        "Ver Detalle button on each card (functionality in later story)",
+        "Auto-generate route names: Ruta Recogida 1, Ruta Entrega 2, etc.",
+        "Editable route name field on card (inline edit)",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "Implemented map visibility checkbox, bulk select/deselect buttons, auto-generated route names, and inline editable name field"
+    },
+    {
+      "id": "US-017",
+      "title": "Step 4 - Multi-route map visualization",
+      "description": "As a coordinator, I need to see selected routes on map with distinct colors.",
+      "acceptanceCriteria": [
+        "Define color palette array (8-10 distinct colors) for routes",
+        "Each selected route draws polyline in its assigned color",
+        "Stop markers shown in route color with order number label",
+        "School marker always visible (distinct icon)",
+        "Click stop marker shows InfoWindow with student names",
+        "Click polyline shows route name in InfoWindow",
+        "Map auto-fits bounds to show all selected routes",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "Implemented MultiRouteMap component with 10-color palette, polylines, stop markers with order labels, school marker with building icon, InfoWindows for stops and polylines, and auto bounds fitting"
+    },
+    {
+      "id": "US-018",
+      "title": "Step 4 - Route detail modal",
+      "description": "As a coordinator, I need to view individual route details in a modal.",
+      "acceptanceCriteria": [
+        "Ver Detalle button opens modal/Dialog component",
+        "Modal shows dedicated map with single route polyline",
+        "List of stops in order with students assigned to each stop",
+        "Editable route name input field at top",
+        "Vehicle selector dropdown (from selected vehicles in Step 3)",
+        "Guardar Cambios and Descartar buttons at bottom",
+        "Modal is scrollable for long stop lists",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "RouteDetailModal integrated with Step4RouteReview. Ver Detalle button opens modal, map placeholder ready for US-017 polyline rendering."
+    },
+    {
+      "id": "US-019",
+      "title": "Step 4 - Stop reordering with drag and drop",
+      "description": "As a coordinator, I need to manually adjust stop order in route detail.",
+      "acceptanceCriteria": [
+        "Stops list supports drag-and-drop reordering (use @dnd-kit or similar)",
+        "Drag handle icon on each stop row",
+        "Map polyline updates in real-time when order changes",
+        "After reorder: recalculate route by calling Directions API",
+        "Show loading indicator during recalculation",
+        "Update time and distance display with new values",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "Implemented with native HTML5 drag-and-drop instead of @dnd-kit. Uses recalculateRouteWithFixedOrder from routeOptimization.ts service."
+    },
+    {
+      "id": "US-020",
+      "title": "Step 4 - Modify stops and students in detail",
+      "description": "As a coordinator, I need to add/remove stops and reassign students.",
+      "acceptanceCriteria": [
+        "Eliminar parada button on each stop (moves students to unassigned)",
+        "Confirmation dialog before deleting stop",
+        "Agregar estudiante dropdown on each stop (from unassigned list)",
+        "Nueva parada button creates stop with selected unassigned student location",
+        "Route stats (stops, students, time, distance) update after modifications",
+        "Polyline recalculates after adding/removing stops",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "Implemented in RouteDetailModal.tsx with delete confirmation, add student dropdown, new stop creation, stats update via useMemo"
+    },
+    {
+      "id": "US-021",
+      "title": "Step 4 - Unassigned students panel",
+      "description": "As a coordinator, I need to see and handle unassigned students.",
+      "acceptanceCriteria": [
+        "Collapsible panel/accordion showing unassigned students if count > 0",
+        "Panel header shows count: X estudiantes sin asignar",
+        "Each unassigned student shows name and home address",
+        "Asignar button opens dropdown to select route and stop",
+        "After assignment student moves to selected route/stop",
+        "Unassigned count in summary header updates",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "Implemented UnassignedStudentsPanel and UnassignedStudentRow components with collapsible accordion UI and route/stop assignment dropdown"
+    },
+    {
+      "id": "US-022",
+      "title": "Step 4 - Validation warnings and navigation",
+      "description": "As a coordinator, I need warnings about issues before confirming routes.",
+      "acceptanceCriteria": [
+        "Warning banner if any route exceeds max time parameter from Step 3",
+        "Warning banner if any route has only 1 student (ineficiente)",
+        "Warning banner if unassigned students remain",
+        "Warnings are yellow Alert components, not blocking",
+        "Confirmar Rutas button proceeds to Step 5",
+        "Atrás button returns to Step 3 (clears generated routes, keeps selections)",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Step 5 - Driver assignment interface",
+      "description": "As a coordinator, I need to assign drivers to each confirmed route.",
+      "acceptanceCriteria": [
+        "Create Step5CrewAssignment component",
+        "List confirmed routes with driver Select dropdown on each",
+        "Driver options show: name, license expiry, already-assigned warning",
+        "Query active drivers with valid licenses for dropdown",
+        "Warning icon if driver already assigned to another route at same schedule",
+        "Warning banner if any route has no driver (blocks proceeding)",
+        "Store driver assignments in wizard state",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Step5Assignment.tsx implements driver assignment with license expiry display, prevents double-assignment"
+    },
+    {
+      "id": "US-024",
+      "title": "Step 5 - Monitor assignment and summary",
+      "description": "As a coordinator, I need to optionally assign monitors and see summary.",
+      "acceptanceCriteria": [
+        "Monitor Select dropdown on each route (optional, includes Sin monitor option)",
+        "Query active monitors for dropdown options",
+        "Warning icon if monitor already assigned to another route at same time",
+        "Summary section below assignments showing all counts",
+        "Summary: rutas, estudiantes, paradas, vehículos, conductores, monitores",
+        "Siguiente button enabled only when all routes have drivers",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "Step5Assignment.tsx updated with monitor conflict detection and summary section"
+    },
+    {
+      "id": "US-025",
+      "title": "Step 6 - Final review display",
+      "description": "As a coordinator, I need to see everything before creating routes.",
+      "acceptanceCriteria": [
+        "Create Step6Confirmation component",
+        "Display all routes in compact card grid (2-3 columns)",
+        "Each card shows: name, vehicle, driver, monitor, stops count, students count",
+        "Recurrence reminder: Días de operación: Lunes, Martes... or Diario",
+        "Crear Rutas button prominently styled (primary, large)",
+        "Atrás button returns to Step 5",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": "Step6Confirmation.tsx already implemented with card grid, recurrence display, primary-styled Crear Rutas button"
+    },
+    {
+      "id": "US-026",
+      "title": "Bulk route creation Convex mutation",
+      "description": "As a system, I need to save all routes in the database.",
+      "acceptanceCriteria": [
+        "Create createBulkRoutes mutation in convex/routes.ts",
+        "Input: institutionId, userId, routes[] with stops and studentIds",
+        "For each route: reuse createRouteWithStops internal logic",
+        "Set recurrence from wizard configuration on each route",
+        "Return: { success, routesCreated, studentsAssigned, errors[] }",
+        "Handle partial failures: continue creating remaining routes, collect errors",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": "Already implemented in commit 6f8b1a0. Mutation creates routes, routeStops, and studentRoutes with partial failure handling."
+    },
+    {
+      "id": "US-027",
+      "title": "Step 6 - Save progress and success feedback",
+      "description": "As a coordinator, I need feedback during and after saving routes.",
+      "acceptanceCriteria": [
+        "Crear Rutas button shows spinner and disables during save",
+        "Progress text: Creando rutas... X de Y",
+        "Call createBulkRoutes mutation with all wizard data",
+        "On success: show success Alert with count of routes created",
+        "Show buttons: Ver Rutas (navigate to /routes) and Crear Más (reset wizard)",
+        "On partial failure: show warning with failed routes list, option to proceed",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": true,
+      "notes": "Implemented in Step6Confirmation.tsx with loading state (Loader2 spinner), progress indicator, success/error/partial_success states, and Ver Rutas/Crear Mas buttons"
+    },
+    {
+      "id": "US-028",
+      "title": "Optional trip generation after route creation",
+      "description": "As a system, I need to optionally generate initial trips for new routes.",
+      "acceptanceCriteria": [
+        "After successful route creation, show prompt dialog",
+        "Prompt: ¿Generar viajes para los próximos 7 días?",
+        "Sí button: call createTrip for each route for next 7 days",
+        "Use existing createTrip mutation from trips.ts",
+        "Show count of trips generated in final success message",
+        "No button: skip trip generation, show success without trips",
+        "Handle trip generation errors separately, don't fail the whole flow",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": true,
+      "notes": "Implemented in Step6Confirmation.tsx with prompt_trips and generating_trips states"
+    }
+  ]
+}

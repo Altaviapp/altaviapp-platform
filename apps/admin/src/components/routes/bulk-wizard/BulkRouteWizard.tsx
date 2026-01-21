@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { WizardStepIndicator, type WizardStep } from './WizardStepIndicator';
 import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2StudentSelection } from './Step2StudentSelection';
+import { Step3VehicleCalculation } from './Step3VehicleCalculation';
 
 // Step definitions
 const WIZARD_STEPS: WizardStep[] = [
@@ -312,9 +313,19 @@ export function BulkRouteWizard() {
               data={wizardState.step2}
               onChange={(data) => updateStepData('step2', data)}
               onValidChange={(valid) => setStepValid(2, valid)}
+              onConfirm={() => setCurrentStep(3)}
             />
           );
-        // Steps 3-6 will be added in future user stories
+        case 3:
+          return (
+            <Step3VehicleCalculation
+              selectedStudentCount={wizardState.step2.selectedStudentIds.length}
+              data={wizardState.step3}
+              onChange={(data) => updateStepData('step3', data)}
+              onValidChange={(valid) => setStepValid(3, valid)}
+            />
+          );
+        // Steps 4-6 will be added in future user stories
         default:
           return (
             <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">

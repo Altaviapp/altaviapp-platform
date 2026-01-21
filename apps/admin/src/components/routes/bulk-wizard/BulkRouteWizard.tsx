@@ -30,6 +30,7 @@ import {
 import { cn } from '@/lib/utils';
 import { WizardStepIndicator, type WizardStep } from './WizardStepIndicator';
 import { Step1BasicInfo } from './Step1BasicInfo';
+import { Step2StudentSelection } from './Step2StudentSelection';
 
 // Step definitions
 const WIZARD_STEPS: WizardStep[] = [
@@ -79,8 +80,16 @@ export interface BulkWizardStep1Data {
   selectedDays: string[];
 }
 
+export interface BulkWizardStep2Filters {
+  search?: string;
+  grade?: string;
+  parentName?: string;
+  hasGps?: boolean;
+}
+
 export interface BulkWizardStep2Data {
   selectedStudentIds: string[];
+  filters: BulkWizardStep2Filters;
 }
 
 export interface BulkWizardStep3Data {
@@ -142,6 +151,9 @@ const initialState: BulkWizardState = {
   },
   step2: {
     selectedStudentIds: [],
+    filters: {
+      hasGps: true, // Default: only show students with GPS
+    },
   },
   step3: {
     selectedVehicleIds: [],
@@ -293,7 +305,16 @@ export function BulkRouteWizard() {
               onValidChange={(valid) => setStepValid(1, valid)}
             />
           );
-        // Steps 2-6 will be added in future user stories
+        case 2:
+          return (
+            <Step2StudentSelection
+              step1Data={wizardState.step1}
+              data={wizardState.step2}
+              onChange={(data) => updateStepData('step2', data)}
+              onValidChange={(valid) => setStepValid(2, valid)}
+            />
+          );
+        // Steps 3-6 will be added in future user stories
         default:
           return (
             <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">

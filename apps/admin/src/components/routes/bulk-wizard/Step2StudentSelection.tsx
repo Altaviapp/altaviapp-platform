@@ -9,7 +9,7 @@
  *
  * PRD References:
  * - US-004 - Step 2 - Split view layout with map
- * - US-005 - Step 2 - Student list with pagination (placeholder for now)
+ * - US-005 - Step 2 - Student list with pagination
  */
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
@@ -21,7 +21,8 @@ import {
 import type { MarkerInfo, LatLng } from '@altaviapp/maps';
 import { cn } from '@/lib/utils';
 import { useInstitution } from '@/hooks';
-import type { BulkWizardStep1Data, BulkWizardStep2Data } from './BulkRouteWizard';
+import type { BulkWizardStep1Data, BulkWizardStep2Data, BulkWizardStep2Filters } from './BulkRouteWizard';
+import { StudentList, type StudentFilters } from './StudentList';
 
 interface Step2StudentSelectionProps {
   step1Data: BulkWizardStep1Data;
@@ -48,6 +49,38 @@ export function Step2StudentSelection({
 }: Step2StudentSelectionProps) {
   const { institution } = useInstitution();
   const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalStudentCount, setTotalStudentCount] = useState(0);
+
+  // Handle student selection toggle
+  const handleStudentSelect = useCallback(
+    (studentId: string, selected: boolean) => {
+      const currentSelection = data.selectedStudentIds;
+      if (selected) {
+        onChange({ selectedStudentIds: [...currentSelection, studentId] });
+      } else {
+        onChange({
+          selectedStudentIds: currentSelection.filter((id) => id !== studentId),
+        });
+      }
+    },
+    [data.selectedStudentIds, onChange]
+  );
+
+  // Handle total count changes from the list
+  const handleTotalCountChange = useCallback((count: number) => {
+    setTotalStudentCount(count);
+  }, []);
+
+  // Handle filter changes
+  const handleFiltersChange = useCallback(
+    (newFilters: StudentFilters) => {
+      onChange({ filters: newFilters as BulkWizardStep2Filters });
+    },
+    [onChange]
+  );
 
   // School location from institution
   const schoolLocation: LatLng | null = useMemo(() => {
@@ -90,8 +123,8 @@ export function Step2StudentSelection({
 
   // Calculate selected count
   const selectedCount = data.selectedStudentIds.length;
-  // Total count will come from the query in US-005
-  const totalCount = 0; // Placeholder
+  // Total count from the query
+  const totalCount = totalStudentCount;
 
   // Format operation days for display
   const operationDaysLabel = useMemo(() => {
@@ -180,15 +213,30 @@ export function Step2StudentSelection({
             </div>
           </div>
 
-          {/* Student List Placeholder - will be implemented in US-005 */}
-          <div className="flex-1 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center min-h-[200px]">
-            <div className="text-center text-gray-500">
-              <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium">Lista de Estudiantes</p>
-              <p className="text-sm text-gray-400 mt-1">
-                (Por implementar en US-005)
-              </p>
-            </div>
+          {/* Student List */}
+          <div className="flex-1 rounded-xl border border-gray-200 bg-white p-4 min-h-[200px] overflow-hidden">
+            {step1Data.routeType ? (
+              <StudentList
+                routeType={step1Data.routeType}
+                page={currentPage}
+                onPageChange={setCurrentPage}
+                filters={data.filters}
+                onFiltersChange={handleFiltersChange}
+                selectedStudentIds={data.selectedStudentIds}
+                onStudentSelect={handleStudentSelect}
+                onTotalCountChange={handleTotalCountChange}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p className="font-medium">Selecciona el tipo de ruta</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Regresa al paso anterior para continuar
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

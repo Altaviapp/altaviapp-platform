@@ -25,7 +25,6 @@ import {
   MapPin,
   UserCheck,
   CheckCircle,
-  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardStepIndicator, type WizardStep } from './WizardStepIndicator';
@@ -33,6 +32,8 @@ import { Step1BasicInfo } from './Step1BasicInfo';
 import { Step2StudentSelection } from './Step2StudentSelection';
 import { Step3VehicleCalculation } from './Step3VehicleCalculation';
 import { Step4RouteReview } from './Step4RouteReview';
+import { Step5Assignment } from './Step5Assignment';
+import { Step6Confirmation } from './Step6Confirmation';
 
 // Step definitions
 const WIZARD_STEPS: WizardStep[] = [
@@ -122,12 +123,15 @@ export interface BulkWizardStep4Data {
   unassignedStudentIds: string[];
 }
 
+export interface RouteAssignment {
+  routeId: string;
+  vehicleId: string;
+  driverId: string;
+  monitorId?: string;
+}
+
 export interface BulkWizardStep5Data {
-  routeAssignments: Array<{
-    routeId: string;
-    driverId: string;
-    monitorId?: string;
-  }>;
+  routeAssignments: RouteAssignment[];
 }
 
 export interface BulkWizardStep6Data {
@@ -178,9 +182,10 @@ const initialState: BulkWizardState = {
 export function BulkRouteWizard() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wizardState, setWizardState] = useState<BulkWizardState>(initialState);
+  // Track if save has completed (success or error) to hide navigation
+  const [saveCompleted, setSaveCompleted] = useState(false);
 
   // Step validity state
   const [stepValidity, setStepValidity] = useState<Record<number, boolean>>({
@@ -211,6 +216,27 @@ export function BulkRouteWizard() {
     setStepValidity((prev) => ({ ...prev, [step]: valid }));
   }, []);
 
+  // Reset wizard to initial state (for "Crear Más" functionality)
+  const resetWizard = useCallback(() => {
+    setWizardState(initialState);
+    setStepValidity({
+      1: false,
+      2: false,
+      3: false,
+      4: false,
+      5: false,
+      6: false,
+    });
+    setCurrentStep(1);
+    setSaveCompleted(false);
+    setError(null);
+  }, []);
+
+  // Handle save completion from Step6
+  const handleSaveComplete = useCallback(() => {
+    setSaveCompleted(true);
+  }, []);
+
   // Navigation
   const canGoNext = () => stepValidity[currentStep];
 
@@ -234,24 +260,6 @@ export function BulkRouteWizard() {
 
   const handleCancel = () => {
     router.push('/routes');
-  };
-
-  const handleSave = async () => {
-    // Will be implemented in US-027
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      // TODO: Call createBulkRoutes mutation
-      console.log('Saving bulk routes:', wizardState);
-      router.push('/routes');
-    } catch (err) {
-      console.error('Error creating bulk routes:', err);
-      setError(
-        err instanceof Error ? err.message : 'Error al crear las rutas'
-      );
-      setIsSubmitting(false);
-    }
   };
 
   // Render step content based on current step
@@ -337,12 +345,43 @@ export function BulkRouteWizard() {
         case 4:
           return (
             <Step4RouteReview
+              step1Data={wizardState.step1}
               data={wizardState.step4}
+              step3Data={wizardState.step3}
               onChange={(data) => updateStepData('step4', data)}
               onValidChange={(valid) => setStepValid(4, valid)}
+              onConfirm={() => setCurrentStep(5)}
+              onBack={() => {
+                // Go back to Step 3, clear generated routes but keep vehicle selections - US-022
+                updateStepData('step4', {
+                  generatedRoutes: [],
+                  unassignedStudentIds: [],
+                });
+                setCurrentStep(3);
+              }}
             />
           );
-        // Steps 5-6 will be added in future user stories
+        case 5:
+          return (
+            <Step5Assignment
+              generatedRoutes={wizardState.step4.generatedRoutes}
+              data={wizardState.step5}
+              onChange={(data) => updateStepData('step5', data)}
+              onValidChange={(valid) => setStepValid(5, valid)}
+            />
+          );
+        case 6:
+          return (
+            <Step6Confirmation
+              step1Data={wizardState.step1}
+              step4Data={wizardState.step4}
+              step5Data={wizardState.step5}
+              onValidChange={(valid) => setStepValid(6, valid)}
+              onSaveComplete={handleSaveComplete}
+              onReset={resetWizard}
+              onEditStep={(step) => setCurrentStep(step)}
+            />
+          );
         default:
           return (
             <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
@@ -392,74 +431,52 @@ export function BulkRouteWizard() {
         {renderStepContent()}
       </div>
 
-      {/* Navigation Buttons */}
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={handleBack}
-          disabled={currentStep === 1}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors',
-            currentStep === 1
-              ? 'text-gray-300 cursor-not-allowed'
-              : 'text-gray-600 hover:bg-gray-100'
-          )}
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Atrás
-        </button>
-
-        <div className="flex items-center gap-3">
+      {/* Navigation Buttons - Hidden when save is completed (Step 6 handles its own nav) */}
+      {!(currentStep === 6 && saveCompleted) && (
+        <div className="flex items-center justify-between">
           <button
             type="button"
-            onClick={handleCancel}
-            className="px-4 py-2.5 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors"
+            onClick={handleBack}
+            disabled={currentStep === 1}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors',
+              currentStep === 1
+                ? 'text-gray-300 cursor-not-allowed'
+                : 'text-gray-600 hover:bg-gray-100'
+            )}
           >
-            Cancelar
+            <ChevronLeft className="w-4 h-4" />
+            Atrás
           </button>
 
-          {currentStep < 6 ? (
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={handleNext}
-              disabled={!canGoNext()}
-              className={cn(
-                'flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium text-sm transition-colors',
-                canGoNext()
-                  ? 'bg-primary text-white hover:bg-primary/90'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              )}
+              onClick={handleCancel}
+              className="px-4 py-2.5 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors"
             >
-              Siguiente
-              <ChevronRight className="w-4 h-4" />
+              Cancelar
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!canGoNext() || isSubmitting}
-              className={cn(
-                'flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium text-sm transition-colors',
-                canGoNext() && !isSubmitting
-                  ? 'bg-success text-white hover:bg-success/90'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              )}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Creando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4" />
-                  Crear Rutas
-                </>
-              )}
-            </button>
-          )}
+
+            {currentStep < 6 && (
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!canGoNext()}
+                className={cn(
+                  'flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium text-sm transition-colors',
+                  canGoNext()
+                    ? 'bg-primary text-white hover:bg-primary/90'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                )}
+              >
+                Siguiente
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -68,6 +68,35 @@ interface MonitorOption {
   firstAidCertified?: boolean;
 }
 
+/**
+ * Format license expiry date for display
+ * Returns formatted date string (e.g., "15/03/2026")
+ */
+function formatLicenseExpiry(expiryTimestamp: number | undefined): string {
+  if (!expiryTimestamp) return '';
+  const date = new Date(expiryTimestamp);
+  return date.toLocaleDateString('es-EC', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+/**
+ * Build driver label with name and license status
+ * Shows: name, license expiry (if valid), or "(Licencia vencida)" if expired
+ */
+function buildDriverLabel(driver: DriverOption): string {
+  if (!driver.hasValidLicense) {
+    return `${driver.name} (Licencia vencida)`;
+  }
+  if (driver.licenseExpiry) {
+    const expiryDate = formatLicenseExpiry(driver.licenseExpiry);
+    return `${driver.name} (Vence: ${expiryDate})`;
+  }
+  return driver.name;
+}
+
 interface Step5AssignmentProps {
   generatedRoutes: GeneratedRoute[];
   data: BulkWizardStep5Data;
@@ -505,7 +534,7 @@ export function Step5Assignment({
                     placeholder="Seleccionar conductor"
                     options={getAvailableDrivers(route.id).map((d) => ({
                       value: d.id,
-                      label: `${d.name}${!d.hasValidLicense ? ' (Licencia vencida)' : ''}`,
+                      label: buildDriverLabel(d),
                       disabled: !d.hasValidLicense,
                     }))}
                   />

@@ -297,3 +297,23 @@
   - buildMutationRoutes prepares data for createBulkRoutes Convex mutation
   - Component already includes save functionality from US-027 (will be marked separately)
 ---
+
+## 2026-01-21 - US-023
+- Enhanced Step 5 driver assignment interface with license expiry display
+- Files changed:
+  - apps/admin/src/components/routes/bulk-wizard/Step5Assignment.tsx (added formatLicenseExpiry and buildDriverLabel helpers)
+- **Acceptance criteria verified:**
+  - Step5Assignment component (named differently but serves same purpose as Step5CrewAssignment)
+  - Routes listed with driver Select dropdown on each route card
+  - Driver options show: name, license expiry date (formatted "Vence: DD/MM/YYYY"), "(Licencia vencida)" warning
+  - getCrewForBulkAssignment query returns active drivers with valid license status
+  - Double-assignment prevented via filtering (better UX than just warning)
+  - Warning banner when routes have no driver (blocks proceeding via validation)
+  - Assignments stored via onChange -> updateStepData('step5', data)
+  - Typecheck passes
+- **Learnings for future iterations:**
+  - formatLicenseExpiry helper: toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  - buildDriverLabel helper: constructs label with name + license expiry or "(Licencia vencida)"
+  - Preventing conflicts proactively (via filtering available options) is better UX than just warning about conflicts
+  - DriverOption interface includes: hasValidLicense, licenseExpired, licenseExpiry (timestamp)
+---

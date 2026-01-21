@@ -9,6 +9,7 @@
  *
  * PRD Reference: US-015 - Step 4 - Split view with route cards
  * PRD Reference: US-016 - Step 4 - Route card selection and map toggle
+ * PRD Reference: US-017 - Step 4 - Multi-route map visualization
  * PRD Reference: US-021 - Step 4 - Unassigned students panel
  * PRD Reference: US-022 - Step 4 - Validation warnings and navigation
  */
@@ -52,7 +53,7 @@ import { useInstitution, useConvexAuth } from '@/hooks';
 import type { BulkWizardStep1Data, BulkWizardStep4Data, BulkWizardStep3Data, GeneratedRoute } from './BulkRouteWizard';
 import { RouteDetailModal, type VehicleOption, type StudentInfo } from './RouteDetailModal';
 
-// Color palette for routes (8 distinct colors) - US-016
+// Color palette for routes (10 distinct colors) - US-017
 const ROUTE_COLORS = [
   '#042940', // Primary blue
   '#E63946', // Red
@@ -62,7 +63,36 @@ const ROUTE_COLORS = [
   '#F4A261', // Orange
   '#1D3557', // Navy
   '#2ECC71', // Green
+  '#E91E63', // Pink
+  '#00BCD4', // Cyan
 ];
+
+// School marker icon path (building/school icon) - US-017
+const SCHOOL_ICON_PATH = 'M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z';
+
+// Map container style - US-017
+const mapContainerStyle = {
+  width: '100%',
+  height: '100%',
+  minHeight: '300px',
+};
+
+// InfoWindow data type for stops - US-017
+interface StopInfoWindowData {
+  routeId: string;
+  routeName: string;
+  stopIndex: number;
+  stopOrder: number;
+  studentNames: string[];
+  position: LatLng;
+}
+
+// InfoWindow data type for polylines - US-017
+interface PolylineInfoWindowData {
+  routeId: string;
+  routeName: string;
+  position: LatLng;
+}
 
 interface Step4RouteReviewProps {
   step1Data: BulkWizardStep1Data;
@@ -84,6 +114,7 @@ interface RouteCardProps {
   onViewDetails: () => void;
   onNameChange: (newName: string) => void;
   vehiclePlate?: string;
+  routeColor: string;
 }
 
 /**
@@ -101,6 +132,7 @@ function RouteCard({
   onViewDetails,
   onNameChange,
   vehiclePlate,
+  routeColor,
 }: RouteCardProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(route.name);
@@ -178,7 +210,7 @@ function RouteCard({
       {/* Route Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          {/* Map visibility checkbox - US-016 */}
+          {/* Map visibility checkbox - US-016, US-017 */}
           <button
             type="button"
             onClick={(e) => {
@@ -188,9 +220,10 @@ function RouteCard({
             className={cn(
               'flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors',
               isVisibleOnMap
-                ? 'bg-primary border-primary text-white'
+                ? 'text-white'
                 : 'bg-white border-gray-300 hover:border-gray-400'
             )}
+            style={isVisibleOnMap ? { backgroundColor: routeColor, borderColor: routeColor } : {}}
             title={isVisibleOnMap ? 'Ocultar en mapa' : 'Mostrar en mapa'}
           >
             {isVisibleOnMap && <Check className="w-3 h-3" />}
@@ -202,9 +235,10 @@ function RouteCard({
             className={cn(
               'w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0',
               isSelected
-                ? 'bg-primary text-white'
+                ? 'text-white'
                 : 'bg-gray-100 text-gray-600'
             )}
+            style={isSelected ? { backgroundColor: routeColor } : {}}
           >
             {index + 1}
           </button>
@@ -252,34 +286,19 @@ function RouteCard({
           </div>
         </div>
 
-        {/* Selection Indicator */}
-        <button
-          type="button"
-          onClick={onSelect}
-          className={cn(
-            'w-4 h-4 rounded-full border-2 transition-colors flex-shrink-0',
-            isSelected
-              ? 'bg-primary border-primary'
-              : 'bg-white border-gray-300'
-          )}
-        >
-          {isSelected && (
-            <svg
-              className="w-full h-full text-white"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <circle cx="12" cy="12" r="6" />
-            </svg>
-          )}
-        </button>
+        {/* Color indicator - US-017 */}
+        <div
+          className="w-4 h-4 rounded-full flex-shrink-0"
+          style={{ backgroundColor: routeColor }}
+          title={`Color de ruta: ${route.name}`}
+        />
       </div>
 
-      {/* Route Stats */}
+      {/* Route Stats - US-017 */}
       <div className="grid grid-cols-2 gap-2 text-sm">
         {/* Students */}
         <div className="flex items-center gap-2 text-gray-600">
-          <Users className="w-4 h-4 text-primary" />
+          <Users className="w-4 h-4" style={{ color: routeColor }} />
           <span>
             {studentCount} estudiante{studentCount !== 1 ? 's' : ''}
           </span>
@@ -287,7 +306,7 @@ function RouteCard({
 
         {/* Stops */}
         <div className="flex items-center gap-2 text-gray-600">
-          <MapPin className="w-4 h-4 text-primary" />
+          <MapPin className="w-4 h-4" style={{ color: routeColor }} />
           <span>
             {route.stops.length} parada{route.stops.length !== 1 ? 's' : ''}
           </span>
@@ -295,13 +314,13 @@ function RouteCard({
 
         {/* Duration */}
         <div className="flex items-center gap-2 text-gray-600">
-          <Clock className="w-4 h-4 text-primary" />
+          <Clock className="w-4 h-4" style={{ color: routeColor }} />
           <span>{formattedDuration}</span>
         </div>
 
         {/* Distance */}
         <div className="flex items-center gap-2 text-gray-600">
-          <Route className="w-4 h-4 text-primary" />
+          <Route className="w-4 h-4" style={{ color: routeColor }} />
           <span>{formattedDistance}</span>
         </div>
       </div>
@@ -382,6 +401,289 @@ function ValidationBanner({ warnings }: { warnings: ValidationWarning[] }) {
 function generateRouteName(routeType: 'pickup' | 'dropoff' | '', index: number): string {
   const typeLabel = routeType === 'pickup' ? 'Recogida' : routeType === 'dropoff' ? 'Entrega' : 'Ruta';
   return `Ruta ${typeLabel} ${index + 1}`;
+}
+
+/**
+ * Multi-Route Map Component - US-017
+ * Renders multiple routes with distinct colors, stop markers, and InfoWindows
+ */
+interface MultiRouteMapProps {
+  routes: GeneratedRoute[];
+  visibleRouteIds: Set<string>;
+  schoolLocation: LatLng | null;
+  schoolName: string;
+  studentsMap: Map<string, StudentInfo>;
+}
+
+function MultiRouteMap({
+  routes,
+  visibleRouteIds,
+  schoolLocation,
+  schoolName,
+  studentsMap,
+}: MultiRouteMapProps) {
+  const { isLoaded, loadError } = useGoogleMapsContext();
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const [stopInfoWindow, setStopInfoWindow] = useState<StopInfoWindowData | null>(null);
+  const [polylineInfoWindow, setPolylineInfoWindow] = useState<PolylineInfoWindowData | null>(null);
+  const prevVisibleIdsRef = useRef<string>('');
+
+  // Get visible routes
+  const visibleRoutes = useMemo(() => {
+    return routes.filter((route) => visibleRouteIds.has(route.id));
+  }, [routes, visibleRouteIds]);
+
+  // Build route index map for consistent color assignment
+  const routeColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    routes.forEach((route, index) => {
+      const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
+      if (color) {
+        map.set(route.id, color);
+      }
+    });
+    return map;
+  }, [routes]);
+
+  // Decode polylines for visible routes
+  const decodedPolylines = useMemo(() => {
+    const polylines: { routeId: string; path: LatLng[]; color: string; name: string }[] = [];
+    visibleRoutes.forEach((route) => {
+      if (route.polyline) {
+        try {
+          const decoded = decodePolyline(route.polyline);
+          const defaultColor = ROUTE_COLORS[0] ?? '#042940';
+          polylines.push({
+            routeId: route.id,
+            path: decoded,
+            color: routeColorMap.get(route.id) ?? defaultColor,
+            name: route.name,
+          });
+        } catch {
+          // Skip invalid polylines
+        }
+      }
+    });
+    return polylines;
+  }, [visibleRoutes, routeColorMap]);
+
+  // Calculate map center from all visible elements
+  const mapCenter = useMemo(() => {
+    if (schoolLocation) return schoolLocation;
+    const firstRoute = visibleRoutes[0];
+    const firstStop = firstRoute?.stops[0];
+    if (firstRoute && firstStop) {
+      return { lat: firstStop.latitude, lng: firstStop.longitude };
+    }
+    return { lat: -0.1807, lng: -78.4678 }; // Default to Quito
+  }, [schoolLocation, visibleRoutes]);
+
+  // Auto-fit bounds when visible routes change - US-017
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return;
+
+    const visibleIdsStr = Array.from(visibleRouteIds).sort().join(',');
+    if (visibleIdsStr === prevVisibleIdsRef.current) return;
+    prevVisibleIdsRef.current = visibleIdsStr;
+
+    const bounds = new google.maps.LatLngBounds();
+    let hasPoints = false;
+
+    // Add school to bounds
+    if (schoolLocation) {
+      bounds.extend(schoolLocation);
+      hasPoints = true;
+    }
+
+    // Add all visible route stops to bounds
+    visibleRoutes.forEach((route) => {
+      route.stops.forEach((stop) => {
+        bounds.extend({ lat: stop.latitude, lng: stop.longitude });
+        hasPoints = true;
+      });
+    });
+
+    if (hasPoints) {
+      mapRef.current.fitBounds(bounds, 50);
+    }
+  }, [isLoaded, visibleRouteIds, visibleRoutes, schoolLocation]);
+
+  // Handle map load
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
+  // Handle stop marker click - US-017
+  const handleStopClick = useCallback(
+    (routeId: string, routeName: string, stopIndex: number, stop: GeneratedRoute['stops'][0]) => {
+      const studentNames = stop.studentIds.map((id) => {
+        const student = studentsMap.get(id);
+        return student?.name || `Estudiante ${id.slice(-4)}`;
+      });
+      setStopInfoWindow({
+        routeId,
+        routeName,
+        stopIndex,
+        stopOrder: stop.order,
+        studentNames,
+        position: { lat: stop.latitude, lng: stop.longitude },
+      });
+      setPolylineInfoWindow(null);
+    },
+    [studentsMap]
+  );
+
+  // Handle polyline click - US-017
+  const handlePolylineClick = useCallback(
+    (routeId: string, routeName: string, event: google.maps.MapMouseEvent) => {
+      if (event.latLng) {
+        setPolylineInfoWindow({
+          routeId,
+          routeName,
+          position: { lat: event.latLng.lat(), lng: event.latLng.lng() },
+        });
+        setStopInfoWindow(null);
+      }
+    },
+    []
+  );
+
+  // Close InfoWindow
+  const handleInfoWindowClose = useCallback(() => {
+    setStopInfoWindow(null);
+    setPolylineInfoWindow(null);
+  }, []);
+
+  if (loadError) {
+    return <MapsErrorState error={loadError} />;
+  }
+
+  if (!isLoaded) {
+    return <MapsLoadingState />;
+  }
+
+  return (
+    <GoogleMap
+      mapContainerStyle={mapContainerStyle}
+      center={mapCenter}
+      zoom={13}
+      onLoad={handleMapLoad}
+      options={{
+        styles: MAPS_CONFIG.mapStyles,
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+      }}
+    >
+      {/* School marker - US-017 */}
+      {schoolLocation && (
+        <Marker
+          position={schoolLocation}
+          icon={{
+            path: SCHOOL_ICON_PATH,
+            fillColor: '#042940',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 1,
+            scale: 1.5,
+            anchor: new google.maps.Point(12, 12),
+          }}
+          title={schoolName}
+          zIndex={1000}
+        />
+      )}
+
+      {/* Route polylines - US-017 */}
+      {decodedPolylines.map((polyline) => (
+        <Polyline
+          key={`polyline-${polyline.routeId}`}
+          path={polyline.path}
+          options={{
+            strokeColor: polyline.color,
+            strokeOpacity: 0.8,
+            strokeWeight: 4,
+            geodesic: true,
+            clickable: true,
+          }}
+          onClick={(e) => handlePolylineClick(polyline.routeId, polyline.name, e)}
+        />
+      ))}
+
+      {/* Stop markers for visible routes - US-017 */}
+      {visibleRoutes.map((route) => {
+        const routeColor = routeColorMap.get(route.id) || ROUTE_COLORS[0];
+        return route.stops.map((stop, stopIndex) => (
+          <Marker
+            key={`stop-${route.id}-${stop.id}`}
+            position={{ lat: stop.latitude, lng: stop.longitude }}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 12,
+              fillColor: routeColor,
+              fillOpacity: 1,
+              strokeColor: '#FFFFFF',
+              strokeWeight: 2,
+            }}
+            label={{
+              text: String(stop.order),
+              color: '#FFFFFF',
+              fontWeight: 'bold',
+              fontSize: '10px',
+            }}
+            title={`Parada ${stop.order} - ${route.name}`}
+            onClick={() => handleStopClick(route.id, route.name, stopIndex, stop)}
+            zIndex={100 + stop.order}
+          />
+        ));
+      })}
+
+      {/* Stop InfoWindow - US-017 */}
+      {stopInfoWindow && (
+        <InfoWindow
+          position={stopInfoWindow.position}
+          onCloseClick={handleInfoWindowClose}
+        >
+          <div className="p-1 max-w-[200px]">
+            <p className="font-semibold text-gray-900 text-sm mb-1">
+              Parada {stopInfoWindow.stopOrder}
+            </p>
+            <p className="text-xs text-gray-500 mb-2">{stopInfoWindow.routeName}</p>
+            <div className="border-t border-gray-200 pt-2">
+              <p className="text-xs font-medium text-gray-700 mb-1">
+                Estudiantes ({stopInfoWindow.studentNames.length}):
+              </p>
+              <ul className="text-xs text-gray-600 space-y-0.5">
+                {stopInfoWindow.studentNames.slice(0, 5).map((name, idx) => (
+                  <li key={idx}>- {name}</li>
+                ))}
+                {stopInfoWindow.studentNames.length > 5 && (
+                  <li className="text-gray-400">
+                    ... y {stopInfoWindow.studentNames.length - 5} mas
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </InfoWindow>
+      )}
+
+      {/* Polyline InfoWindow - US-017 */}
+      {polylineInfoWindow && (
+        <InfoWindow
+          position={polylineInfoWindow.position}
+          onCloseClick={handleInfoWindowClose}
+        >
+          <div className="p-1">
+            <p className="font-semibold text-gray-900 text-sm">
+              {polylineInfoWindow.routeName}
+            </p>
+          </div>
+        </InfoWindow>
+      )}
+    </GoogleMap>
+  );
 }
 
 /**
@@ -927,6 +1229,11 @@ export function Step4RouteReview({
   const allVisible = visibleCount === generatedRoutes.length;
   const noneVisible = visibleCount === 0;
 
+  // Get route color by index - US-017
+  const getRouteColor = useCallback((index: number): string => {
+    return ROUTE_COLORS[index % ROUTE_COLORS.length] ?? '#042940';
+  }, []);
+
   // Validation: at least one route must exist
   useEffect(() => {
     const isValid = generatedRoutes.length > 0;
@@ -1049,25 +1356,21 @@ export function Step4RouteReview({
                 onSelect={() => handleRouteSelect(route.id)}
                 onToggleMapVisibility={() => handleToggleMapVisibility(route.id)}
                 onNameChange={(newName) => handleRouteNameChange(route.id, newName)}
+                routeColor={getRouteColor(index)}
               />
             ))}
           </div>
         </div>
 
-        {/* Right Side: Map (2/3) */}
+        {/* Right Side: Map (2/3) - US-017 */}
         <div className="w-full lg:w-2/3 min-h-[300px] lg:min-h-0">
           <div className="h-full rounded-xl overflow-hidden border border-gray-200">
-            <InteractiveMap
-              center={mapCenter}
-              zoom={13}
-              markers={schoolLocation ? [{
-                id: 'school',
-                type: 'school',
-                position: schoolLocation,
-                title: institution?.name || 'Colegio',
-              }] : []}
-              showInfoWindow={true}
-              style={{ height: '100%', minHeight: '300px' }}
+            <MultiRouteMap
+              routes={generatedRoutes}
+              visibleRouteIds={visibleRouteIds}
+              schoolLocation={schoolLocation}
+              schoolName={institution?.name || 'Colegio'}
+              studentsMap={modalStudentsMap}
             />
           </div>
         </div>

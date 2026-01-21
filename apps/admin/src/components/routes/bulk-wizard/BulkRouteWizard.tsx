@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WizardStepIndicator, type WizardStep } from './WizardStepIndicator';
+import { Step1BasicInfo } from './Step1BasicInfo';
 
 // Step definitions
 const WIZARD_STEPS: WizardStep[] = [
@@ -239,7 +240,7 @@ export function BulkRouteWizard() {
     }
   };
 
-  // Render step content placeholder (will be replaced with actual components in later stories)
+  // Render step content based on current step
   const renderStepContent = () => {
     const stepTitles: Record<number, { title: string; description: string }> = {
       1: {
@@ -281,6 +282,34 @@ export function BulkRouteWizard() {
 
     const { title, description } = currentStepInfo;
 
+    // Render the appropriate step component
+    const renderStepComponent = () => {
+      switch (currentStep) {
+        case 1:
+          return (
+            <Step1BasicInfo
+              data={wizardState.step1}
+              onChange={(data) => updateStepData('step1', data)}
+              onValidChange={(valid) => setStepValid(1, valid)}
+            />
+          );
+        // Steps 2-6 will be added in future user stories
+        default:
+          return (
+            <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+              <div className="text-center">
+                <p className="text-gray-500">
+                  Contenido del Paso {currentStep} (por implementar)
+                </p>
+                <p className="text-sm text-gray-400 mt-2">
+                  {currentWizardStep.title}
+                </p>
+              </div>
+            </div>
+          );
+      }
+    };
+
     return (
       <div className="space-y-6">
         <div>
@@ -288,17 +317,7 @@ export function BulkRouteWizard() {
           <p className="text-gray-500 text-sm mt-1">{description}</p>
         </div>
 
-        {/* Placeholder content - will be replaced with step components */}
-        <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <div className="text-center">
-            <p className="text-gray-500">
-              Contenido del Paso {currentStep} (por implementar)
-            </p>
-            <p className="text-sm text-gray-400 mt-2">
-              {currentWizardStep.title}
-            </p>
-          </div>
-        </div>
+        {renderStepComponent()}
       </div>
     );
   };

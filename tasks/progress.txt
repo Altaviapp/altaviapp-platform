@@ -1,0 +1,19 @@
+## Codebase Patterns
+- Bulk route wizard uses step-based state management in BulkRouteWizard.tsx
+- Step components should be in apps/admin/src/components/routes/bulk-wizard/
+- WizardStepIndicator handles step navigation and progress display
+- Spanish is the primary language for UI labels (Ecuador/Colombia localization)
+- Form validation uses react-hook-form + Zod patterns
+
+---
+
+## 2026-01-21 - US-001 (Pre-existing)
+- Bulk route wizard page structure was already implemented
+- Files: apps/admin/src/app/(dashboard)/routes/bulk-create/page.tsx, apps/admin/src/components/routes/bulk-wizard/
+- **Learnings for future iterations:**
+  - BulkRouteWizard component manages all step state via BulkWizardState interface
+  - Steps 1-6 each have their own data interface (BulkWizardStep1Data, etc.)
+  - updateStepData and setStepValid callbacks are passed to step components
+  - Routes list page already has "Creación Masiva" button linking to wizard
+---
+

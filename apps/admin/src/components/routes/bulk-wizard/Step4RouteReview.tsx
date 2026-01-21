@@ -15,6 +15,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery } from 'convex/react';
+import { GoogleMap, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
 import {
   MapPin,
   Users,
@@ -25,9 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
-  X,
   Eye,
-  EyeOff,
   Pencil,
   Square,
   CheckSquare,
@@ -40,9 +39,13 @@ import {
 } from 'lucide-react';
 import {
   GoogleMapsProvider,
-  InteractiveMap,
+  useGoogleMapsContext,
+  MapsLoadingState,
+  MapsErrorState,
+  decodePolyline,
+  MAPS_CONFIG,
 } from '@altaviapp/maps';
-import type { LatLng, MarkerInfo } from '@altaviapp/maps';
+import type { LatLng } from '@altaviapp/maps';
 import { api } from '../../../../../../convex/_generated/api';
 import { cn } from '@/lib/utils';
 import { useInstitution, useConvexAuth } from '@/hooks';
@@ -382,6 +385,227 @@ function generateRouteName(routeType: 'pickup' | 'dropoff' | '', index: number):
 }
 
 /**
+ * Unassigned Student info type from the Convex query
+ * US-021
+ */
+interface UnassignedStudent {
+  id: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  grade?: string;
+  address?: string;
+  homeLatitude?: number;
+  homeLongitude?: number;
+  hasGps: boolean;
+}
+
+/**
+ * Props for UnassignedStudentRow
+ */
+interface UnassignedStudentRowProps {
+  student: UnassignedStudent;
+  routes: Array<{ id: string; name: string; stops: Array<{ id: string; order: number; studentIds: string[] }> }>;
+  onAssign: (studentId: string, routeId: string, stopId: string | null) => void;
+}
+
+/**
+ * Single unassigned student row with assignment dropdown
+ * US-021: Shows name, address, and Asignar button with dropdown
+ */
+function UnassignedStudentRow({ student, routes, onAssign }: UnassignedStudentRowProps) {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState<string>('');
+  const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Get stops for selected route
+  const selectedRoute = routes.find((r) => r.id === selectedRouteId);
+  const stops = selectedRoute?.stops || [];
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle assignment
+  const handleAssign = useCallback(() => {
+    if (selectedRouteId) {
+      onAssign(student.id, selectedRouteId, selectedStopId);
+      setIsDropdownOpen(false);
+      setSelectedRouteId('');
+      setSelectedStopId(null);
+    }
+  }, [student.id, selectedRouteId, selectedStopId, onAssign]);
+
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 px-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
+      {/* Student info */}
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm text-gray-900 truncate">
+          {student.fullName}
+        </p>
+        {student.address && (
+          <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+            <Home className="w-3 h-3 flex-shrink-0" />
+            {student.address.length > 40
+              ? `${student.address.substring(0, 40)}...`
+              : student.address}
+          </p>
+        )}
+        {!student.hasGps && (
+          <p className="text-xs text-warning font-medium mt-0.5">Sin GPS</p>
+        )}
+      </div>
+
+      {/* Assignment dropdown */}
+      <div className="relative" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors"
+        >
+          <UserPlus className="w-3.5 h-3.5" />
+          Asignar
+          <ChevronDown className={cn('w-3 h-3 transition-transform', isDropdownOpen && 'rotate-180')} />
+        </button>
+
+        {isDropdownOpen && (
+          <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-3 space-y-3">
+            {/* Route selector */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Seleccionar ruta</label>
+              <select
+                value={selectedRouteId}
+                onChange={(e) => {
+                  setSelectedRouteId(e.target.value);
+                  setSelectedStopId(null); // Reset stop when route changes
+                }}
+                className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="">-- Seleccionar --</option>
+                {routes.map((route) => (
+                  <option key={route.id} value={route.id}>
+                    {route.name} ({route.stops.reduce((sum, s) => sum + s.studentIds.length, 0)} est.)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Stop selector (only shown if route selected) */}
+            {selectedRouteId && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Seleccionar parada</label>
+                <select
+                  value={selectedStopId || ''}
+                  onChange={(e) => setSelectedStopId(e.target.value || null)}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Nueva parada (ubicacion del estudiante)</option>
+                  {stops.map((stop) => (
+                    <option key={stop.id} value={stop.id}>
+                      Parada {stop.order} ({stop.studentIds.length} est.)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Confirm button */}
+            <button
+              type="button"
+              onClick={handleAssign}
+              disabled={!selectedRouteId}
+              className={cn(
+                'w-full py-2 text-xs font-medium rounded-lg transition-colors',
+                selectedRouteId
+                  ? 'bg-primary text-white hover:bg-primary/90'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              )}
+            >
+              Confirmar asignacion
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Collapsible panel for unassigned students
+ * US-021: Shows unassigned students with assignment functionality
+ */
+interface UnassignedStudentsPanelProps {
+  unassignedStudents: UnassignedStudent[];
+  routes: Array<{ id: string; name: string; stops: Array<{ id: string; order: number; studentIds: string[]; latitude: number; longitude: number }> }>;
+  onAssignStudent: (studentId: string, routeId: string, stopId: string | null) => void;
+  isLoading: boolean;
+}
+
+function UnassignedStudentsPanel({
+  unassignedStudents,
+  routes,
+  onAssignStudent,
+  isLoading,
+}: UnassignedStudentsPanelProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const count = unassignedStudents.length;
+
+  if (count === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-warning/30 bg-warning/5 overflow-hidden">
+      {/* Collapsible header */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-warning/10 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <UserX className="w-4 h-4 text-warning" />
+          <span className="font-semibold text-sm text-warning">
+            {count} estudiante{count !== 1 ? 's' : ''} sin asignar
+          </span>
+        </div>
+        {isExpanded ? (
+          <ChevronUp className="w-4 h-4 text-warning" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-warning" />
+        )}
+      </button>
+
+      {/* Expandable content */}
+      {isExpanded && (
+        <div className="border-t border-warning/20 bg-white max-h-[250px] overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+              <span className="ml-2 text-sm text-gray-500">Cargando estudiantes...</span>
+            </div>
+          ) : (
+            unassignedStudents.map((student) => (
+              <UnassignedStudentRow
+                key={student.id}
+                student={student}
+                routes={routes}
+                onAssign={onAssignStudent}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Step 4 Route Review Component
  */
 export function Step4RouteReview({
@@ -394,6 +618,7 @@ export function Step4RouteReview({
   onBack,
 }: Step4RouteReviewProps) {
   const { institution } = useInstitution();
+  const { userId } = useConvexAuth();
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   // Track which routes are visible on the map - US-016
   const [visibleRouteIds, setVisibleRouteIds] = useState<Set<string>>(new Set());
@@ -407,6 +632,20 @@ export function Step4RouteReview({
   const { generatedRoutes, unassignedStudentIds } = data;
   const { maxRouteTime } = step3Data;
   const { routeType } = step1Data;
+
+  // US-021: Query unassigned student details
+  const unassignedStudentsData = useQuery(
+    api.routes.getUnassignedStudentDetails,
+    userId && institution && unassignedStudentIds.length > 0
+      ? {
+          userId,
+          institutionId: institution._id,
+          studentIds: unassignedStudentIds,
+        }
+      : 'skip'
+  );
+  const isLoadingUnassigned = unassignedStudentsData === undefined && unassignedStudentIds.length > 0;
+  const unassignedStudents: UnassignedStudent[] = unassignedStudentsData?.students || [];
 
   // Auto-generate route names on first render if not already named - US-016
   useEffect(() => {
@@ -632,6 +871,57 @@ export function Step4RouteReview({
     [generatedRoutes, onChange]
   );
 
+  // US-021: Handle assigning an unassigned student to a route
+  const handleAssignStudent = useCallback(
+    (studentId: string, routeId: string, stopId: string | null) => {
+      // Find the student data
+      const student = unassignedStudents.find((s) => s.id === studentId);
+      if (!student) return;
+
+      // Update routes with the new student assignment
+      const updatedRoutes = generatedRoutes.map((route) => {
+        if (route.id !== routeId) return route;
+
+        if (stopId) {
+          // Add student to existing stop
+          return {
+            ...route,
+            stops: route.stops.map((stop) =>
+              stop.id === stopId
+                ? { ...stop, studentIds: [...stop.studentIds, studentId] }
+                : stop
+            ),
+          };
+        } else {
+          // Create new stop with student's location
+          const newStopId = `stop-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          const newOrder = route.stops.length + 1;
+          const newStop = {
+            id: newStopId,
+            latitude: student.homeLatitude || 0,
+            longitude: student.homeLongitude || 0,
+            studentIds: [studentId],
+            order: newOrder,
+          };
+          return {
+            ...route,
+            stops: [...route.stops, newStop],
+          };
+        }
+      });
+
+      // Remove student from unassigned list
+      const updatedUnassignedIds = unassignedStudentIds.filter((id) => id !== studentId);
+
+      // Update both in a single onChange call
+      onChange({
+        generatedRoutes: updatedRoutes,
+        unassignedStudentIds: updatedUnassignedIds,
+      });
+    },
+    [generatedRoutes, unassignedStudentIds, unassignedStudents, onChange]
+  );
+
   // Count how many routes are visible on map
   const visibleCount = visibleRouteIds.size;
   const allVisible = visibleCount === generatedRoutes.length;
@@ -735,6 +1025,16 @@ export function Step4RouteReview({
 
           {/* Validation Warnings - US-022 */}
           <ValidationBanner warnings={validationWarnings} />
+
+          {/* US-021: Unassigned Students Panel */}
+          {unassignedStudentIds.length > 0 && (
+            <UnassignedStudentsPanel
+              unassignedStudents={unassignedStudents}
+              routes={generatedRoutes}
+              onAssignStudent={handleAssignStudent}
+              isLoading={isLoadingUnassigned}
+            />
+          )}
 
           {/* Route Cards List */}
           <div className="flex-1 overflow-y-auto space-y-3 min-h-0 max-h-[400px] lg:max-h-none">

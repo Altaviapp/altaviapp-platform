@@ -233,3 +233,46 @@
   - expandedStopPickers Set tracks which stops have their add-student dropdown expanded
   - Filter unassignedStudentsWithGps via useMemo for new stop creation (requires GPS coordinates)
 ---
+
+## 2026-01-21 - US-022
+- Verified and validated Step 4 validation warnings and navigation
+- Files changed:
+  - apps/admin/src/components/routes/bulk-wizard/Step4RouteReview.tsx (validation warnings, navigation buttons)
+  - apps/admin/src/components/routes/bulk-wizard/BulkRouteWizard.tsx (onBack handler clears generated routes)
+- **Acceptance criteria verified:**
+  - Warning banner for routes exceeding maxRouteTime: validationWarnings filters routes where duration > maxRouteTime
+  - Warning banner for single-student routes: filters routes where studentCount === 1 (marked ineficiente)
+  - Warning banner for unassigned students: checks unassignedStudentIds.length > 0
+  - Yellow Alert components: ValidationBanner uses bg-warning/10, border-warning/20, text-warning
+  - Non-blocking: Confirmar Rutas button stays enabled, just changes color when hasWarnings
+  - Confirmar Rutas proceeds to Step 5 via onConfirm callback
+  - Atras button calls onBack which clears step4 data and navigates to Step 3
+- **Learnings for future iterations:**
+  - ValidationWarning interface: { id, message, detail?, type: 'warning' | 'info' }
+  - validationWarnings useMemo computes 3 types of warnings with array filtering
+  - Warning button styling pattern: hasWarnings ? 'bg-warning' : 'bg-primary'
+  - onBack handler pattern: clear dependent step data before navigating back
+  - Inefficient route detection: reduce stops to count total students per route
+---
+
+## 2026-01-21 - US-019
+- Verified and committed Step 4 stop reordering with drag and drop functionality
+- Files committed:
+  - apps/admin/src/components/routes/bulk-wizard/RouteDetailModal.tsx (new file with drag-drop implementation)
+  - apps/admin/src/components/routes/bulk-wizard/index.ts (exports RouteDetailModal and types)
+- **Acceptance criteria verified:**
+  - Stops list supports drag-and-drop: Native HTML5 drag-and-drop events (draggable, onDragStart/End/Enter/Leave/Over/Drop)
+  - Drag handle icon: GripVertical icon from lucide-react on each stop row
+  - Map polyline updates: editedRoute.polyline updated after recalculation (actual map rendering in US-017)
+  - Recalculate route via Directions API: onRecalculateRoute callback calls recalculateRouteWithFixedOrder service
+  - Loading indicator: isRecalculating state with Loader2 spinner shown during recalculation
+  - Update time and distance: duration and distance updated from recalculation result
+- **Learnings for future iterations:**
+  - Native HTML5 drag-and-drop works well for simple reordering, no need for @dnd-kit library
+  - dragCounter ref pattern prevents flickering from nested drag events (increment on enter, decrement on leave)
+  - handleDrop: splice from draggedIndex, splice into dropIndex, then map to update order numbers
+  - Immediate UI update (setEditedRoute) before async recalculation for responsive UX
+  - hasReordered flag enables "Restaurar orden original" undo button
+  - originalStopsOrder stored on modal open to support undo functionality
+  - CSS feedback: border-primary/border-dashed for drop target, opacity-50 for dragged item
+---

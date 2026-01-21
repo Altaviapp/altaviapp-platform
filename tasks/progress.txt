@@ -4,6 +4,10 @@
 - WizardStepIndicator handles step navigation and progress display
 - Spanish is the primary language for UI labels (Ecuador/Colombia localization)
 - Form validation uses react-hook-form + Zod patterns
+- Step components receive `data`, `onChange`, and `onValidChange` props
+- useInstitution hook provides school location for validation
+- Use useConvexAuth hook for typed userId/institutionId in admin app
+- Import api from '../../../../../../convex/_generated/api' (relative path) in admin components
 
 ---
 
@@ -15,5 +19,52 @@
   - Steps 1-6 each have their own data interface (BulkWizardStep1Data, etc.)
   - updateStepData and setStepValid callbacks are passed to step components
   - Routes list page already has "Creación Masiva" button linking to wizard
+---
+
+## 2026-01-21 - US-002
+- Implemented Step1BasicInfo component for route type and schedule selection
+- Files changed:
+  - apps/admin/src/components/routes/bulk-wizard/Step1BasicInfo.tsx (new)
+  - apps/admin/src/components/routes/bulk-wizard/BulkRouteWizard.tsx (integrated Step1)
+  - apps/admin/src/components/routes/bulk-wizard/index.ts (export)
+- **Learnings for future iterations:**
+  - Step components use useEffect to validate and call onValidChange
+  - School location check is important before allowing route creation
+  - Route type affects time label (arrival vs departure)
+  - Days of week stored in selectedDays array, operation type toggles daily vs specific
+  - cn() utility used for conditional Tailwind classes
+---
+
+## 2026-01-21 - US-004
+- Verified Step2StudentSelection component was already fully implemented
+- Component includes:
+  - 50/50 split layout (flex-col lg:flex-row)
+  - Google Map with school marker via InteractiveMap
+  - Route summary header showing type, time, and operation days
+  - Student selection counter showing "X de Y estudiantes seleccionados"
+  - Responsive stacking on mobile
+- Files: apps/admin/src/components/routes/bulk-wizard/Step2StudentSelection.tsx (existing)
+- **Learnings for future iterations:**
+  - Step2 receives step1Data prop for displaying route configuration summary
+  - Uses GoogleMapsProvider and InteractiveMap from @altaviapp/maps package
+  - MarkerInfo type used for map markers with id, type, position, title
+  - useInstitution hook provides school coordinates for map center
+  - Validation in Step 2 requires at least 1 selected student (selectedCount > 0)
+---
+
+## 2026-01-21 - US-003
+- Implemented fleet and student summary display in Step 1
+- Files changed:
+  - convex/routes.ts (added getBulkWizardFleetSummary query)
+  - apps/admin/src/components/routes/bulk-wizard/FleetSummary.tsx (new)
+  - apps/admin/src/components/routes/bulk-wizard/Step1BasicInfo.tsx (integrated FleetSummary)
+  - apps/admin/src/components/routes/bulk-wizard/index.ts (export)
+- **Learnings for future iterations:**
+  - Use useConvexAuth hook (not useAuth) to get userId and institutionId as typed Convex IDs
+  - Import api from '../../../../../../convex/_generated/api' in admin app components
+  - Fleet summary query returns structured counts with nested objects (vehicles.count, drivers.withValidLicense, etc.)
+  - Pass query result directly to FleetSummary component - it handles undefined and loading states
+  - Validation in Step 1 now includes hasStudentsAvailable check to disable Next button
+  - Warning banners: error/red for blockers, warning/yellow for advisories
 ---
 

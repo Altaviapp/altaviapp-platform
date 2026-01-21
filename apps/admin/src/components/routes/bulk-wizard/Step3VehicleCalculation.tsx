@@ -139,6 +139,155 @@ export function Step3VehicleCalculation({
     onChange({ selectedVehicleIds: [] });
   };
 
+  // Calculate routes handler
+  const handleCalculateRoutes = useCallback(async () => {
+    // Validate prerequisites
+    if (!schoolLocation) {
+      setCalculationError('La ubicación del colegio no está configurada');
+      return;
+    }
+
+    if (!studentsData?.students || studentsData.students.length === 0) {
+      setCalculationError('No hay estudiantes seleccionados');
+      return;
+    }
+
+    if (!vehicles || data.selectedVehicleIds.length === 0) {
+      setCalculationError('Debes seleccionar al menos un vehículo');
+      return;
+    }
+
+    if (!hasEnoughCapacity) {
+      setCalculationError(
+        `Capacidad insuficiente. Faltan ${selectedStudentCount - selectedCapacity} asientos.`
+      );
+      return;
+    }
+
+    setIsCalculating(true);
+    setCalculationError(null);
+
+    try {
+      // Prepare students for clustering
+      const clusteringStudents: ClusteringStudent[] = studentsData.students
+        .filter((s) => s.hasGps && s.homeLatitude && s.homeLongitude)
+        .map((s) => ({
+          id: s.id,
+          name: s.fullName,
+          position: {
+            lat: s.homeLatitude!,
+            lng: s.homeLongitude!,
+          },
+        }));
+
+      // Prepare selected vehicles for clustering
+      const selectedVehicles = vehicles.filter((v) =>
+        data.selectedVehicleIds.includes(v.id)
+      );
+      const clusteringVehicles: ClusteringVehicle[] = selectedVehicles.map((v) => ({
+        id: v.id,
+        capacity: v.capacity,
+      }));
+
+      // Step 1: Cluster students into route groups
+      const clusterResult = clusterStudentsForRoutes(
+        clusteringStudents,
+        clusteringVehicles,
+        schoolLocation,
+        {
+          groupingRadius: data.groupingRadius,
+        }
+      );
+
+      // Step 2: Optimize each cluster's route order
+      const routeType = step1Data.routeType as 'pickup' | 'dropoff';
+      const generatedRoutes: GeneratedRoute[] = [];
+
+      for (let i = 0; i < clusterResult.clusters.length; i++) {
+        const cluster = clusterResult.clusters[i];
+        if (!cluster || cluster.stops.length === 0) continue;
+
+        // Prepare stops for optimization
+        const optimizationStops: OptimizationStop[] = cluster.stops.map((stop) => ({
+          id: stop.id,
+          position: stop.position,
+          studentIds: stop.studentIds,
+        }));
+
+        // Optimize route order
+        const optimizationResult = await optimizeRouteOrder(
+          schoolLocation,
+          optimizationStops,
+          routeType
+        );
+
+        // Generate route name
+        const routeName =
+          routeType === 'pickup'
+            ? `Ruta Recogida ${i + 1}`
+            : `Ruta Entrega ${i + 1}`;
+
+        // Build generated route
+        const route: GeneratedRoute = {
+          id: `route-${Date.now()}-${i}`,
+          name: routeName,
+          vehicleId: cluster.vehicleId,
+          stops: optimizationResult.stops.map((stop) => ({
+            id: stop.id,
+            latitude: stop.position.lat,
+            longitude: stop.position.lng,
+            studentIds: stop.studentIds,
+            order: stop.order,
+          })),
+          polyline: optimizationResult.encodedPolyline,
+          duration: optimizationResult.totalDuration,
+          distance: optimizationResult.totalDistance,
+        };
+
+        generatedRoutes.push(route);
+      }
+
+      // Collect unassigned student IDs
+      const unassignedStudentIds = [
+        ...clusterResult.unassignedStudents.map((s) => s.id),
+        ...clusterResult.studentsWithoutGps.map((s) => s.id),
+      ];
+
+      // Store results and advance to Step 4
+      onCalculationComplete(generatedRoutes, unassignedStudentIds);
+      onAdvanceToStep4();
+    } catch (error) {
+      console.error('Route calculation error:', error);
+      setCalculationError(
+        error instanceof Error
+          ? `Error al calcular rutas: ${error.message}`
+          : 'Error desconocido al calcular rutas. Por favor, inténtalo de nuevo.'
+      );
+    } finally {
+      setIsCalculating(false);
+    }
+  }, [
+    schoolLocation,
+    studentsData,
+    vehicles,
+    data.selectedVehicleIds,
+    data.groupingRadius,
+    hasEnoughCapacity,
+    selectedStudentCount,
+    selectedCapacity,
+    step1Data.routeType,
+    onCalculationComplete,
+    onAdvanceToStep4,
+  ]);
+
+  // Check if calculation can proceed
+  const canCalculate =
+    data.selectedVehicleIds.length > 0 &&
+    hasEnoughCapacity &&
+    schoolLocation !== null &&
+    studentsData?.students &&
+    studentsData.students.length > 0;
+
   // Loading state
   if (vehicles === undefined) {
     return (
@@ -455,6 +604,85 @@ export function Step3VehicleCalculation({
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Error Banner */}
+      {calculationError && (
+        <div className="bg-error/10 border border-error/20 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-error flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-medium text-error">Error en el cálculo</p>
+              <p className="text-sm text-gray-600 mt-1">{calculationError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCalculationError(null)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Calculate Routes Button */}
+      <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+        <div className="flex items-center justify-between gap-4">
+          {/* Summary Info */}
+          <div className="flex items-center gap-3">
+            <div
+              className={cn(
+                'w-10 h-10 rounded-full flex items-center justify-center',
+                canCalculate ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400'
+              )}
+            >
+              <Calculator className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-medium text-gray-900">
+                {data.selectedVehicleIds.length} vehículo{data.selectedVehicleIds.length !== 1 ? 's' : ''} seleccionado{data.selectedVehicleIds.length !== 1 ? 's' : ''}
+              </p>
+              <p className="text-sm text-gray-500">
+                {hasEnoughCapacity
+                  ? 'Listo para calcular rutas'
+                  : 'Selecciona más vehículos para cubrir la demanda'}
+              </p>
+            </div>
+          </div>
+
+          {/* Calcular Rutas Button */}
+          <button
+            type="button"
+            onClick={handleCalculateRoutes}
+            disabled={!canCalculate || isCalculating}
+            className={cn(
+              'flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-sm transition-colors',
+              canCalculate && !isCalculating
+                ? 'bg-primary text-white hover:bg-primary/90'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            )}
+          >
+            {isCalculating ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Calculando...</span>
+              </>
+            ) : (
+              <>
+                <Calculator className="w-5 h-5" />
+                <span>Calcular Rutas</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Progress Text during calculation */}
+        {isCalculating && (
+          <p className="text-sm text-gray-500 mt-3 text-center">
+            Calculando rutas... (puede tomar unos segundos)
+          </p>
         )}
       </div>
     </div>

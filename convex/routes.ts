@@ -884,6 +884,123 @@ export const listRoutesForCrew = query({
 });
 
 /**
+ * Get fleet summary for bulk route wizard
+ *
+ * Returns counts of available resources for route creation:
+ * - Active vehicles with valid documents
+ * - Active drivers with valid licenses
+ * - Active monitors
+ * - Students without route assignment for the selected type
+ */
+export const getBulkWizardFleetSummary = query({
+  args: {
+    userId: v.id("users"),
+    institutionId: v.id("institutions"),
+    routeType: v.union(v.literal("pickup"), v.literal("dropoff")),
+  },
+  handler: async (ctx, args) => {
+    await verifyInstitutionAccess(ctx, args.userId, args.institutionId);
+
+    // 1. Count active vehicles
+    const vehicles = await ctx.db
+      .query("vehicles")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("status"), "active")
+        )
+      )
+      .collect();
+
+    const totalCapacity = vehicles.reduce((sum, v) => sum + v.capacity, 0);
+
+    // 2. Count active drivers with valid licenses
+    const now = Date.now();
+    const drivers = await ctx.db
+      .query("drivers")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Filter drivers with valid license (not expired)
+    const driversWithValidLicense = drivers.filter(
+      (d) => d.licenseExpiry && d.licenseExpiry > now
+    );
+
+    // 3. Count active monitors
+    const monitors = await ctx.db
+      .query("monitors")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // 4. Count students without route assignment for the selected type
+    // Get all active students
+    const students = await ctx.db
+      .query("students")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    // Get all routes of the specified type
+    const routes = await ctx.db
+      .query("routes")
+      .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("type"), args.routeType)
+        )
+      )
+      .collect();
+
+    // Get all active studentRoutes for routes of this type
+    const studentsWithRoutes = new Set<string>();
+    for (const route of routes) {
+      const studentRoutes = await ctx.db
+        .query("studentRoutes")
+        .withIndex("by_route", (q) => q.eq("routeId", route._id))
+        .filter((q) => q.eq(q.field("isActive"), true))
+        .collect();
+
+      for (const sr of studentRoutes) {
+        studentsWithRoutes.add(sr.studentId);
+      }
+    }
+
+    // Filter students without route assignment
+    const studentsWithoutRoute = students.filter(
+      (s) => !studentsWithRoutes.has(s._id)
+    );
+
+    // Also count students with GPS coordinates
+    const studentsWithGps = studentsWithoutRoute.filter(
+      (s) => s.homeLatitude !== undefined && s.homeLongitude !== undefined
+    );
+
+    return {
+      vehicles: {
+        count: vehicles.length,
+        totalCapacity,
+      },
+      drivers: {
+        count: drivers.length,
+        withValidLicense: driversWithValidLicense.length,
+      },
+      monitors: {
+        count: monitors.length,
+      },
+      students: {
+        totalWithoutRoute: studentsWithoutRoute.length,
+        withGps: studentsWithGps.length,
+        withoutGps: studentsWithoutRoute.length - studentsWithGps.length,
+      },
+    };
+  },
+});
+
+/**
  * Migration: Fix route durations that were stored in seconds instead of minutes
  * Only run once per institution to correct existing data
  */

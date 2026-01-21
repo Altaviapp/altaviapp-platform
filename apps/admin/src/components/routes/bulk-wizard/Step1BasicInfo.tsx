@@ -7,15 +7,21 @@
  * - Route type (pickup/dropoff)
  * - Target time (arrival for pickup, departure for dropoff)
  * - Operation days (daily or specific days of week)
+ * - Fleet and student summary display
  *
- * PRD Reference: US-002 - Step 1 - Route type and schedule selection
+ * PRD References:
+ * - US-002 - Step 1 - Route type and schedule selection
+ * - US-003 - Step 1 - Fleet and student summary display
  */
 
 import { useEffect } from 'react';
+import { useQuery } from 'convex/react';
 import { Bus, Clock, Calendar, Repeat, AlertCircle } from 'lucide-react';
+import { api } from '../../../../../../convex/_generated/api';
 import { cn } from '@/lib/utils';
-import { useInstitution } from '@/hooks';
+import { useConvexAuth, useInstitution } from '@/hooks';
 import type { BulkWizardStep1Data } from './BulkRouteWizard';
+import { FleetSummary } from './FleetSummary';
 
 interface Step1BasicInfoProps {
   data: BulkWizardStep1Data;
@@ -38,22 +44,42 @@ export function Step1BasicInfo({
   onChange,
   onValidChange,
 }: Step1BasicInfoProps) {
+  const { userId, institutionId } = useConvexAuth();
   const { institution } = useInstitution();
 
   // Check if school location is configured
   const hasSchoolLocation =
     institution?.schoolLatitude && institution?.schoolLongitude;
 
+  // Query fleet summary when route type is selected
+  const fleetSummary = useQuery(
+    api.routes.getBulkWizardFleetSummary,
+    userId && institutionId && data.routeType
+      ? {
+          userId,
+          institutionId,
+          routeType: data.routeType,
+        }
+      : 'skip'
+  );
+
+  // Check if there are students available for the selected route type
+  const hasStudentsAvailable =
+    fleetSummary?.students.totalWithoutRoute !== undefined &&
+    fleetSummary.students.totalWithoutRoute > 0;
+
   // Validate step data
+  // Disable "Next" if no students are available for the selected route type
   useEffect(() => {
     const isValid = !!(
       hasSchoolLocation &&
       data.routeType &&
       data.targetTime &&
-      (data.operationType === 'daily' || data.selectedDays.length > 0)
+      (data.operationType === 'daily' || data.selectedDays.length > 0) &&
+      hasStudentsAvailable
     );
     onValidChange(isValid);
-  }, [data, hasSchoolLocation, onValidChange]);
+  }, [data, hasSchoolLocation, hasStudentsAvailable, onValidChange]);
 
   const handleRouteTypeChange = (routeType: 'pickup' | 'dropoff') => {
     onChange({ routeType });
@@ -348,6 +374,13 @@ export function Step1BasicInfo({
           </p>
         </div>
       </div>
+
+      {/* Fleet Summary - US-003 */}
+      <FleetSummary
+        data={fleetSummary}
+        isLoading={fleetSummary === undefined && !!data.routeType}
+        routeType={data.routeType}
+      />
     </div>
   );
 }

@@ -15,3 +15,5 @@ export { WizardStepIndicator } from './WizardStepIndicator';
 export type { WizardStep } from './WizardStepIndicator';
 
 export { Step1BasicInfo } from './Step1BasicInfo';
+
+export { FleetSummary } from './FleetSummary';

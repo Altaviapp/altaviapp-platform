@@ -1,68 +1,44 @@
-# Plan: reescritura completa del producto
+# Plan: reescritura completa del producto como Abordo
 
 Requisitos: [docs/PRD.md](../docs/PRD.md)
-Estado: **pendiente de aprobación del usuario**. No se borra ni se implementa nada hasta aprobar.
+Estado: **fases 0 a 6 implementadas y verificadas en local**. Pendiente lo que depende de servicios externos.
 
-## Decisiones que necesito antes de empezar
+## Decisiones tomadas
 
-- [ ] Nombre del producto (candidatos en la sección 11 del PRD)
-- [ ] Datos de producción: despliegue nuevo de Convex o migración de colegios existentes
-- [ ] Funciones recortadas que deban volver a v1 (sección 7 del PRD)
+- [x] Nombre: Abordo
+- [x] Datos: se empieza de cero; el despliegue de Altaviapp no se toca
+- [x] Entra en v1: check-in con reconocimiento facial
+- [x] Diseño: paleta campestre (verde bosque, crema, musgo, pizarra, carmesí), bloques amplios y tipografía protagonista, según las referencias del dueño del producto
 
-## Fase 0 — Limpieza
+## Hecho
 
-- [ ] Borrar `apps/`, `packages/`, `convex/`, `lib/`, `tests/`, `scripts/`, `assets/`
-- [ ] Borrar `docs/` salvo `docs/PRD.md`; borrar `Technical-Specification.md`, `README.md` y el resto de `tasks/`
-- [ ] Borrar configuración de monorepo y Docker: `turbo.json`, `pnpm-workspace.yaml`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `jest.config.js`, archivos `.env*.example`
-- [ ] Esqueleto nuevo: una app Next.js + Convex + Tailwind + Vitest en la raíz
+- [x] Fase 0 — Código y documentación anteriores eliminados; app única Next.js + Convex
+- [x] Fase 1 — Esquema de 14 tablas, acceso por código al correo, sesión resuelta en el servidor, registro de colegio, navegación por rol
+- [x] Fase 2 — Estudiantes con mapa y CSV, equipo y buses, editor de rutas con orden automático y arrastre
+- [x] Fase 3 — Conductor: mis viajes, viaje en curso, posición cada 10 s, asistencia con deshacer, avisos, resumen, escáner de rostro
+- [x] Fase 4 — Familia: estado en vivo con mapa, ausencias, registro de rostro con consentimiento, actividad, suscripción push
+- [x] Fase 5 — Coordinador: Hoy en vivo, bandeja de atención, detalle de viaje, historial con exportación CSV, ajustes
+- [x] Fase 6 — PWA instalable, datos de demostración, 28 pruebas, README y CLAUDE.md nuevos
 
-## Fase 1 — Base
+## Verificado
 
-- [ ] `convex/schema.ts` con las 13 tablas del PRD
-- [ ] Acceso por código al correo; sesión por token resuelta en el servidor
-- [ ] Ayudantes de autorización: usuario de la sesión, rol, colegio
-- [ ] Registro de colegio
-- [ ] Navegación por rol: `admin/`, `conductor/`, `familia/`
+- [x] `pnpm test`: 28 pruebas (reglas puras y flujos del backend, incluido aislamiento entre colegios)
+- [x] `pnpm type-check` y `pnpm build`
+- [x] Recorrido en navegador contra backend local: acceso con código, registro de colegio, CSV, ruta nueva, viaje completo con los tres roles en vivo, exportación
+- [x] Reconocimiento facial en navegador: registro con una foto y reconocimiento con otra foto de la misma persona por cámara simulada
 
-## Fase 2 — Coordinador: datos maestros
+## Pendiente (requiere servicios o dispositivos reales)
 
-- [ ] Estudiantes: lista, formulario con punto en el mapa, acudientes
-- [ ] Importación CSV con vista previa
-- [ ] Equipo y buses
-- [ ] Rutas: editor, paradas por domicilio, ordenar, arrastrar, horas
-
-## Fase 3 — Conductor
-
-- [ ] Mis viajes de hoy (lista derivada de rutas y ausencias)
-- [ ] Iniciar viaje con copia de paradas
-- [ ] Viaje en curso: asistencia por toque, deshacer, llegar al colegio
-- [ ] Envío de posición cada 10 s y pantalla encendida
-- [ ] Avisar retraso, avería u otro
-- [ ] Resumen
-
-## Fase 4 — Familia
-
-- [ ] Inicio con estado por hijo y mapa en vivo
-- [ ] Reportar y cancelar ausencia
-- [ ] Push web (suscripción, envío, aviso de cercanía a 500 m)
-- [ ] Actividad
-
-## Fase 5 — Coordinador: operación
-
-- [ ] Hoy: mapa, viajes, bandeja de atención
-- [ ] Detalle de viaje
-- [ ] Historial y exportación CSV
-- [ ] Ajustes del colegio
-
-## Fase 6 — Cierre
-
-- [ ] Manifest e instalación PWA
-- [ ] Datos de demostración
-- [ ] Pruebas de las reglas de la sección 6 del PRD
-- [ ] README y CLAUDE.md nuevos
-- [ ] Verificación de punta a punta en el navegador con los tres roles
+- [ ] Push de punta a punta en un teléfono: el backend cifra, firma e intenta el envío, pero falta probarlo contra el servicio push de un navegador real con llaves VAPID
+- [ ] Envío del código por correo con una llave de Resend y un dominio verificado
+- [ ] Reconocimiento facial en teléfonos reales, con niños y luz de calle; ajustar umbrales de `lib/face.ts` con esos datos
+- [ ] Posición con el teléfono en movimiento (en la prueba la ubicación fue simulada)
+- [ ] Revisión legal del texto de autorización biométrica (LOPDP en Ecuador, Ley 1581 en Colombia)
+- [ ] Proveedor de teselas de mapa para producción
+- [ ] Proyecto nuevo de Convex y despliegue de la app; dominio y marca de Abordo
+- [ ] Límite de solicitudes de código por dirección IP (hoy el límite es por correo)
 
 ## Fuera de este plan
 
-- Desplegar a producción (Convex o Vercel). El despliegue actual `wooden-armadillo-937` no se toca.
+- Desplegar a producción. El despliegue `wooden-armadillo-937` no se toca.
 - Fusionar a `main`. Todo queda en la rama `claude/charming-babbage-s9a15w`.

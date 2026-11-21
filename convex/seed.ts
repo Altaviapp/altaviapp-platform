@@ -61,7 +61,7 @@ export const demo = internalMutation({
           schoolId,
           name: `${i === 0 ? "Sur" : "Norte"} ${direction === "to_school" ? "mañana" : "tarde"}`,
           direction,
-          days: [1, 2, 3, 4, 5],
+          days: [0, 1, 2, 3, 4, 5, 6], // todos los días, para poder probar la demo cualquier día
           startTime,
           vehicleId: vehicles[i],
           driverId: drivers[i],
@@ -87,5 +87,19 @@ export const session = internalMutation({
       userId: user._id, tokenHash: await sha256(token), expiresAt: Date.now() + 86400000,
     });
     return user.role;
+  },
+});
+
+/** Borra TODOS los datos del despliegue. Solo para reiniciar el entorno local. */
+export const wipe = internalMutation({
+  args: { confirm: v.literal("borrar todo") },
+  handler: async (ctx) => {
+    const tables = [
+      "schools", "users", "sessions", "students", "guardians", "faces", "vehicles",
+      "routes", "trips", "positions", "boardings", "absences", "notifications", "pushSubscriptions",
+    ] as const;
+    for (const table of tables) {
+      for await (const doc of ctx.db.query(table)) await ctx.db.delete(doc._id);
+    }
   },
 });

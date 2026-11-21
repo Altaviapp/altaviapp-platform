@@ -49,3 +49,14 @@ export function addDays(date: string, days: number): string {
 }
 
 export const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+export const TIMEZONES = [
+  ["America/Guayaquil", "Ecuador"],
+  ["America/Bogota", "Colombia"],
+  ["America/Lima", "Perú"],
+  ["America/Mexico_City", "México (centro)"],
+  ["America/Santiago", "Chile"],
+  ["America/Argentina/Buenos_Aires", "Argentina"],
+  ["America/Panama", "Panamá"],
+  ["America/Costa_Rica", "Costa Rica"],
+] as const;

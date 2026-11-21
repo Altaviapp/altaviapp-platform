@@ -1,0 +1,128 @@
+@import "tailwindcss";
+@import "@fontsource-variable/outfit/wght.css";
+@import "@fontsource-variable/fraunces/opsz.css";
+
+/*
+ * Identidad visual de Abordo. Paleta campestre: verde bosque, crema, musgo,
+ * pizarra y carmesí solo para alertas. Cambiar la marca es editar este bloque
+ * y components/ui.tsx.
+ */
+@theme {
+  --color-ink: #12301f; /* verde bosque: texto y superficies oscuras */
+  --color-ink-deep: #0b2114;
+  --color-paper: #f5f0e1; /* crema: fondo general */
+  --color-surface: #fffdf6; /* tarjetas */
+  --color-muted: #5d6b5c;
+  --color-line: #e2dac2;
+  --color-brand: #ead9a0; /* mantequilla: acento sobre oscuro */
+  --color-brand-ink: #12301f;
+  --color-gold: #c9a86a;
+  --color-moss: #76873b;
+  --color-ok: #3d6a1f;
+  --color-ok-soft: #e1ead0;
+  --color-info: #24424f; /* pizarra */
+  --color-info-soft: #dbe6e8;
+  --color-bad: #8a1c14; /* carmesí */
+  --color-bad-soft: #f3ddd5;
+  --color-warn: #6f5510;
+  --color-warn-soft: #f2e4b9;
+  --font-sans: "Outfit Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
+  --radius-card: 1.5rem;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-moss);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-brand);
+}
+
+/* Mapa: teselas desaturadas para que el color lo pongan el bus y las paradas. */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #ece7d8;
+  z-index: 0;
+}
+.leaflet-tile-pane {
+  filter: grayscale(0.9) sepia(0.18) brightness(1.04) contrast(0.92);
+}
+.leaflet-control-attribution {
+  font-size: 10px;
+  background: rgb(255 253 246 / 0.75) !important;
+}
+.leaflet-bar a {
+  color: var(--color-ink) !important;
+  background: var(--color-surface) !important;
+  border-color: var(--color-line) !important;
+}
+.leaflet-container .leaflet-tooltip {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--color-paper);
+  background: var(--color-ink);
+  font-weight: 500;
+  box-shadow: none;
+}
+.leaflet-container .leaflet-tooltip::before {
+  display: none;
+}
+
+/* Marcadores (Leaflet divIcon). */
+.pin {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid var(--color-surface);
+  font: 600 12px/1 var(--font-sans);
+  color: var(--color-paper);
+  background: var(--color-ink);
+  box-shadow: 0 2px 6px rgb(11 33 20 / 0.3);
+}
+.pin-done {
+  background: #a9b0a0;
+}
+.pin-mine {
+  background: var(--color-moss);
+  width: 36px;
+  height: 36px;
+  margin: -4px;
+}
+.pin-school {
+  background: var(--color-bad);
+  border-radius: 10px;
+}
+.pin-home {
+  background: var(--color-moss);
+}
+.pin-bus {
+  width: 42px;
+  height: 42px;
+  margin: -7px;
+  border-width: 3px;
+  color: var(--color-ink);
+  background: var(--color-brand);
+  box-shadow: 0 0 0 6px rgb(234 217 160 / 0.45), 0 2px 8px rgb(11 33 20 / 0.35);
+}
+.pin-bus svg {
+  width: 20px;
+  height: 20px;
+}

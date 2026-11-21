@@ -30,6 +30,8 @@ export const send = internalAction({
           // 404/410: el navegador ya no tiene esa suscripción.
           if (status === 404 || status === 410) {
             await ctx.runMutation(internal.notifications.dropSubscription, { id: s._id });
+          } else {
+            console.error(`Push falló (${status ?? (error as Error).message})`);
           }
         }
       }),

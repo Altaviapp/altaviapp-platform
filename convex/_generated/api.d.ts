@@ -17,6 +17,7 @@ import type * as lib from "../lib.js";
 import type * as notifications from "../notifications.js";
 import type * as push from "../push.js";
 import type * as routes from "../routes.js";
+import type * as seed from "../seed.js";
 import type * as students from "../students.js";
 import type * as team from "../team.js";
 import type * as trips from "../trips.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   notifications: typeof notifications;
   push: typeof push;
   routes: typeof routes;
+  seed: typeof seed;
   students: typeof students;
   team: typeof team;
   trips: typeof trips;

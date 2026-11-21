@@ -2,7 +2,7 @@
 
 **Versión**: 3.0 (reescritura completa)
 **Fecha**: noviembre 2026
-**Estado**: Aprobado; en desarrollo
+**Estado**: Aprobado; versión 1 implementada
 **Reemplaza**: `docs/prd/*`, `docs/prd-v2/*`, `Technical-Specification.md`
 
 ---
@@ -246,7 +246,7 @@ Push web real más la lista dentro de la app.
 | Correo | Resend por HTTP | Solo se usa para el código de acceso y la bienvenida |
 | Mapas | Leaflet con teselas de OpenStreetMap, URL configurable | Sin costo ni llave obligatoria |
 | Push | Web Push con llaves VAPID | Sin proveedor externo |
-| Estilos | Tailwind, componentes propios mínimos | Sin paquete de UI compartido |
+| Estilos | Tailwind 4, componentes propios mínimos, fuentes Outfit y Fraunces autoalojadas | La identidad vive en dos archivos |
 | Reconocimiento facial | face-api en el navegador, cargado solo al escanear o registrar | Ninguna imagen sale del dispositivo |
 | Pruebas | Vitest sobre las reglas de la sección 6 y los flujos del backend | Las reglas son pocas y críticas |
 
@@ -272,7 +272,24 @@ Limitaciones conocidas que se aceptan en v1:
 
 ---
 
-## 10. Métricas de éxito
+## 10. Diseño
+
+Limpio, fácil de navegar, nunca saturado, y con un aire campestre propio de un colegio privado.
+
+| Elemento | Decisión |
+|----------|----------|
+| Paleta | Verde bosque `#12301f` para texto y superficies oscuras; crema `#f5f0e1` de fondo; mantequilla `#ead9a0` como acento sobre oscuro; musgo `#76873b`; pizarra `#24424f`; carmesí `#8a1c14` solo para alertas; dorado arena `#c9a86a` en detalles |
+| Tipografía | Fraunces (serif) en títulos, horas y cifras; Outfit (sans geométrica) en todo lo demás |
+| Forma | Bloques de radio amplio, botones y pestañas tipo píldora, iconos de línea |
+| Celular | Cabecera verde con saludo y el contenido en una hoja crema; barra de navegación flotante |
+| Escritorio | Barra lateral verde flotante; contenido sobre crema con tarjetas claras |
+| Jerarquía | Un dato protagonista por bloque (la hora, el estado del hijo, el conteo a bordo) en tipografía grande |
+| Color con significado | A bordo en pizarra, entregado en verde, ausente en dorado, no abordó en carmesí. Nada más lleva color |
+| Mapa | Teselas desaturadas; el color lo ponen el bus, las paradas y el colegio |
+
+---
+
+## 11. Métricas de éxito
 
 | Métrica | Meta |
 |---------|------|
@@ -284,13 +301,13 @@ Limitaciones conocidas que se aceptan en v1:
 
 ---
 
-## 11. Nombre
+## 12. Nombre
 
 **Abordo**: lo que la familia quiere saber es que su hijo ya va a bordo. Reemplaza a Altaviapp. Falta verificar disponibilidad de dominio y de marca.
 
 ---
 
-## 12. Entrega por fases
+## 13. Entrega por fases
 
 | Fase | Contenido | Resultado verificable |
 |------|-----------|-----------------------|
@@ -304,9 +321,9 @@ Limitaciones conocidas que se aceptan en v1:
 
 ---
 
-## 13. Decisiones tomadas
+## 14. Decisiones tomadas
 
 1. Nombre: Abordo.
 2. Datos: se empieza de cero en un despliegue nuevo de Convex. El despliegue de Altaviapp no se toca ni se migra.
 3. El check-in con reconocimiento facial entra en la versión 1.
-4. El diseño visual es nuevo y sigue los ejemplos que entregue el dueño del producto.
+4. El diseño visual es nuevo: paleta campestre y estructura de bloques amplios (sección 10).

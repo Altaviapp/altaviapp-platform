@@ -67,8 +67,7 @@ export const home = parentQuery({
                   departed: trip.direction === "to_school" || !!trip.departedAt,
                   stopsAway: Math.max(0, stopIndex - trip.stopIndex),
                   notices: trip.notices.filter((n) => n.toFamilies),
-                  // Solo geometría: sin nombres de otros estudiantes.
-                  stops: trip.stops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng })),
+                  // Nunca se envían las demás paradas: son los domicilios de otras familias.
                 },
                 driver: driver && { name: driver.name, phone: driver.phone },
                 vehicle: vehicle && { name: vehicle.name, plate: vehicle.plate },

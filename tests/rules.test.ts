@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { parseCsv, readStudentsCsv } from "../lib/csv";
 import { addDays, localNow, toMinutes, toTime } from "../lib/dates";
 import { matchFace } from "../lib/face";
-import { distance, estimateTimes, orderStops } from "../lib/geo";
+import { decodePolyline, distance, estimateTimes, orderStops } from "../lib/geo";
 import {
   absentSet, covers, delayAt, eta, nextStopIndex, runsOn, stopResolved, studentStatus, tally,
 } from "../lib/roster";
@@ -93,6 +93,11 @@ describe("orden de paradas", () => {
     expect(times[0] < times[1] && times[1] < times[2]).toBe(true);
     expect(estimateTimes([far, mid], "06:30", school, "to_school")[0]).toBe("06:30");
   });
+});
+
+test("decodifica una polilínea codificada", () => {
+  // Ejemplo de la especificación del formato.
+  expect(decodePolyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@")).toEqual([[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]);
 });
 
 describe("reconocimiento facial", () => {

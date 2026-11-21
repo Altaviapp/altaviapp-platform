@@ -1,7 +1,7 @@
 # Plan: Abordo autoalojado, mapas abiertos y suscripción con Wompi
 
 Requisitos: [docs/PRD.md](../docs/PRD.md)
-Estado: **pendiente de aprobación**. Nada de esto está implementado.
+Estado: **aprobado; en implementación**.
 Lo anterior (versión 1 sobre Convex) está terminado y verificado; el detalle quedó en el historial de git.
 
 ## Qué cambia y por qué
@@ -11,7 +11,7 @@ Lo anterior (versión 1 sobre Convex) está terminado y verificado; el detalle q
 | Convex (nube) | PostgreSQL 17 + API propia dentro de la app | Autoalojable, sin proveedor, respaldos y permisos estándar |
 | Vercel | Docker Compose en VPS o servidor propio, detrás de Caddy | Un `docker compose up` levanta todo |
 | Tiempo real de Convex | Server-Sent Events + `LISTEN/NOTIFY` de Postgres | Sin servicio adicional; funciona con varias réplicas |
-| Tareas programadas de Convex | pg-boss (cola sobre Postgres) | Avisos diferidos, push, correo, cobros, limpieza |
+| Tareas programadas de Convex | Cola propia sobre Postgres | Avisos diferidos, push, correo, cobros, limpieza; sin dependencia extra y se prueba igual que el resto |
 | Token en `localStorage` | Cookie `httpOnly`, `Secure`, `SameSite=Lax` | Un script inyectado no puede robar la sesión |
 | Leaflet + teselas públicas de OSM | MapLibre GL + archivo PMTiles de Colombia autoalojado | Las teselas públicas no admiten uso comercial sostenido; cero costo por uso |
 | Orden y horas por línea recta | OSRM autoalojado (opcional) | Trazo por calles, tiempos reales, orden óptimo de paradas |
@@ -19,11 +19,12 @@ Lo anterior (versión 1 sobre Convex) está terminado y verificado; el detalle q
 
 La interfaz casi no cambia: se conservan `useQ` y `useM` con la misma firma y solo cambia lo que hay debajo.
 
-## Decisiones que necesito
+## Decisiones tomadas
 
-- [ ] Backend: PostgreSQL con API propia (recomendado) o Convex autoalojado
-- [ ] Modelo de precio de la suscripción
-- [ ] Qué servicios de mapas se autoalojan (depende de la memoria del servidor)
+- [x] Backend: PostgreSQL con API propia
+- [x] Precio: por estudiante activo al mes, tarifa configurable
+- [x] Mapas: opción A. Mapa y rutas abiertos y autoalojados; la hora estimada aprende del historial de cada tramo y se corrige con la posición del bus. El tráfico de un proveedor de pago queda como pieza enchufable, apagada por defecto
+- [x] Cada viaje guarda la hora estimada contra la hora real por parada, para medir el error antes de decidir si se paga tráfico
 
 ## Decisiones que tomo salvo que digas otra cosa
 
@@ -48,7 +49,7 @@ La interfaz casi no cambia: se conservan `useQ` y `useM` con la misma firma y so
 
 - [ ] Canal SSE con `LISTEN/NOTIFY`; cada mutación declara qué temas invalida
 - [ ] `useQ` con caché y reconsulta por tema; cola de toques sin conexión para el conductor
-- [ ] pg-boss: aviso a la familia tras 8 s, push, correo, rutas sin iniciar, limpieza diaria
+- [ ] Cola de tareas propia sobre Postgres (`FOR UPDATE SKIP LOCKED`): aviso a la familia tras 8 s, push, correo, rutas sin iniciar, limpieza diaria
 
 ## Fase C — Seguridad
 
@@ -63,6 +64,10 @@ La interfaz casi no cambia: se conservan `useQ` y `useM` con la misma firma y so
 
 - [ ] MapLibre GL con PMTiles de Colombia servido por Caddy; estilo con la paleta de la marca
 - [ ] Cliente de OSRM para trazo, tiempos y orden de paradas; sin OSRM se usa el cálculo actual
+- [ ] Hora estimada que aprende: tiempo real de cada tramo por ruta y día de la semana
+- [ ] Registro de hora estimada contra hora real por parada
+- [ ] Botón "Cómo llegar" con Waze además de Google Maps
+- [ ] Interfaz de proveedor de tráfico (apagada por defecto)
 - [ ] Buscador de direcciones con Photon si se autoaloja; el punto en el mapa sigue siendo el camino seguro
 - [ ] Guion que descarga y prepara los datos de Colombia
 
@@ -84,6 +89,20 @@ La interfaz casi no cambia: se conservan `useQ` y `useM` con la misma firma y so
 - [ ] Perfiles opcionales: OSRM, Photon, túnel de Cloudflare
 - [ ] Guía de instalación en un VPS limpio y de actualización sin caída
 - [ ] Retirar Convex del repositorio; actualizar PRD, README y CLAUDE.md
+
+## Fase G — Apps Android y iPhone (siguiente fase, con plan propio)
+
+Pedido por el dueño del producto: se planea a fondo al cerrar las fases A–F, para publicar sin cabos sueltos. Lo que ya se deja preparado desde ahora:
+
+- [ ] La API acepta la sesión por cookie (web) o por cabecera `Authorization: Bearer` (apps)
+- [ ] Los pagos quedan fuera de las apps (solo web), para no chocar con las reglas de compras dentro de la app
+
+Temas que el plan de esa fase debe cerrar:
+
+- Envoltura nativa de la app web (Capacitor) o app nativa; ubicación en segundo plano del conductor, que una PWA no puede dar
+- Push nativo (FCM y APNs) junto al push web
+- Requisitos de tiendas: política de privacidad pública, eliminación de cuenta desde la app, formularios de datos, justificación de ubicación en segundo plano y de datos de rostro
+- Cuentas de desarrollador, firma, íconos, capturas, fichas, pruebas internas y revisión
 
 ## Lo que este plan no resuelve
 

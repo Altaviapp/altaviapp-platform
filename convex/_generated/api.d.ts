@@ -9,44 +9,17 @@
  */
 
 import type * as auth from "../auth.js";
-import type * as authApi from "../authApi.js";
-import type * as checkins from "../checkins.js";
-import type * as clients from "../clients.js";
-import type * as drivers from "../drivers.js";
+import type * as crons from "../crons.js";
 import type * as email from "../email.js";
-import type * as emailVerification from "../emailVerification.js";
-import type * as gpsDevices from "../gpsDevices.js";
-import type * as gpsTracking from "../gpsTracking.js";
-import type * as gpsWebhook from "../gpsWebhook.js";
-import type * as http from "../http.js";
-import type * as incidents from "../incidents.js";
-import type * as institutions from "../institutions.js";
-import type * as invitations from "../invitations.js";
-import type * as lib_authUtils from "../lib/authUtils.js";
-import type * as lib_emailTemplates from "../lib/emailTemplates.js";
-import type * as lib_eta from "../lib/eta.js";
-import type * as lib_simpleAuth from "../lib/simpleAuth.js";
-import type * as lib_tokenUtils from "../lib/tokenUtils.js";
-import type * as monitoring from "../monitoring.js";
-import type * as monitors from "../monitors.js";
+import type * as faces from "../faces.js";
+import type * as family from "../family.js";
+import type * as lib from "../lib.js";
 import type * as notifications from "../notifications.js";
-import type * as novedadTypes from "../novedadTypes.js";
-import type * as novedades from "../novedades.js";
-import type * as projectedTrips from "../projectedTrips.js";
-import type * as reports from "../reports.js";
-import type * as routeStops from "../routeStops.js";
+import type * as push from "../push.js";
 import type * as routes from "../routes.js";
-import type * as seed_clearData from "../seed/clearData.js";
-import type * as seed_createDemo from "../seed/createDemo.js";
-import type * as seed_demoData from "../seed/demoData.js";
-import type * as seed_seedNovedadTypes from "../seed/seedNovedadTypes.js";
-import type * as studentRoutes from "../studentRoutes.js";
 import type * as students from "../students.js";
-import type * as tripEvents from "../tripEvents.js";
+import type * as team from "../team.js";
 import type * as trips from "../trips.js";
-import type * as userPreferences from "../userPreferences.js";
-import type * as users from "../users.js";
-import type * as vehicles from "../vehicles.js";
 
 import type {
   ApiFromModules,
@@ -56,44 +29,17 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
-  authApi: typeof authApi;
-  checkins: typeof checkins;
-  clients: typeof clients;
-  drivers: typeof drivers;
+  crons: typeof crons;
   email: typeof email;
-  emailVerification: typeof emailVerification;
-  gpsDevices: typeof gpsDevices;
-  gpsTracking: typeof gpsTracking;
-  gpsWebhook: typeof gpsWebhook;
-  http: typeof http;
-  incidents: typeof incidents;
-  institutions: typeof institutions;
-  invitations: typeof invitations;
-  "lib/authUtils": typeof lib_authUtils;
-  "lib/emailTemplates": typeof lib_emailTemplates;
-  "lib/eta": typeof lib_eta;
-  "lib/simpleAuth": typeof lib_simpleAuth;
-  "lib/tokenUtils": typeof lib_tokenUtils;
-  monitoring: typeof monitoring;
-  monitors: typeof monitors;
+  faces: typeof faces;
+  family: typeof family;
+  lib: typeof lib;
   notifications: typeof notifications;
-  novedadTypes: typeof novedadTypes;
-  novedades: typeof novedades;
-  projectedTrips: typeof projectedTrips;
-  reports: typeof reports;
-  routeStops: typeof routeStops;
+  push: typeof push;
   routes: typeof routes;
-  "seed/clearData": typeof seed_clearData;
-  "seed/createDemo": typeof seed_createDemo;
-  "seed/demoData": typeof seed_demoData;
-  "seed/seedNovedadTypes": typeof seed_seedNovedadTypes;
-  studentRoutes: typeof studentRoutes;
   students: typeof students;
-  tripEvents: typeof tripEvents;
+  team: typeof team;
   trips: typeof trips;
-  userPreferences: typeof userPreferences;
-  users: typeof users;
-  vehicles: typeof vehicles;
 }>;
 
 /**

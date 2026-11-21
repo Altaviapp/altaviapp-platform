@@ -1,55 +1,12 @@
-# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Production builds
 .next/
 out/
-dist/
-build/
-
-# Environment variables
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Convex
+.env.*.local
 .convex/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
 *.log
-
-# Testing
+.DS_Store
 coverage/
-.nyc_output
-
-# Temporary files
-*.tmp
-*.temp
-
-# Database
-*.db
-*.sqlite
-
-# Assets (if sensitive)
-# assets/private/
-
-# Docker
-.env.local
-docker-compose.override.yml
-*.dockerignore.bak
-.turbo/
+*.tsbuildinfo
+next-env.d.ts

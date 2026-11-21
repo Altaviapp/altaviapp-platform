@@ -1,8 +1,8 @@
-# PRD — Plataforma de rutas escolares (nombre por definir)
+# Abordo — PRD
 
 **Versión**: 3.0 (reescritura completa)
 **Fecha**: noviembre 2026
-**Estado**: Borrador para aprobación
+**Estado**: Aprobado; en desarrollo
 **Reemplaza**: `docs/prd/*`, `docs/prd-v2/*`, `Technical-Specification.md`
 
 ---
@@ -56,7 +56,8 @@ Lo que sí funciona y se conserva como idea: ruta como plantilla y viaje como ej
 4. **Avisar, no pedir permiso.** La familia informa una ausencia y queda aplicada. El coordinador la ve, no la aprueba.
 5. **Derivar antes que guardar.** La lista de un viaje se calcula (estudiantes de la ruta menos ausencias del día), no se copia ni se sincroniza.
 6. **Un toque por estudiante.** El conductor nunca escribe mientras opera.
-7. **Presupuesto de ligereza.** Menos de 10.000 líneas, máximo 13 tablas, máximo 16 pantallas, sin dependencias de pago obligatorias.
+7. **Presupuesto de ligereza.** Menos de 10.000 líneas, máximo 14 tablas, máximo 16 pantallas, sin dependencias de pago obligatorias.
+8. **La biometría es opcional y local.** El reconocimiento facial corre en el celular del conductor. Al servidor solo llegan vectores numéricos, con consentimiento registrado y revocable.
 
 ---
 
@@ -94,6 +95,7 @@ Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado 
 - Lista con búsqueda y filtro por grado y por ruta.
 - Crear y editar: nombre, grado, dirección, punto en el mapa, hasta 2 acudientes (nombre, correo, teléfono), nota opcional.
 - Los hermanos se agrupan solos al compartir correo de acudiente.
+- Registro de rostro desde el colegio, declarando que cuenta con la autorización escrita del acudiente.
 - Importación por CSV con vista previa y errores por fila.
 
 **Rutas**
@@ -125,7 +127,8 @@ Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado 
 - Tarjeta de la parada siguiente: nombre, hora prevista, estudiantes.
 - Hacia el colegio: por estudiante, "Subió" o "No salió". Al llegar, "Llegamos al colegio" marca a todos los que van a bordo como entregados y termina el viaje.
 - Desde el colegio: primero se marca quién subió en el colegio; en cada parada, "Bajó".
-- Cada toque se puede deshacer.
+- Cada toque se puede deshacer. El aviso a la familia espera 8 segundos por si el conductor corrige.
+- **Check-in con reconocimiento facial**: botón "Escanear" que abre la cámara, reconoce al estudiante entre los de ese viaje y lo marca. Si el parecido es dudoso pide confirmación; si no reconoce, se usa la lista. Solo aplica a estudiantes con rostro registrado.
 - Mapa con las paradas y botón para abrir la navegación del teléfono hacia la parada siguiente.
 - Botón "Avisar": retraso, avería u otro, con texto opcional. Llega al coordinador y, si el conductor lo marca, a las familias de ese viaje.
 - La pantalla se mantiene encendida durante el viaje.
@@ -145,6 +148,10 @@ Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado 
 **Ausencia**
 - Hijo, fecha o rango de fechas, sentido (mañana, tarde o ambos), nota opcional.
 - Queda aplicada al instante. Se puede cancelar mientras el viaje no haya iniciado.
+
+**Rostro del hijo (opcional)**
+- El acudiente autoriza el reconocimiento facial y registra el rostro con la cámara de su celular.
+- Puede retirar la autorización en cualquier momento; el registro se borra.
 
 **Actividad**
 - Avisos recibidos y asistencia de los últimos 30 días.
@@ -177,8 +184,10 @@ Push web real más la lista dentro de la app.
 5. **Estados del viaje.** `in_progress` y `completed`. "Sin iniciar" es la ausencia de viaje. Un coordinador puede cerrar un viaje olvidado.
 6. **Estados del estudiante en un viaje.** Esperado, a bordo, entregado, no salió, ausente. Los tres del medio son registros de asistencia; los otros dos se derivan.
 7. **Hora estimada.** Hora prevista de la parada más el retraso observado en la última parada completada. Sin servicios externos de tráfico.
-8. **Posición.** El celular del conductor envía la posición cada 10 segundos mientras el viaje está en curso. Se guarda la última en el viaje y un rastro que se borra a los 30 días.
-9. **Aislamiento.** Todo dato lleva `schoolId` y toda función filtra por el colegio de la sesión. Un padre solo ve estudiantes de los que es acudiente; un conductor solo opera viajes de rutas que tiene asignadas.
+8. **Posición.** El celular del conductor envía la posición cada 10 segundos mientras el viaje está en curso. Solo se guarda la última, en una tabla aparte para que cada reporte no recalcule las pantallas que leen el viaje. Se borra al terminar.
+9. **Desde el colegio.** El viaje empieza con el abordaje en el colegio. Al salir, quien no subió queda como "no abordó" y las paradas sin nadie a bordo se saltan solas.
+10. **Rostros.** Se comparan únicamente contra los estudiantes del viaje en curso. Coincidencia automática solo si el parecido es alto y con ventaja clara sobre el segundo candidato. Los vectores solo se entregan al conductor de ese viaje.
+11. **Aislamiento.** Todo dato lleva `schoolId` y toda función filtra por el colegio de la sesión. Un padre solo ve estudiantes de los que es acudiente; un conductor solo opera viajes de rutas que tiene asignadas.
 
 ---
 
@@ -186,7 +195,7 @@ Push web real más la lista dentro de la app.
 
 | Se elimina | Por qué | Vuelve si |
 |------------|---------|-----------|
-| Check-in con código QR | Tocar un nombre es más rápido que escanear a cada niño | Un colegio exige identificación con carné |
+| Check-in con código QR | Se reemplaza por reconocimiento facial y lista por toque | Un colegio exige identificación con carné |
 | Aprobación de novedades y tipos configurables | La ausencia cubre casi todos los casos | Hay demanda de cambio de parada temporal |
 | Dispositivos GPS externos y webhooks | El celular basta para empezar | Un cliente ya tiene GPS instalado en la flota |
 | Checklist del vehículo con fotos | No responde ninguna de las tres preguntas | Lo pide una norma local |
@@ -206,25 +215,24 @@ Push web real más la lista dentro de la app.
 
 ## 8. Modelo de datos
 
-13 tablas. Las paradas viven dentro de la ruta, no en tabla aparte.
+14 tablas. Las paradas viven dentro de la ruta y los avisos del conductor dentro del viaje. El código de acceso vive en el usuario.
 
 | Tabla | Campos principales |
 |-------|--------------------|
 | `schools` | nombre, zona horaria, ubicación, grados |
-| `users` | schoolId, correo, nombre, teléfono, rol, activo |
-| `authCodes` | correo, hash del código, vencimiento, intentos |
+| `users` | schoolId, correo, nombre, teléfono, rol, activo, código de acceso vigente (hash) |
 | `sessions` | userId, hash del token, vencimiento |
-| `students` | schoolId, nombre, grado, domicilio (dirección, lat, lng), guardianIds, nota, activo |
+| `students` | schoolId, nombre, grado, dirección, domicilio (lat, lng), nota, activo |
+| `guardians` | schoolId, studentId, userId |
+| `faces` | schoolId, studentId, vectores, quién autorizó, cuándo, origen (acudiente o colegio) |
 | `vehicles` | schoolId, nombre, placa, capacidad, activo |
 | `routes` | schoolId, nombre, sentido, días, hora de inicio, vehicleId, driverId, paradas `[{id, nombre, lat, lng, hora, studentIds}]`, activa |
-| `trips` | schoolId, routeId, fecha, sentido, driverId, vehicleId, estado, inicio, fin, copia de paradas, índice de parada, última posición |
-| `boardings` | schoolId, tripId, studentId, stopId, estado (a bordo, entregado, no salió), hora |
+| `trips` | schoolId, routeId, fecha, sentido, driverId, vehicleId, estado, inicio, salida, fin, copia de paradas, parada siguiente, retraso, avisos, resumen |
+| `positions` | schoolId, tripId, lat, lng, rumbo, velocidad, hora (una fila por viaje en curso) |
+| `boardings` | schoolId, tripId, studentId, stopId, estado (a bordo, entregado, no abordó), método (toque o rostro), hora |
 | `absences` | schoolId, studentId, desde, hasta, sentido, nota, creada por |
-| `notices` | schoolId, tripId, tipo, mensaje, visible para familias, hora |
 | `notifications` | userId, título, cuerpo, tripId, leída, hora |
 | `pushSubscriptions` | userId, endpoint, llaves |
-
-El rastro de posiciones se guarda en `positions` (tripId, lat, lng, hora) solo si se confirma que el coordinador lo quiere ver en el historial; si no, basta la última posición en `trips` y el modelo queda en 13 tablas.
 
 ---
 
@@ -239,7 +247,8 @@ El rastro de posiciones se guarda en `positions` (tripId, lat, lng, hora) solo s
 | Mapas | Leaflet con teselas de OpenStreetMap, URL configurable | Sin costo ni llave obligatoria |
 | Push | Web Push con llaves VAPID | Sin proveedor externo |
 | Estilos | Tailwind, componentes propios mínimos | Sin paquete de UI compartido |
-| Pruebas | Vitest sobre las reglas de la sección 6 | Las reglas son pocas y críticas |
+| Reconocimiento facial | face-api en el navegador, cargado solo al escanear o registrar | Ninguna imagen sale del dispositivo |
+| Pruebas | Vitest sobre las reglas de la sección 6 y los flujos del backend | Las reglas son pocas y críticas |
 
 Estructura del repositorio:
 
@@ -258,6 +267,8 @@ Limitaciones conocidas que se aceptan en v1:
 - Una PWA no puede reportar posición con la pantalla apagada. Se mantiene la pantalla encendida durante el viaje y se le indica al conductor dejar la app abierta.
 - En iPhone, las notificaciones push exigen instalar la app en la pantalla de inicio. La app guía ese paso.
 - El trazo entre paradas es en línea recta, no por calles.
+- El reconocimiento facial depende de la luz y de la cámara del teléfono. Nunca es el único camino: la lista por toque siempre está disponible.
+- Los datos biométricos de menores son datos sensibles (LOPDP en Ecuador, Ley 1581 en Colombia). El texto de autorización debe revisarlo un abogado antes de usarse con un colegio real.
 
 ---
 
@@ -275,14 +286,7 @@ Limitaciones conocidas que se aceptan en v1:
 
 ## 11. Nombre
 
-El producto nuevo deja el nombre Altaviapp. Candidatos (sin verificar disponibilidad de dominio ni de marca):
-
-| Nombre | Idea |
-|--------|------|
-| **Abordo** | Lo que la familia quiere saber: su hijo ya va a bordo |
-| **Ronda** | El recorrido diario; corto y con eco escolar |
-| **Trayecto** | Descriptivo y serio, orientado al colegio que compra |
-| **Rutea** | Verbo directo para el coordinador que arma rutas |
+**Abordo**: lo que la familia quiere saber es que su hijo ya va a bordo. Reemplaza a Altaviapp. Falta verificar disponibilidad de dominio y de marca.
 
 ---
 
@@ -300,8 +304,9 @@ El producto nuevo deja el nombre Altaviapp. Candidatos (sin verificar disponibil
 
 ---
 
-## 13. Decisiones abiertas
+## 13. Decisiones tomadas
 
-1. Nombre del producto.
-2. Datos de producción: empezar en un despliegue nuevo de Convex o migrar colegios existentes.
-3. Si alguna función de la sección 7 debe entrar en v1.
+1. Nombre: Abordo.
+2. Datos: se empieza de cero en un despliegue nuevo de Convex. El despliegue de Altaviapp no se toca ni se migra.
+3. El check-in con reconocimiento facial entra en la versión 1.
+4. El diseño visual es nuevo y sigue los ejemplos que entregue el dueño del producto.

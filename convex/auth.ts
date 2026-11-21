@@ -1,266 +1,187 @@
-/**
- * Authentication Helper Functions
- *
- * Simple token-based authentication using Convex + PBKDF2 (Web Crypto API).
- * No external auth providers - everything runs on Convex.
- *
- * Provides:
- * - Token-based session validation
- * - Role-based access control (RBAC)
- * - Multi-tenancy enforcement
- */
+// Acceso sin contraseña: código de 6 dígitos al correo y sesión por token.
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { ActionCtx, action, internalMutation, mutation, query } from "./_generated/server";
+import { EMAIL_RE } from "../lib/csv";
+import { sendEmail } from "./email";
+import { clean, fail, normalizeEmail, sessionUser, sha256 } from "./lib";
 
-import { QueryCtx, MutationCtx } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+const CODE_TTL = 10 * 60 * 1000;
+const SESSION_TTL = 90 * 24 * 60 * 60 * 1000;
+const MAX_ATTEMPTS = 5;
+const RESEND_WAIT = 60 * 1000;
+const HOUR = 60 * 60 * 1000;
+const MAX_PER_HOUR = 5;
 
-/**
- * Role hierarchy levels for RBAC
- * Higher level = more permissions
- */
-export const ROLE_LEVELS = {
-  super_admin: 1000,
-  admin: 500,
-  monitor: 150,
-  driver: 100,
-  parent: 10,
-} as const;
-
-export type UserRole = keyof typeof ROLE_LEVELS;
-
-/**
- * Get user from session token
- * Returns null if token is invalid or session expired
- */
-export async function getUserFromToken(
-  ctx: QueryCtx | MutationCtx,
-  token: string
-): Promise<{
-  _id: Id<"users">;
-  email: string;
-  name: string;
-  role: UserRole;
-  institutionId?: Id<"institutions">;
-  clientId?: Id<"clients">;
-  isActive: boolean;
-} | null> {
-  if (!token) return null;
-
-  // Find active session
-  const session = await ctx.db
-    .query("sessions")
-    .withIndex("by_token", (q) => q.eq("token", token))
-    .filter((q) => q.eq(q.field("isActive"), true))
-    .first();
-
-  if (!session) return null;
-
-  // Check expiration
-  if (session.expiresAt < Date.now()) {
-    return null;
-  }
-
-  // Get user
-  const user = await ctx.db.get(session.userId);
-  if (!user || !user.isActive) return null;
-
-  return {
-    _id: user._id,
-    email: user.email,
-    name: user.name,
-    role: user.role as UserRole,
-    institutionId: user.institutionId,
-    clientId: user.clientId,
-    isActive: user.isActive,
-  };
+function randomDigits(): string {
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
+  return String(n).padStart(6, "0");
 }
 
-/**
- * Require authentication - throws if not authenticated
- */
-export async function requireAuth(
-  ctx: QueryCtx | MutationCtx,
-  token: string
-) {
-  const user = await getUserFromToken(ctx, token);
-
-  if (!user) {
-    throw new Error("Autenticación requerida. Inicia sesión.");
-  }
-
-  if (!user.isActive) {
-    throw new Error("Cuenta desactivada. Contacta al administrador.");
-  }
-
-  return user;
+function randomToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/**
- * Check if user has required role level or higher
- */
-export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
-  return ROLE_LEVELS[userRole] >= ROLE_LEVELS[requiredRole];
-}
-
-/**
- * Require minimum role level
- */
-export async function requireRole(
-  ctx: QueryCtx | MutationCtx,
-  token: string,
-  requiredRole: UserRole
-) {
-  const user = await requireAuth(ctx, token);
-
-  if (!hasRole(user.role, requiredRole)) {
-    throw new Error(
-      `Acceso denegado. Rol requerido: ${requiredRole}, tu rol: ${user.role}`
+async function issueAndSend(ctx: ActionCtx, email: string) {
+  const code = randomDigits();
+  const issued = await ctx.runMutation(internal.auth.issueCode, {
+    email,
+    codeHash: await sha256(`${email}:${code}`),
+  });
+  if (issued) {
+    await sendEmail(
+      email,
+      `${code} es tu código de Abordo`,
+      `Tu código de acceso es ${code}. Vence en 10 minutos. Si no lo pediste, ignora este correo.`,
     );
   }
-
-  return user;
 }
 
-/**
- * Verify user has access to specific institution
- * Super admins have access to all institutions
- */
-export async function requireInstitutionAccess(
-  ctx: QueryCtx | MutationCtx,
-  token: string,
-  institutionId: Id<"institutions">
-) {
-  const user = await requireAuth(ctx, token);
+/** Envía un código si el correo está registrado. La respuesta no revela si lo está. */
+export const requestCode = action({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const email = normalizeEmail(args.email);
+    if (!EMAIL_RE.test(email)) fail("Escribe un correo válido.");
+    await issueAndSend(ctx, email);
+    return null;
+  },
+});
 
-  // Super admins can access all institutions
-  if (user.role === "super_admin") {
-    return user;
-  }
-
-  // Check if user belongs to this institution
-  if (user.institutionId !== institutionId) {
-    throw new Error("Acceso denegado. No tienes acceso a esta institución.");
-  }
-
-  return user;
-}
-
-/**
- * Get user's institution ID
- * Throws if user doesn't have institution
- */
-export async function getUserInstitutionId(
-  ctx: QueryCtx | MutationCtx,
-  token: string
-): Promise<Id<"institutions">> {
-  const user = await requireAuth(ctx, token);
-
-  if (!user.institutionId) {
-    throw new Error("Usuario sin institución asignada.");
-  }
-
-  return user.institutionId;
-}
-
-/**
- * Enforce institution scope for queries (multi-tenancy)
- * Super admins can query all institutions if institutionId not provided
- */
-export async function enforceInstitutionScope(
-  ctx: QueryCtx | MutationCtx,
-  token: string,
-  institutionId?: Id<"institutions">
-): Promise<Id<"institutions"> | null> {
-  const user = await requireAuth(ctx, token);
-
-  // Super admin can query all institutions
-  if (user.role === "super_admin") {
-    return institutionId || null;
-  }
-
-  // Non-super admin must query their own institution only
-  if (!user.institutionId) {
-    throw new Error("Usuario sin institución asignada.");
-  }
-
-  // If institutionId provided, verify it matches user's institution
-  if (institutionId && institutionId !== user.institutionId) {
-    throw new Error("Acceso denegado. No puedes acceder a otras instituciones.");
-  }
-
-  return user.institutionId;
-}
-
-/**
- * Create new session for user
- */
-export async function createSession(
-  ctx: MutationCtx,
-  userId: Id<"users">,
-  options?: {
-    userAgent?: string;
-    ipAddress?: string;
-    expirationDays?: number;
-  }
-): Promise<string> {
-  const now = Date.now();
-  const expirationDays = options?.expirationDays || 30;
-
-  // Generate token
-  const random = Math.random().toString(36).substring(2, 15);
-  const token = `session_${userId}_${now}_${random}`;
-
-  await ctx.db.insert("sessions", {
-    userId,
-    token,
-    expiresAt: now + expirationDays * 24 * 60 * 60 * 1000,
-    lastUsedAt: now,
-    userAgent: options?.userAgent,
-    ipAddress: options?.ipAddress,
-    isActive: true,
-    createdAt: now,
-  });
-
-  return token;
-}
-
-/**
- * Invalidate session (logout)
- */
-export async function invalidateSession(
-  ctx: MutationCtx,
-  token: string
-): Promise<void> {
-  const session = await ctx.db
-    .query("sessions")
-    .withIndex("by_token", (q) => q.eq("token", token))
-    .first();
-
-  if (session) {
-    await ctx.db.patch(session._id, {
-      isActive: false,
-      revokedAt: Date.now(),
+export const issueCode = internalMutation({
+  args: { email: v.string(), codeHash: v.string() },
+  handler: async (ctx, { email, codeHash }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+    if (!user || !user.active) return false;
+    const now = Date.now();
+    const prev = user.login;
+    if (prev && now - prev.sentAt < RESEND_WAIT) return false;
+    const sameWindow = prev && now - prev.windowStart < HOUR;
+    if (sameWindow && prev.sentCount >= MAX_PER_HOUR) return false;
+    await ctx.db.patch(user._id, {
+      login: {
+        codeHash,
+        expiresAt: now + CODE_TTL,
+        attempts: 0,
+        sentAt: now,
+        sentCount: sameWindow ? prev.sentCount + 1 : 1,
+        windowStart: sameWindow ? prev.windowStart : now,
+      },
     });
-  }
-}
+    return true;
+  },
+});
 
-/**
- * Invalidate all sessions for user (logout everywhere)
- */
-export async function invalidateAllSessions(
-  ctx: MutationCtx,
-  userId: Id<"users">
-): Promise<void> {
-  const sessions = await ctx.db
-    .query("sessions")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .filter((q) => q.eq(q.field("isActive"), true))
-    .collect();
-
-  const now = Date.now();
-  for (const session of sessions) {
-    await ctx.db.patch(session._id, {
-      isActive: false,
-      revokedAt: now,
+export const verifyCode = action({
+  args: { email: v.string(), code: v.string() },
+  handler: async (ctx, args): Promise<{ token: string }> => {
+    const email = normalizeEmail(args.email);
+    const token = randomToken();
+    const ok = await ctx.runMutation(internal.auth.consumeCode, {
+      email,
+      codeHash: await sha256(`${email}:${args.code.trim()}`),
+      tokenHash: await sha256(token),
     });
-  }
-}
+    if (!ok) fail("Código incorrecto o vencido. Pide uno nuevo.");
+    return { token };
+  },
+});
+
+// Devuelve false en vez de lanzar error para que el conteo de intentos quede guardado.
+export const consumeCode = internalMutation({
+  args: { email: v.string(), codeHash: v.string(), tokenHash: v.string() },
+  handler: async (ctx, { email, codeHash, tokenHash }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+    const login = user?.login;
+    const now = Date.now();
+    if (!user || !user.active || !login || login.expiresAt < now) return false;
+    if (login.attempts >= MAX_ATTEMPTS) return false;
+    if (login.codeHash !== codeHash) {
+      await ctx.db.patch(user._id, { login: { ...login, attempts: login.attempts + 1 } });
+      return false;
+    }
+    await ctx.db.patch(user._id, { login: undefined, verifiedAt: user.verifiedAt ?? now });
+    await ctx.db.insert("sessions", { userId: user._id, tokenHash, expiresAt: now + SESSION_TTL });
+    return true;
+  },
+});
+
+/** Registro de un colegio nuevo con su primer coordinador. */
+export const registerSchool = action({
+  args: { schoolName: v.string(), name: v.string(), email: v.string(), timezone: v.string() },
+  handler: async (ctx, args) => {
+    const email = normalizeEmail(args.email);
+    if (!EMAIL_RE.test(email)) fail("Escribe un correo válido.");
+    const schoolName = clean(args.schoolName, 80);
+    const name = clean(args.name, 80);
+    if (schoolName.length < 3 || name.length < 2) fail("Completa el nombre del colegio y el tuyo.");
+    try {
+      new Intl.DateTimeFormat("es", { timeZone: args.timezone });
+    } catch {
+      fail("Zona horaria inválida.");
+    }
+    await ctx.runMutation(internal.auth.createSchool, {
+      schoolName,
+      name,
+      email,
+      timezone: args.timezone,
+    });
+    await issueAndSend(ctx, email);
+    return null;
+  },
+});
+
+export const DEFAULT_GRADES = [
+  "Inicial", "1.º", "2.º", "3.º", "4.º", "5.º", "6.º", "7.º", "8.º", "9.º", "10.º", "11.º", "12.º",
+];
+
+export const createSchool = internalMutation({
+  args: { schoolName: v.string(), name: v.string(), email: v.string(), timezone: v.string() },
+  handler: async (ctx, { schoolName, name, email, timezone }) => {
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+    if (existing) fail("Ese correo ya está registrado. Ingresa con tu código.");
+    const schoolId = await ctx.db.insert("schools", {
+      name: schoolName,
+      timezone,
+      grades: DEFAULT_GRADES,
+    });
+    await ctx.db.insert("users", { schoolId, email, name, role: "admin", active: true });
+  },
+});
+
+export const signOut = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const tokenHash = await sha256(token);
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    if (session) await ctx.db.delete(session._id);
+    return null;
+  },
+});
+
+/** Usuario y colegio de la sesión, o null si no hay sesión válida. */
+export const me = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const user = await sessionUser(ctx, token);
+    if (!user) return null;
+    const school = (await ctx.db.get(user.schoolId))!;
+    return {
+      user: { _id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role },
+      school,
+    };
+  },
+});

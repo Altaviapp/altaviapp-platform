@@ -1,204 +1,82 @@
-/**
- * Notification Management Functions
- *
- * User notifications for trips, check-ins, incidents.
- */
-
+// Avisos dentro de la app y suscripciones push.
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
-import { verifyUser } from "./lib/simpleAuth";
+import { internalMutation, internalQuery } from "./_generated/server";
+import { userMutation, userQuery } from "./lib";
 
-/**
- * Get notifications for user
- */
-export const getNotifications = query({
-  args: {
-    userId: v.id("users"),
-    unreadOnly: v.optional(v.boolean()),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    await verifyUser(ctx, args.userId);
-
-    const limit = args.limit || 50;
-
-    let notifications;
-
-    if (args.unreadOnly) {
-      notifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_unread", (q) => q.eq("userId", args.userId).eq("read", false))
-        .order("desc")
-        .take(limit);
-    } else {
-      notifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .order("desc")
-        .take(limit);
-    }
-
-    return notifications;
-  },
-});
-
-/**
- * Get unread notification count
- */
-export const getUnreadCount = query({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    await verifyUser(ctx, args.userId);
-
-    const unread = await ctx.db
+export const mine = userQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
       .query("notifications")
-      .withIndex("by_unread", (q) => q.eq("userId", args.userId).eq("read", false))
-      .collect();
-
-    return { count: unread.length };
+      .withIndex("by_user", (q) => q.eq("userId", ctx.user._id))
+      .order("desc")
+      .take(50);
+    const subscribed = await ctx.db
+      .query("pushSubscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", ctx.user._id))
+      .first();
+    return {
+      unread: rows.filter((n) => !n.read).length,
+      pushOn: !!subscribed,
+      items: rows.map((n) => ({ _id: n._id, title: n.title, body: n.body, tripId: n.tripId, read: n.read, at: n.at })),
+    };
   },
 });
 
-/**
- * Mark notification as read
- */
-export const markAsRead = mutation({
-  args: {
-    userId: v.id("users"),
-    notificationId: v.id("notifications"),
-  },
-  handler: async (ctx, args) => {
-    await verifyUser(ctx, args.userId);
-
-    const notification = await ctx.db.get(args.notificationId);
-    if (!notification) {
-      throw new Error("Notificación no encontrada");
-    }
-
-    if (notification.userId !== args.userId) {
-      throw new Error("No tienes permiso para modificar esta notificación");
-    }
-
-    await ctx.db.patch(args.notificationId, { read: true });
-
-    return { success: true };
-  },
-});
-
-/**
- * Mark all notifications as read
- */
-export const markAllAsRead = mutation({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    await verifyUser(ctx, args.userId);
-
-    const unread = await ctx.db
+export const readAll = userMutation({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
       .query("notifications")
-      .withIndex("by_unread", (q) => q.eq("userId", args.userId).eq("read", false))
-      .collect();
-
-    for (const notification of unread) {
-      await ctx.db.patch(notification._id, { read: true });
-    }
-
-    return { success: true, count: unread.length };
+      .withIndex("by_user", (q) => q.eq("userId", ctx.user._id))
+      .order("desc")
+      .take(100);
+    for (const n of rows) if (!n.read) await ctx.db.patch(n._id, { read: true });
+    return null;
   },
 });
 
-/**
- * Delete notification
- */
-export const deleteNotification = mutation({
-  args: {
-    userId: v.id("users"),
-    notificationId: v.id("notifications"),
-  },
-  handler: async (ctx, args) => {
-    await verifyUser(ctx, args.userId);
-
-    const notification = await ctx.db.get(args.notificationId);
-    if (!notification) {
-      throw new Error("Notificación no encontrada");
-    }
-
-    if (notification.userId !== args.userId) {
-      throw new Error("No tienes permiso para eliminar esta notificación");
-    }
-
-    await ctx.db.delete(args.notificationId);
-
-    return { success: true };
+export const subscribe = userMutation({
+  args: { endpoint: v.string(), p256dh: v.string(), auth: v.string() },
+  handler: async (ctx, sub) => {
+    if (!sub.endpoint.startsWith("https://") || sub.endpoint.length > 1000) return null;
+    const existing = await ctx.db
+      .query("pushSubscriptions")
+      .withIndex("by_endpoint", (q) => q.eq("endpoint", sub.endpoint))
+      .unique();
+    if (existing) await ctx.db.replace(existing._id, { ...sub, userId: ctx.user._id });
+    else await ctx.db.insert("pushSubscriptions", { ...sub, userId: ctx.user._id });
+    return null;
   },
 });
 
-/**
- * Create notification (internal use)
- */
-export const createNotification = mutation({
-  args: {
-    userId: v.id("users"),
-    targetUserId: v.id("users"),
-    title: v.string(),
-    message: v.string(),
-    type: v.union(
-      v.literal("info"),
-      v.literal("warning"),
-      v.literal("error"),
-      v.literal("success")
-    ),
-  },
-  handler: async (ctx, args) => {
-    // Verify caller is admin or system
-    const currentUser = await verifyUser(ctx, args.userId);
-    if (!["admin", "super_admin"].includes(currentUser.role)) {
-      throw new Error("Solo administradores pueden crear notificaciones");
-    }
-
-    const now = Date.now();
-
-    const notificationId = await ctx.db.insert("notifications", {
-      userId: args.targetUserId,
-      title: args.title,
-      message: args.message,
-      type: args.type,
-      read: false,
-      createdAt: now,
-    });
-
-    return { success: true, notificationId };
+export const unsubscribe = userMutation({
+  args: { endpoint: v.string() },
+  handler: async (ctx, { endpoint }) => {
+    const existing = await ctx.db
+      .query("pushSubscriptions")
+      .withIndex("by_endpoint", (q) => q.eq("endpoint", endpoint))
+      .unique();
+    if (existing?.userId === ctx.user._id) await ctx.db.delete(existing._id);
+    return null;
   },
 });
 
-/**
- * Clear old notifications (cleanup)
- */
-export const clearOldNotifications = mutation({
-  args: {
-    userId: v.id("users"),
-    olderThanDays: v.optional(v.number()),
+export const subscriptionsFor = internalQuery({
+  args: { userIds: v.array(v.id("users")) },
+  handler: async (ctx, { userIds }) => {
+    const all = await Promise.all(
+      userIds.map((userId) =>
+        ctx.db.query("pushSubscriptions").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
+      ),
+    );
+    return all.flat().map((s) => ({ _id: s._id, endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth }));
   },
-  handler: async (ctx, args) => {
-    await verifyUser(ctx, args.userId);
+});
 
-    const days = args.olderThanDays || 30;
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-
-    const oldNotifications = await ctx.db
-      .query("notifications")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .filter((q) => q.lt(q.field("createdAt"), cutoff))
-      .filter((q) => q.eq(q.field("read"), true))
-      .collect();
-
-    for (const notification of oldNotifications) {
-      await ctx.db.delete(notification._id);
-    }
-
-    return { success: true, deleted: oldNotifications.length };
+export const dropSubscription = internalMutation({
+  args: { id: v.id("pushSubscriptions") },
+  handler: async (ctx, { id }) => {
+    if (await ctx.db.get(id)) await ctx.db.delete(id);
   },
 });

@@ -1,6 +1,6 @@
 # CLAUDE.md — Guía de desarrollo de Abordo
 
-Abordo es un SaaS de rutas escolares para colegios privados, autoalojado: una sola app Next.js (coordinador, conductor, familia y dueño de la plataforma) sobre PostgreSQL, desplegada con Docker Compose. Mercado inicial: Colombia. Reemplaza a Altaviapp; nada del código anterior sigue vigente.
+Abordo es un SaaS de rutas escolares para colegios privados, autoalojado: una sola app Next.js (coordinador, conductor, familia y dueño de la plataforma) sobre PostgreSQL, desplegada con Docker Compose. Mercado inicial: Colombia.
 
 ## Fuentes de verdad
 
@@ -119,4 +119,4 @@ docs(prd): move QR check-in back in scope
 
 ## Despliegue
 
-Autoalojado con `docker compose` (ver README). El despliegue de Convex `wooden-armadillo-937` y los dominios `*.altaviapp.com` pertenecen al producto anterior: no se usan.
+Autoalojado con `docker compose` (ver README). La versión de desarrollo se publica en la tailnet con `./scripts/dev-tailnet.sh`.

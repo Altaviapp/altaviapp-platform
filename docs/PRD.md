@@ -3,7 +3,6 @@
 **Versión**: 3.1 (autoalojado, mapas abiertos y suscripción)
 **Fecha**: noviembre 2026
 **Estado**: Aprobado; versión 1 implementada
-**Reemplaza**: `docs/prd/*`, `docs/prd-v2/*`, `Technical-Specification.md`
 
 ---
 
@@ -23,11 +22,11 @@ Todo lo que no ayude a responder una de esas tres preguntas queda fuera de la ve
 
 ---
 
-## 2. Qué aprendimos del producto actual
+## 2. Qué aprendimos del producto anterior
 
-El producto actual (Altaviapp v2) cubre la idea correcta pero creció por acumulación. Medido sobre el repositorio:
+Abordo nace de reescribir un producto anterior que cubría la idea correcta pero creció por acumulación. Medido sobre su repositorio:
 
-| Dato | Valor actual | Consecuencia |
+| Dato | Valor anterior | Consecuencia |
 |------|--------------|--------------|
 | Código TypeScript | 110.734 líneas, 664 archivos | Cada cambio toca muchas capas |
 | Aplicaciones | 3 apps Next.js + 5 paquetes compartidos | Login, hooks y notificaciones triplicados |
@@ -336,7 +335,7 @@ Limpio, fácil de navegar, nunca saturado, y con un aire campestre propio de un 
 
 ## 12. Nombre
 
-**Abordo**: lo que la familia quiere saber es que su hijo ya va a bordo. Reemplaza a Altaviapp. Falta verificar disponibilidad de dominio y de marca.
+**Abordo**: lo que la familia quiere saber es que su hijo ya va a bordo. Falta verificar disponibilidad de dominio y de marca.
 
 ---
 
@@ -357,7 +356,7 @@ Limpio, fácil de navegar, nunca saturado, y con un aire campestre propio de un 
 ## 14. Decisiones tomadas
 
 1. Nombre: Abordo.
-2. Se empieza de cero. El despliegue de Altaviapp no se toca ni se migra.
+2. Se empieza de cero: no se migra código ni datos del producto anterior.
 3. El check-in con reconocimiento facial entra en la versión 1.
 4. Diseño: paleta campestre y estructura de bloques amplios (sección 10).
 5. Autoalojado en VPS o servidor propio, sobre PostgreSQL. Sin Convex ni Vercel.

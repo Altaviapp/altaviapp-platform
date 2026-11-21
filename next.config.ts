@@ -18,6 +18,8 @@ const config: NextConfig = {
   agentRules: false,
   devIndicators: false,
   poweredByHeader: false,
+  // Desarrollo desde el celular por la tailnet (https://equipo.tu-tailnet.ts.net).
+  allowedDevOrigins: ["**.ts.net"],
   output: "standalone", // imagen de Docker mínima
   serverExternalPackages: ["postgres", "nodemailer", "web-push"],
   async headers() {

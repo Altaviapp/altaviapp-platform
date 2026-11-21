@@ -48,6 +48,32 @@ Para la consola del dueño:
 pnpm make-owner tu@correo.com Tu Nombre
 ```
 
+## Probar desde el celular por tu tailnet
+
+Deja la versión de desarrollo siempre encendida en tu máquina y accesible solo desde tus dispositivos de Tailscale, con HTTPS (el celular lo exige para cámara, ubicación y notificaciones).
+
+Requisitos: Docker, y Tailscale conectado en esa máquina con MagicDNS y certificados HTTPS activados en el panel de la tailnet (DNS → Enable HTTPS).
+
+```bash
+./scripts/dev-tailnet.sh
+```
+
+Muestra la dirección (`https://tu-maquina.tu-tailnet.ts.net`). Ábrela en el celular, que debe estar en la misma tailnet. La primera vez tarda unos minutos instalando dependencias.
+
+En desarrollo el código de acceso no llega por correo. Se ve con:
+
+```bash
+./scripts/dev-tailnet.sh codigos
+```
+
+Qué trae: PostgreSQL, el colegio de demostración y llaves de push generadas, para probar las notificaciones en el teléfono. El código es el de la carpeta: al hacer `git pull` la app se actualiza sola. La app y la base solo escuchan en la propia máquina; hacia afuera salen únicamente por Tailscale.
+
+```bash
+./scripts/dev-tailnet.sh parar
+```
+
+Para probar todo el recorrido con un solo celular, abre una ventana normal como conductor y una privada como familia; el coordinador se ve mejor en un computador de la tailnet.
+
 ## Comandos
 
 | Comando | Qué hace |
@@ -59,6 +85,7 @@ pnpm make-owner tu@correo.com Tu Nombre
 | `pnpm db:generate` | Genera una migración a partir de cambios en `db/schema.ts` |
 | `pnpm db:migrate` | Aplica migraciones pendientes |
 | `pnpm seed` | Crea el colegio de demostración |
+| `./scripts/dev-tailnet.sh` | Versión de desarrollo en contenedores, publicada en tu tailnet |
 
 ## Desplegar en un servidor
 

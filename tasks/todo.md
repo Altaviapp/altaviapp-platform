@@ -18,6 +18,7 @@ Estado: **fases A a F implementadas y verificadas en local**. Sigue la fase G (a
 - [x] **C. Seguridad** — cookie `HttpOnly`, verificación de origen, límite de intentos por correo y por conexión, política de contenido por petición, cabeceras, contenedor sin root y de solo lectura, respaldo cifrado con restauración
 - [x] **D. Mapas abiertos** — MapLibre con PMTiles en la paleta de la marca, OSRM para orden, horas y trazo por calles, hora estimada que aprende, medición de su error, botón de Waze
 - [x] **E. Suscripción** — prueba de 30 días, "Plan y pagos", checkout de Wompi, webhook con firma, recordatorios, mora y suspensión, consola del dueño con pagos por transferencia
+- [x] **Desarrollo en la tailnet** — pila de desarrollo en contenedores (`docker-compose.dev.yml`) y `./scripts/dev-tailnet.sh` para publicarla con HTTPS solo dentro de Tailscale
 - [x] **F. Despliegue** — Dockerfile, Docker Compose (Postgres, app, Caddy; perfiles para OSRM y túnel de Cloudflare), guiones de mapas y respaldo, documentación
 
 ## Verificado
@@ -31,6 +32,7 @@ Estado: **fases A a F implementadas y verificadas en local**. Sigue la fase G (a
 
 ## Pendiente: necesita llaves, datos o dispositivos reales
 
+- [ ] **Tailscale real.** La pila de desarrollo se probó en contenedores simulando las peticiones con el nombre de la tailnet; `tailscale serve` no se pudo ejecutar aquí. Falta correr `./scripts/dev-tailnet.sh` en la máquina del dueño
 - [ ] **Wompi en sandbox.** Probado contra eventos simulados con el formato documentado, no contra Wompi. Faltan las llaves de prueba
 - [ ] **Renovación automática con tarjeta guardada.** No se implementó: cobra sin una persona delante y no se puede probar sin sandbox. Wompi lo permite con "fuentes de pago"
 - [ ] **OSRM propio.** El cliente se probó contra el servidor público de demostración de OSRM. Falta preparar los datos de Colombia en el servidor (`./scripts/maps.sh rutas`, unos 4 GB de RAM)

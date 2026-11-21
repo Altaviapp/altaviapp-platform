@@ -7,12 +7,15 @@ export function readToken(request: Request): { token?: string; viaCookie: boolea
   if (header?.startsWith("Bearer ")) return { token: header.slice(7).trim(), viaCookie: false };
   const cookie = request.headers.get("cookie") ?? "";
   const match = cookie.split(/;\s*/).find((part) => part.startsWith(`${SESSION_COOKIE}=`));
-  return { token: match?.slice(SESSION_COOKIE.length + 1), viaCookie: true };
+  const token = match?.slice(SESSION_COOKIE.length + 1) || undefined;
+  // Sin cookie no hay credencial que un sitio ajeno pueda aprovechar.
+  return { token, viaCookie: !!token };
 }
 
 /**
- * IP del cliente. Detrás del proxy propio (Caddy o túnel) se toma el último valor de
- * X-Forwarded-For, que es el que escribió nuestro proxy y el cliente no puede falsificar.
+ * IP del cliente. Detrás de Caddy se toma el último valor de X-Forwarded-For, que es el que
+ * escribió nuestro proxy y el cliente no puede falsificar. Detrás de un túnel de Cloudflare
+ * se configura CLIENT_IP_HEADER=cf-connecting-ip.
  */
 export function clientIp(request: Request): string {
   const header = process.env.CLIENT_IP_HEADER ?? "x-forwarded-for";

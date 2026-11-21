@@ -300,3 +300,22 @@ describe("rutas", () => {
     expect(audit.map((a) => a.action)).toContain("rostro.registrar");
   });
 });
+
+describe("superficie de la API", () => {
+  test("solo existen las funciones registradas", async () => {
+    const { findFn } = await import("@/server/api");
+    expect(findFn("students.list")).toBeDefined();
+    for (const name of ["students.constructor", "students.toString", "__proto__.list", "constructor.name", "students", "students.list.x", "seed.demo"]) {
+      expect(findFn(name)).toBeUndefined();
+    }
+  });
+
+  test("las suscripciones push solo aceptan servicios de push de navegadores", async () => {
+    const keys = { p256dh: "x", auth: "y" };
+    expect(await message(app.call("notifications.subscribe", { endpoint: "https://interno.empresa.local/admin", ...keys }, lucia))).toContain("no admitimos");
+    expect(await message(app.call("notifications.subscribe", { endpoint: "https://fcm.googleapis.com.malo.example/x", ...keys }, lucia))).toContain("no admitimos");
+    await app.call("notifications.subscribe", { endpoint: "https://fcm.googleapis.com/fcm/send/abc", ...keys }, lucia);
+    await app.call("notifications.subscribe", { endpoint: "https://web.push.apple.com/abc", ...keys }, lucia);
+    expect((await app.call("notifications.mine", {}, lucia)).pushOn).toBe(true);
+  });
+});

@@ -1,113 +1,67 @@
 # Plan: Abordo autoalojado, mapas abiertos y suscripción con Wompi
 
 Requisitos: [docs/PRD.md](../docs/PRD.md)
-Estado: **aprobado; en implementación**.
-Lo anterior (versión 1 sobre Convex) está terminado y verificado; el detalle quedó en el historial de git.
-
-## Qué cambia y por qué
-
-| Hoy | Propuesta | Motivo |
-|-----|-----------|--------|
-| Convex (nube) | PostgreSQL 17 + API propia dentro de la app | Autoalojable, sin proveedor, respaldos y permisos estándar |
-| Vercel | Docker Compose en VPS o servidor propio, detrás de Caddy | Un `docker compose up` levanta todo |
-| Tiempo real de Convex | Server-Sent Events + `LISTEN/NOTIFY` de Postgres | Sin servicio adicional; funciona con varias réplicas |
-| Tareas programadas de Convex | Cola propia sobre Postgres | Avisos diferidos, push, correo, cobros, limpieza; sin dependencia extra y se prueba igual que el resto |
-| Token en `localStorage` | Cookie `httpOnly`, `Secure`, `SameSite=Lax` | Un script inyectado no puede robar la sesión |
-| Leaflet + teselas públicas de OSM | MapLibre GL + archivo PMTiles de Colombia autoalojado | Las teselas públicas no admiten uso comercial sostenido; cero costo por uso |
-| Orden y horas por línea recta | OSRM autoalojado (opcional) | Trazo por calles, tiempos reales, orden óptimo de paradas |
-| Sin cobro | Suscripción por colegio cobrada con Wompi | Mercado inicial: Colombia |
-
-La interfaz casi no cambia: se conservan `useQ` y `useM` con la misma firma y solo cambia lo que hay debajo.
+Estado: **fases A a F implementadas y verificadas en local**. Sigue la fase G (apps móviles), que necesita plan propio y aprobación.
 
 ## Decisiones tomadas
 
-- [x] Backend: PostgreSQL con API propia
-- [x] Precio: por estudiante activo al mes, tarifa configurable
-- [x] Mapas: opción A. Mapa y rutas abiertos y autoalojados; la hora estimada aprende del historial de cada tramo y se corrige con la posición del bus. El tráfico de un proveedor de pago queda como pieza enchufable, apagada por defecto
-- [x] Cada viaje guarda la hora estimada contra la hora real por parada, para medir el error antes de decidir si se paga tráfico
+- [x] Backend: PostgreSQL con API propia (sin Convex ni Vercel)
+- [x] Precio: por estudiante activo en ruta al mes, tarifa configurable por colegio
+- [x] Mapas: abiertos y autoalojados; la hora estimada aprende del historial; el tráfico de pago queda como pieza enchufable, apagada
+- [x] Cobro por periodo con el checkout de Wompi; el webhook firmado es la única confirmación de un pago
+- [x] Suspender por falta de pago bloquea la edición del coordinador, nunca viajes ni familias
 
-## Decisiones que tomo salvo que digas otra cosa
+## Hecho
 
-- Cobro por periodo con el checkout de Wompi (PSE, tarjeta, Nequi, Bancolombia) y, opcional, tarjeta guardada para renovación automática. PSE no admite cobro automático, y es como suelen pagar los colegios.
-- El webhook `transaction.updated`, validado con su firma, es la única fuente de verdad de un pago. La redirección del navegador no confirma nada.
-- Suspender por falta de pago nunca corta un viaje en curso ni el seguimiento a las familias: bloquea la edición del coordinador y muestra el aviso.
-- Compose con dos perfiles: `vps` (Caddy con HTTPS automático) y `casa` (túnel de Cloudflare, sin abrir puertos).
-- Correo por SMTP (sirve cualquier proveedor), en lugar de la API de un proveedor concreto.
-- Valores por defecto de Colombia: zona `America/Bogota`, pesos, indicativo +57.
+- [x] **A. Base y API** — 20 tablas en PostgreSQL con migraciones, seguridad por fila forzada, funciones tipadas con Zod, vectores de rostro cifrados, bitácora de auditoría
+- [x] **B. Tiempo real y tareas** — Server-Sent Events sobre `LISTEN/NOTIFY`, caché de consultas por etiquetas, cola de tareas propia sobre Postgres, cola sin conexión para los toques del conductor
+- [x] **C. Seguridad** — cookie `HttpOnly`, verificación de origen, límite de intentos por correo y por conexión, política de contenido por petición, cabeceras, contenedor sin root y de solo lectura, respaldo cifrado con restauración
+- [x] **D. Mapas abiertos** — MapLibre con PMTiles en la paleta de la marca, OSRM para orden, horas y trazo por calles, hora estimada que aprende, medición de su error, botón de Waze
+- [x] **E. Suscripción** — prueba de 30 días, "Plan y pagos", checkout de Wompi, webhook con firma, recordatorios, mora y suspensión, consola del dueño con pagos por transferencia
+- [x] **F. Despliegue** — Dockerfile, Docker Compose (Postgres, app, Caddy; perfiles para OSRM y túnel de Cloudflare), guiones de mapas y respaldo, documentación
 
-## Fase A — Base de datos y API
+## Verificado
 
-- [ ] Esquema en Drizzle con las 14 tablas actuales, llaves foráneas e índices; migraciones versionadas
-- [ ] Capa de funciones tipadas: validación con Zod, rol y colegio resueltos desde la sesión
-- [ ] Seguridad por fila en Postgres (`school_id`) como segunda barrera además del filtro en código
-- [ ] Portar las funciones: acceso, estudiantes, equipo, rutas, viajes, familia, avisos, rostros
-- [ ] Vectores de rostro cifrados en reposo (AES-256-GCM, llave fuera de la base)
-- [ ] Bitácora de auditoría: ingresos, registro y borrado de rostros, exportaciones, cambios de plan
-- [ ] Portar las 28 pruebas a Postgres en memoria (PGlite) y sumar las de facturación
+- [x] 45 pruebas sobre PostgreSQL en memoria con la seguridad por fila activa: flujos, aislamiento entre colegios, pagos, mora, cola de tareas
+- [x] Firma de integridad de Wompi contra el ejemplo de su documentación oficial
+- [x] Compilación de producción y recorrido en navegador sobre ella, con la política de contenido estricta: acceso con código, viaje completo con los tres roles en vivo, cola sin conexión, registro y escáner de rostro, orden de paradas por calles, pago con webhook, consola del dueño
+- [x] Pila completa con Docker Compose: imagen construida, migraciones con un rol sin superusuario, 20 tablas con seguridad por fila, app sin root y de solo lectura, tiempo real a través de Caddy
+- [x] Respaldo cifrado y restauración (se borró un colegio y volvió al restaurar)
+- [x] Extracción de teselas con el contenedor de PMTiles (zona pequeña)
 
-## Fase B — Tiempo real y tareas
+## Pendiente: necesita llaves, datos o dispositivos reales
 
-- [ ] Canal SSE con `LISTEN/NOTIFY`; cada mutación declara qué temas invalida
-- [ ] `useQ` con caché y reconsulta por tema; cola de toques sin conexión para el conductor
-- [ ] Cola de tareas propia sobre Postgres (`FOR UPDATE SKIP LOCKED`): aviso a la familia tras 8 s, push, correo, rutas sin iniciar, limpieza diaria
+- [ ] **Wompi en sandbox.** Probado contra eventos simulados con el formato documentado, no contra Wompi. Faltan las llaves de prueba
+- [ ] **Renovación automática con tarjeta guardada.** No se implementó: cobra sin una persona delante y no se puede probar sin sandbox. Wompi lo permite con "fuentes de pago"
+- [ ] **OSRM propio.** El cliente se probó contra el servidor público de demostración de OSRM. Falta preparar los datos de Colombia en el servidor (`./scripts/maps.sh rutas`, unos 4 GB de RAM)
+- [ ] **Teselas de toda Colombia.** Se probó una zona pequeña y, en el navegador, el archivo mundial remoto. Falta la descarga completa y medir su tamaño
+- [ ] **Correo por SMTP** con un proveedor real
+- [ ] **Push en un teléfono real** con llaves VAPID
+- [ ] **Rostros y ubicación en teléfonos reales**, con niños, luz de calle y el bus en movimiento
+- [ ] **HTTPS automático de Caddy** con un dominio real (aquí se probó por HTTP local)
+- [ ] **Límite general de peticiones por conexión.** Hoy solo lo tienen el acceso y el registro
 
-## Fase C — Seguridad
+## Pendiente: no es código
 
-- [ ] Sesión en cookie; verificación de origen en toda mutación
-- [ ] Límite de intentos por IP y por correo en el acceso
-- [ ] Cabeceras: CSP, HSTS, `frame-ancestors`, `Permissions-Policy` (cámara y ubicación solo propias)
-- [ ] Contenedores sin root y con sistema de archivos de solo lectura; secretos por archivo
-- [ ] Respaldo cifrado diario fuera del servidor y guion de restauración probado
-- [ ] Revisión de seguridad del diff completo antes de cerrar
+- [ ] Factura electrónica ante la DIAN (proveedor como Alegra, Siigo o Factus)
+- [ ] Confirmar con un contador la tarifa de IVA (configurable; por defecto 19 %)
+- [ ] Política de tratamiento de datos y registro de bases ante la SIC (Ley 1581)
+- [ ] Revisión legal del texto de autorización biométrica
+- [ ] Definir el precio por estudiante (el colegio de demostración usa 6.000 pesos como ejemplo)
+- [ ] Dominio y marca de Abordo
 
-## Fase D — Mapas abiertos
+## Fase G — Apps Android y iPhone (siguiente, con plan propio)
 
-- [ ] MapLibre GL con PMTiles de Colombia servido por Caddy; estilo con la paleta de la marca
-- [ ] Cliente de OSRM para trazo, tiempos y orden de paradas; sin OSRM se usa el cálculo actual
-- [ ] Hora estimada que aprende: tiempo real de cada tramo por ruta y día de la semana
-- [ ] Registro de hora estimada contra hora real por parada
-- [ ] Botón "Cómo llegar" con Waze además de Google Maps
-- [ ] Interfaz de proveedor de tráfico (apagada por defecto)
-- [ ] Buscador de direcciones con Photon si se autoaloja; el punto en el mapa sigue siendo el camino seguro
-- [ ] Guion que descarga y prepara los datos de Colombia
+Pedido por el dueño del producto: se planea a fondo antes de implementar, para publicar sin cabos sueltos.
 
-## Fase E — Suscripción y Wompi
+Ya preparado:
 
-- [ ] Tablas `subscriptions` y `charges`; estados: prueba, activa, vencida, suspendida, cancelada
-- [ ] Prueba gratis de 30 días al registrar el colegio
-- [ ] Pantalla "Plan y pagos" del coordinador: estado, próximo cobro, historial, datos de facturación (NIT, razón social)
-- [ ] Pago del periodo con checkout de Wompi, con firma de integridad calculada en el servidor
-- [ ] Webhook con validación de firma, idempotencia y reconsulta de la transacción
-- [ ] Tarjeta guardada (fuente de pago) y cobro automático al vencer, con reintentos
-- [ ] Recordatorios por correo: 7 días antes, el día, y al entrar en mora
-- [ ] Consola del dueño de la plataforma: colegios, estado de pago, extender prueba, registrar pago por transferencia
-- [ ] Pruebas contra el ambiente sandbox de Wompi (necesito llaves de prueba)
+- [x] La API acepta la sesión por cookie (web) o por cabecera `Authorization: Bearer` (apps). Probado
+- [x] Los pagos viven solo en la web, fuera de las reglas de compras dentro de la app
 
-## Fase F — Despliegue
+Temas que ese plan debe cerrar:
 
-- [ ] `Dockerfile` de la app (salida `standalone`) y `docker-compose.yml` con Postgres, app, tareas, Caddy
-- [ ] Perfiles opcionales: OSRM, Photon, túnel de Cloudflare
-- [ ] Guía de instalación en un VPS limpio y de actualización sin caída
-- [ ] Retirar Convex del repositorio; actualizar PRD, README y CLAUDE.md
-
-## Fase G — Apps Android y iPhone (siguiente fase, con plan propio)
-
-Pedido por el dueño del producto: se planea a fondo al cerrar las fases A–F, para publicar sin cabos sueltos. Lo que ya se deja preparado desde ahora:
-
-- [ ] La API acepta la sesión por cookie (web) o por cabecera `Authorization: Bearer` (apps)
-- [ ] Los pagos quedan fuera de las apps (solo web), para no chocar con las reglas de compras dentro de la app
-
-Temas que el plan de esa fase debe cerrar:
-
-- Envoltura nativa de la app web (Capacitor) o app nativa; ubicación en segundo plano del conductor, que una PWA no puede dar
+- Envoltura nativa de la app web (Capacitor) o app nativa. Lo que decide: ubicación en segundo plano del conductor, que una PWA no puede dar
 - Push nativo (FCM y APNs) junto al push web
-- Requisitos de tiendas: política de privacidad pública, eliminación de cuenta desde la app, formularios de datos, justificación de ubicación en segundo plano y de datos de rostro
+- Requisitos de tiendas: política de privacidad pública, eliminación de cuenta desde la app, formularios de datos, justificación de ubicación en segundo plano y de datos de rostro de menores
 - Cuentas de desarrollador, firma, íconos, capturas, fichas, pruebas internas y revisión
-
-## Lo que este plan no resuelve
-
-- **Factura electrónica ante la DIAN.** Vender en Colombia la exige. Se integra aparte con un proveedor (Alegra, Siigo, Factus).
-- **IVA.** Dejo la tarifa configurable; que la confirme un contador.
-- **Habeas data.** Política de tratamiento, autorización y registro de bases de datos ante la SIC (Ley 1581): trabajo legal, no de código.
-- **Servidor en casa para producción.** Sirve para pilotos; con datos en vivo de menores recomiendo un VPS por energía, conexión y respaldo.
-- **Direcciones colombianas.** Los buscadores abiertos aciertan poco con "Cra 15 # 93-60"; por eso el punto en el mapa no se quita.

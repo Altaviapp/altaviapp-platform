@@ -1,6 +1,6 @@
 # Abordo — PRD
 
-**Versión**: 3.0 (reescritura completa)
+**Versión**: 3.1 (autoalojado, mapas abiertos y suscripción)
 **Fecha**: noviembre 2026
 **Estado**: Aprobado; versión 1 implementada
 **Reemplaza**: `docs/prd/*`, `docs/prd-v2/*`, `Technical-Specification.md`
@@ -9,7 +9,7 @@
 
 ## 1. Premisa
 
-SaaS para colegios privados que gestionan sus rutas escolares.
+SaaS para colegios privados que gestionan sus rutas escolares. Mercado inicial: Colombia.
 
 Un colegio tiene buses, conductores y estudiantes que viajan cada mañana y cada tarde. El producto responde tres preguntas, una por persona:
 
@@ -56,8 +56,10 @@ Lo que sí funciona y se conserva como idea: ruta como plantilla y viaje como ej
 4. **Avisar, no pedir permiso.** La familia informa una ausencia y queda aplicada. El coordinador la ve, no la aprueba.
 5. **Derivar antes que guardar.** La lista de un viaje se calcula (estudiantes de la ruta menos ausencias del día), no se copia ni se sincroniza.
 6. **Un toque por estudiante.** El conductor nunca escribe mientras opera.
-7. **Presupuesto de ligereza.** Menos de 10.000 líneas, máximo 14 tablas, máximo 16 pantallas, sin dependencias de pago obligatorias.
+7. **Presupuesto de ligereza.** Menos de 12.000 líneas, máximo 20 tablas, máximo 18 pantallas, sin dependencias de pago obligatorias.
 8. **La biometría es opcional y local.** El reconocimiento facial corre en el celular del conductor. Al servidor solo llegan vectores numéricos, con consentimiento registrado y revocable.
+9. **Autoalojado y sin proveedor cautivo.** Todo corre con `docker compose up` en un VPS o un servidor propio: PostgreSQL, la app y un proxy. Mapas, rutas y tiempo real usan software y datos abiertos.
+10. **Cobrar no puede frenar un bus.** La falta de pago bloquea la edición del coordinador; nunca un viaje en curso ni el aviso a una familia.
 
 ---
 
@@ -68,8 +70,9 @@ Lo que sí funciona y se conserva como idea: ruta como plantilla y viaje como ej
 | `admin` | Coordinador de transporte del colegio | Computador | Todo dentro de su colegio |
 | `driver` | Conductor o monitor que opera el viaje | Celular | Ver y operar los viajes que tiene asignados |
 | `parent` | Padre, madre o acudiente | Celular | Ver a sus hijos, reportar ausencias |
+| `owner` | Dueño de la plataforma | Computador | Ver todos los colegios, fijar precio, registrar pagos |
 
-Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado de monitor: quien lleva el celular en el bus opera el viaje. El dueño de la plataforma administra colegios desde el panel de Convex en v1.
+Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado de monitor: quien lleva el celular en el bus opera el viaje. El dueño de la plataforma no pertenece a ningún colegio y entra a su propia consola.
 
 ---
 
@@ -79,10 +82,11 @@ Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado 
 
 - Pantalla única de entrada: correo, luego código de 6 dígitos (vence en 10 minutos, 5 intentos).
 - Solo entran correos que el coordinador ya registró, más el registro de un colegio nuevo.
-- Registro de colegio: nombre del colegio, nombre y correo del coordinador. Crea el colegio y su primer `admin`.
+- Registro de colegio: nombre del colegio, nombre y correo del coordinador. Crea el colegio, su primer `admin` y una prueba gratis de 30 días.
+- La sesión vive en una cookie que el código de la página no puede leer. Las apps nativas usarán la cabecera `Authorization`.
 - No hay invitaciones: al crear un estudiante con el correo de su acudiente, ese acudiente ya puede entrar. El coordinador puede reenviar un correo de bienvenida.
 
-### 5.2 Coordinador (6 pantallas)
+### 5.2 Coordinador (7 pantallas)
 
 **Hoy** — pantalla de inicio.
 - Mapa con todos los buses en viaje.
@@ -102,8 +106,8 @@ Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado 
 - Lista de rutas con sentido, horario, bus, conductor y ocupación.
 - Editor en una sola pantalla: nombre, sentido (hacia el colegio o desde el colegio), días de la semana, hora de inicio, bus y conductor.
 - Agregar estudiantes: cada uno crea o se suma a una parada en su domicilio. Los que viven en el mismo punto comparten parada.
-- Botón "Ordenar paradas" (vecino más cercano desde o hacia el colegio) y reordenamiento manual arrastrando.
-- Hora estimada por parada calculada desde la hora de inicio, editable.
+- Botón "Ordenar": orden óptimo, horas y trazo por calles con el motor de rutas abierto; sin él, vecino más cercano en línea recta. Reordenamiento manual arrastrando.
+- Hora prevista por parada, editable.
 - Aviso si los estudiantes superan la capacidad del bus.
 
 **Equipo y buses**
@@ -113,6 +117,12 @@ Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado 
 **Historial**
 - Viajes por fecha y ruta, con hora real de inicio y fin y asistencia por estudiante.
 - Exportación a CSV.
+
+**Plan y pagos**
+- Estado de la suscripción y fecha hasta la que está cubierta.
+- Tarifa del momento: estudiantes activos en ruta × precio, más IVA.
+- Pagar 1 o 12 meses en el checkout de Wompi (PSE, tarjeta, Nequi, Botón Bancolombia).
+- Datos de facturación (razón social, NIT, correo) e historial de pagos.
 
 **Ajustes**
 - Nombre del colegio, ubicación en el mapa, zona horaria, lista de grados, coordinadores adicionales.
@@ -129,10 +139,10 @@ Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado 
 - Desde el colegio: primero se marca quién subió en el colegio; en cada parada, "Bajó".
 - Cada toque se puede deshacer. El aviso a la familia espera 8 segundos por si el conductor corrige.
 - **Check-in con reconocimiento facial**: botón "Escanear" que abre la cámara, reconoce al estudiante entre los de ese viaje y lo marca. Si el parecido es dudoso pide confirmación; si no reconoce, se usa la lista. Solo aplica a estudiantes con rostro registrado.
-- Mapa con las paradas y botón para abrir la navegación del teléfono hacia la parada siguiente.
+- Mapa con las paradas y el trazo, y botones para abrir Waze o Google Maps hacia la parada siguiente. El conductor decide el camino con el tráfico del momento.
 - Botón "Avisar": retraso, avería u otro, con texto opcional. Llega al coordinador y, si el conductor lo marca, a las familias de ese viaje.
 - La pantalla se mantiene encendida durante el viaje.
-- Si se pierde la conexión, los toques quedan en cola y se envían al volver.
+- Si se pierde la conexión, los toques quedan guardados en el teléfono, se ven aplicados y se envían en orden al volver la señal.
 
 **Resumen**
 - Al terminar: duración, estudiantes transportados, quiénes no salieron.
@@ -157,7 +167,14 @@ Un usuario pertenece a un solo colegio y tiene un solo rol. No hay rol separado 
 - Avisos recibidos y asistencia de los últimos 30 días.
 - Activar o desactivar notificaciones push. Cerrar sesión.
 
-### 5.5 Notificaciones
+### 5.5 Dueño de la plataforma (1 pantalla)
+
+**Colegios**
+- Todos los colegios con su estado de pago, estudiantes en ruta, valor mensual y fecha cubierta.
+- Ajustar el precio por estudiante, extender la prueba o cambiar el estado.
+- Registrar un pago recibido por transferencia.
+
+### 5.6 Notificaciones
 
 Push web real más la lista dentro de la app.
 
@@ -183,11 +200,12 @@ Push web real más la lista dentro de la app.
 4. **Foto de la ruta.** Al iniciar, el viaje guarda una copia de las paradas. Editar la ruta después no altera viajes ya iniciados ni el historial.
 5. **Estados del viaje.** `in_progress` y `completed`. "Sin iniciar" es la ausencia de viaje. Un coordinador puede cerrar un viaje olvidado.
 6. **Estados del estudiante en un viaje.** Esperado, a bordo, entregado, no salió, ausente. Los tres del medio son registros de asistencia; los otros dos se derivan.
-7. **Hora estimada.** Hora prevista de la parada más el retraso observado en la última parada completada. Sin servicios externos de tráfico.
+7. **Hora estimada que aprende.** Cada viaje guarda la hora real de llegada a cada parada. Con 3 o más viajes, la hora típica de una parada es la mediana de sus últimas 10 llegadas; a eso se suma el retraso observado hoy. Así la estimación incluye el tráfico habitual de esa ruta sin consultar a un proveedor. También se guarda lo que se le mostró a la familia, para medir el error contra la llegada real.
 8. **Posición.** El celular del conductor envía la posición cada 10 segundos mientras el viaje está en curso. Solo se guarda la última, en una tabla aparte para que cada reporte no recalcule las pantallas que leen el viaje. Se borra al terminar.
 9. **Desde el colegio.** El viaje empieza con el abordaje en el colegio. Al salir, quien no subió queda como "no abordó" y las paradas sin nadie a bordo se saltan solas.
 10. **Rostros.** Se comparan únicamente contra los estudiantes del viaje en curso. Coincidencia automática solo si el parecido es alto y con ventaja clara sobre el segundo candidato. Los vectores solo se entregan al conductor de ese viaje.
-11. **Aislamiento.** Todo dato lleva `schoolId` y toda función filtra por el colegio de la sesión. Un padre solo ve estudiantes de los que es acudiente; un conductor solo opera viajes de rutas que tiene asignadas.
+11. **Suscripción.** Se cobra por estudiante activo asignado a una ruta activa, por mes, más IVA. Estados: prueba (30 días), activa, en mora (7 días de gracia) y suspendida. Un pago se aplica solo con un evento de Wompi con firma válida, monto exacto y una sola vez. Pagar antes de vencer no pierde días.
+12. **Aislamiento.** Todo dato lleva `schoolId` y toda función filtra por el colegio de la sesión. Además la base de datos lo impone por su cuenta (seguridad por fila): una consulta sin filtro tampoco ve otro colegio. Un padre solo ve estudiantes de los que es acudiente; un conductor solo opera viajes de rutas que tiene asignadas.
 
 ---
 
@@ -204,35 +222,33 @@ Push web real más la lista dentro de la app.
 | Reportes y gráficas | El historial exportable a CSV cubre la necesidad | Hay preguntas recurrentes que el CSV no responde |
 | Calendario del conductor y del padre | "Hoy" es lo que importa | — |
 | Organización matriz con varios colegios | Un colegio por cuenta | Aparece un grupo educativo como cliente |
-| Planes y suscripción dentro de la app | La facturación se maneja por fuera al inicio | Hay más de unos pocos clientes |
 | API REST pública | Nadie la consume | Hay una integración concreta |
 | Contraseñas, 2FA, verificación de correo | Sustituidos por código al correo | — |
 | Edición de datos del estudiante por la familia | El coordinador es dueño del dato | Se quiere que la familia confirme el punto de su casa |
-| Google Maps | Costo y llave obligatoria | Se necesita trazado por calles con tráfico |
+| Tráfico en vivo de un proveedor de pago | La hora estimada aprende del historial y se corrige con la posición del bus | El error medido (Historial) lo justifica; el motor de rutas tiene dónde enchufarlo |
+| Renovación automática con tarjeta guardada | Mueve dinero sin una persona delante: se hace cuando se pueda probar contra Wompi | Hay llaves de prueba de Wompi |
+| Factura electrónica (DIAN) | Se integra con un proveedor aparte | Antes del primer cobro real |
+| Buscador de direcciones propio | Los buscadores abiertos aciertan poco con direcciones colombianas; el punto en el mapa es el camino seguro | Hay un índice de direcciones confiable |
 | Rutas mensuales o de fecha única | Las rutas escolares son por día de la semana | Salidas pedagógicas |
 
 ---
 
 ## 8. Modelo de datos
 
-14 tablas. Las paradas viven dentro de la ruta y los avisos del conductor dentro del viaje. El código de acceso vive en el usuario.
+PostgreSQL, 20 tablas. Las paradas viven dentro de la ruta y los avisos del conductor dentro del viaje.
 
-| Tabla | Campos principales |
-|-------|--------------------|
-| `schools` | nombre, zona horaria, ubicación, grados |
-| `users` | schoolId, correo, nombre, teléfono, rol, activo, código de acceso vigente (hash) |
-| `sessions` | userId, hash del token, vencimiento |
-| `students` | schoolId, nombre, grado, dirección, domicilio (lat, lng), nota, activo |
-| `guardians` | schoolId, studentId, userId |
-| `faces` | schoolId, studentId, vectores, quién autorizó, cuándo, origen (acudiente o colegio) |
-| `vehicles` | schoolId, nombre, placa, capacidad, activo |
-| `routes` | schoolId, nombre, sentido, días, hora de inicio, vehicleId, driverId, paradas `[{id, nombre, lat, lng, hora, studentIds}]`, activa |
-| `trips` | schoolId, routeId, fecha, sentido, driverId, vehicleId, estado, inicio, salida, fin, copia de paradas, parada siguiente, retraso, avisos, resumen |
-| `positions` | schoolId, tripId, lat, lng, rumbo, velocidad, hora (una fila por viaje en curso) |
-| `boardings` | schoolId, tripId, studentId, stopId, estado (a bordo, entregado, no abordó), método (toque o rostro), hora |
-| `absences` | schoolId, studentId, desde, hasta, sentido, nota, creada por |
-| `notifications` | userId, título, cuerpo, tripId, leída, hora |
-| `pushSubscriptions` | userId, endpoint, llaves |
+| Tabla | Para qué |
+|-------|----------|
+| `schools`, `users`, `sessions` | Colegios, personas (con su código de acceso vigente) y sesiones |
+| `students`, `guardians`, `faces` | Estudiantes, sus acudientes y el vector de rostro cifrado con su consentimiento |
+| `vehicles`, `routes` | Buses y rutas (paradas, días, hora, trazo por calles) |
+| `trips`, `positions`, `boardings`, `stop_times` | Viajes, última posición, asistencia y hora real de llegada por parada |
+| `absences` | Ausencias reportadas |
+| `notifications`, `push_subscriptions` | Avisos en la app y suscripciones push |
+| `subscriptions`, `charges` | Suscripción de cada colegio y sus cobros |
+| `jobs`, `audit_log`, `rate_limits` | Cola de tareas, bitácora de acciones sensibles y límites de intentos |
+
+Las 14 tablas con datos de un colegio tienen seguridad por fila forzada. La app se conecta con un rol que no es superusuario.
 
 ---
 
@@ -240,35 +256,50 @@ Push web real más la lista dentro de la app.
 
 | Capa | Elección | Motivo |
 |------|----------|--------|
-| App | Una sola app Next.js (App Router), instalable como PWA | Un despliegue, un dominio, un login |
-| Backend y tiempo real | Convex | Las suscripciones en vivo son el corazón del producto y ya hay experiencia con él |
-| Identidad | Sesión propia con token; el servidor resuelve el usuario en cada función | Corrige el fallo de seguridad actual |
-| Correo | Resend por HTTP | Solo se usa para el código de acceso y la bienvenida |
-| Mapas | Leaflet con teselas de OpenStreetMap, URL configurable | Sin costo ni llave obligatoria |
+| App | Una sola app Next.js, instalable como PWA, en una imagen de Docker | Un despliegue, un dominio, un login |
+| Base de datos | PostgreSQL 17 con Drizzle y migraciones versionadas | Estándar, con respaldos y permisos conocidos |
+| API | Funciones tipadas tras un único punto `/api/rpc`, validadas con Zod | La identidad y el colegio se resuelven siempre en el servidor |
+| Tiempo real | Server-Sent Events + `LISTEN/NOTIFY` de Postgres | Sin servicio extra; funciona con varias réplicas |
+| Tareas | Cola propia sobre Postgres (`FOR UPDATE SKIP LOCKED`) | Avisos diferidos, push, correo, mora; transaccional y sin dependencia |
+| Mapas | MapLibre GL con un archivo PMTiles de Colombia servido por el proxy | Datos de OpenStreetMap, cero costo por uso |
+| Rutas | OSRM autoalojado (opcional) | Trazo por calles, tiempos y orden óptimo de paradas |
+| Proxy | Caddy con HTTPS automático, o túnel de Cloudflare para un servidor en casa | Sin configurar certificados a mano |
+| Correo | SMTP de cualquier proveedor | Solo código de acceso, bienvenida y recordatorios |
 | Push | Web Push con llaves VAPID | Sin proveedor externo |
-| Estilos | Tailwind 4, componentes propios mínimos, fuentes Outfit y Fraunces autoalojadas | La identidad vive en dos archivos |
-| Reconocimiento facial | face-api en el navegador, cargado solo al escanear o registrar | Ninguna imagen sale del dispositivo |
-| Pruebas | Vitest sobre las reglas de la sección 6 y los flujos del backend | Las reglas son pocas y críticas |
+| Pagos | Wompi: checkout web y webhook firmado | Mercado colombiano: PSE, tarjeta, Nequi, Bancolombia |
+| Reconocimiento facial | face-api en el navegador | Ninguna imagen sale del dispositivo |
+| Pruebas | Vitest sobre PostgreSQL en memoria (PGlite), con la seguridad por fila activa | Las reglas son pocas y críticas |
 
-Estructura del repositorio:
+### Seguridad
+
+- Sesión en cookie `HttpOnly`, `Secure`, `SameSite=Lax`; toda petición con cookie debe venir del propio origen.
+- Política de contenido con valor de un solo uso por petición; cabeceras HSTS, `nosniff`, sin marcos y permisos de cámara y ubicación solo para la propia app.
+- Límite de intentos de acceso por correo y por conexión.
+- Seguridad por fila en la base, como segunda barrera tras el filtro del código.
+- Vectores de rostro cifrados en reposo con una llave que no está en la base.
+- Bitácora de ingresos, rostros, importaciones, cambios de equipo y pagos.
+- Contenedor de la app sin root, con sistema de archivos de solo lectura y sin capacidades; la base no se expone fuera de la red interna.
+- Respaldo cifrado de la base y restauración probada.
+
+### Estructura del repositorio
 
 ```
-app/            Pantallas: (auth), admin/, conductor/, familia/
-components/     Componentes compartidos (mapa, lista, formulario)
-convex/         Esquema y funciones
-lib/            Reglas puras (lista del viaje, hora estimada, orden de paradas)
-docs/PRD.md     Este documento
+app/            Pantallas y rutas de la API (rpc, live, wompi, health)
+components/     Cliente de la API y sesión, componentes base, mapa, rostro, push
+server/         Funciones del backend, cola de tareas, tiempo real, Wompi, rutas
+db/             Esquema, migraciones y datos de demostración
+lib/            Reglas puras compartidas por servidor y cliente
+deploy/, scripts/   Caddy, base inicial, respaldos y datos de mapas
+tests/          Reglas, flujos del backend y facturación
 ```
 
-Sin monorepo, sin Turborepo, sin paquetes internos, sin Docker.
+### Limitaciones conocidas
 
-Limitaciones conocidas que se aceptan en v1:
-
-- Una PWA no puede reportar posición con la pantalla apagada. Se mantiene la pantalla encendida durante el viaje y se le indica al conductor dejar la app abierta.
-- En iPhone, las notificaciones push exigen instalar la app en la pantalla de inicio. La app guía ese paso.
-- El trazo entre paradas es en línea recta, no por calles.
-- El reconocimiento facial depende de la luz y de la cámara del teléfono. Nunca es el único camino: la lista por toque siempre está disponible.
-- Los datos biométricos de menores son datos sensibles (LOPDP en Ecuador, Ley 1581 en Colombia). El texto de autorización debe revisarlo un abogado antes de usarse con un colegio real.
+- Una PWA no reporta posición con la pantalla apagada: la pantalla se mantiene encendida durante el viaje. Las apps nativas (siguiente fase) lo resuelven.
+- En iPhone, el push web exige instalar la app en la pantalla de inicio.
+- Sin tráfico en vivo, la hora estimada no anticipa un trancón que el bus aún no ha tocado.
+- El reconocimiento facial depende de la luz y de la cámara. Nunca es el único camino.
+- Los datos biométricos de menores son datos sensibles (Ley 1581 en Colombia): el texto de autorización necesita revisión legal.
 
 ---
 
@@ -297,7 +328,9 @@ Limpio, fácil de navegar, nunca saturado, y con un aire campestre propio de un 
 | Toques del conductor por estudiante | 1 |
 | Familias con push activo a las 2 semanas | Más del 60 % |
 | Viajes iniciados en la app sobre viajes programados | Más del 90 % |
-| Tamaño del código | Menos de 10.000 líneas |
+| Tamaño del código | Menos de 12.000 líneas |
+| Error medio de la hora estimada | Menos de 3 minutos por parada |
+| Colegios que pagan al terminar la prueba | Más del 50 % |
 
 ---
 
@@ -324,6 +357,10 @@ Limpio, fácil de navegar, nunca saturado, y con un aire campestre propio de un 
 ## 14. Decisiones tomadas
 
 1. Nombre: Abordo.
-2. Datos: se empieza de cero en un despliegue nuevo de Convex. El despliegue de Altaviapp no se toca ni se migra.
+2. Se empieza de cero. El despliegue de Altaviapp no se toca ni se migra.
 3. El check-in con reconocimiento facial entra en la versión 1.
-4. El diseño visual es nuevo: paleta campestre y estructura de bloques amplios (sección 10).
+4. Diseño: paleta campestre y estructura de bloques amplios (sección 10).
+5. Autoalojado en VPS o servidor propio, sobre PostgreSQL. Sin Convex ni Vercel.
+6. Mapas y rutas con software y datos abiertos. El tráfico de pago queda como pieza enchufable, apagada.
+7. Mercado inicial: Colombia. Cobro por estudiante activo al mes, con Wompi.
+8. Siguiente fase: apps para Android y iPhone, con plan propio para publicación.

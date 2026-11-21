@@ -6,6 +6,8 @@ import { api, errorText, useM, useSession } from "@/components/session";
 import { Button, Card, Field, PageHeader, inputClass, useToast } from "@/components/ui";
 import { TIMEZONES } from "@/lib/dates";
 
+const GEOCODER = process.env.NEXT_PUBLIC_GEOCODER_URL ?? "https://nominatim.openstreetmap.org";
+
 export default function Ajustes() {
   const { me } = useSession();
   const school = me!.school!;
@@ -22,7 +24,7 @@ export default function Ajustes() {
   const locate = async () => {
     if (!address.trim()) return;
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`);
+      const res = await fetch(`${GEOCODER}/search?format=json&limit=1&countrycodes=co&q=${encodeURIComponent(address)}`);
       const [hit] = (await res.json()) as { lat: string; lon: string }[];
       if (hit) setPoint({ lat: Number(hit.lat), lng: Number(hit.lon) });
       else setError("No encontramos esa dirección. Marca el punto tocando el mapa.");

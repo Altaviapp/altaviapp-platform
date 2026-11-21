@@ -30,7 +30,9 @@ export const api = {
 export type Api = typeof api;
 
 export function findFn(name: string): Fn | undefined {
-  const [module, fn] = name.split(".");
-  const found = (api as Record<string, Record<string, unknown>>)[module]?.[fn];
-  return Object.prototype.hasOwnProperty.call(api, module) && found ? (found as Fn) : undefined;
+  const [module, fn, extra] = name.split(".");
+  const has = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
+  if (extra !== undefined || !module || !fn || !has(api, module)) return undefined;
+  const functions = (api as Record<string, Record<string, Fn>>)[module];
+  return has(functions, fn) ? functions[fn] : undefined;
 }

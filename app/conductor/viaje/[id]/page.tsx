@@ -3,10 +3,11 @@
 import { ArrowLeft, Check, Map as MapIcon, Megaphone, Navigation, ScanFace, Undo2, X } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaceScan } from "@/components/face-scan";
 import { Map, type Pin } from "@/components/map";
-import { api, errorText, useM, useQ, useSession } from "@/components/session";
+import { ApiError, api, errorText, useM, useQ, useSession } from "@/components/session";
+import { nextStopIndex } from "@/lib/roster";
 import { Badge, Button, Field, Modal, STATUS, Segmented, Spinner, cx, formatTime, inputClass, useToast } from "@/components/ui";
 
 type Trip = NonNullable<(typeof api.trips.detail)["_returnType"]>;
@@ -48,12 +49,94 @@ function useTracking(tripId: string, active: boolean) {
   return { gps, here };
 }
 
+type Queued = { studentId: string; status: Mark; method: "tap" | "face" };
+
+/**
+ * Cola de registros del conductor. Cada toque se guarda en el teléfono y se envía en orden;
+ * sin conexión espera y se reintenta solo. Así un túnel o una zona sin señal no pierde nada.
+ */
+function useMarkQueue(tripId: string) {
+  const mark = useM(api.trips.mark);
+  const toast = useToast();
+  const key = `abordo.cola.${tripId}`;
+  const [queue, setQueue] = useState<Queued[]>([]);
+  const items = useRef<Queued[]>([]);
+  const sending = useRef(false);
+
+  const store = useCallback((next: Queued[]) => {
+    items.current = next;
+    setQueue(next);
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {}
+  }, [key]);
+
+  const flush = useCallback(async () => {
+    if (sending.current) return;
+    sending.current = true;
+    try {
+      while (items.current.length) {
+        try {
+          await mark({ tripId, ...items.current[0] });
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 0) return; // sin conexión: se queda en cola
+          toast(errorText(error), "bad"); // el servidor lo rechazó: no tiene sentido reintentar
+        }
+        store(items.current.slice(1));
+      }
+    } finally {
+      sending.current = false;
+    }
+  }, [mark, tripId, store, toast]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "[]") as Queued[];
+      if (saved.length) store(saved);
+    } catch {}
+    void flush();
+    const timer = setInterval(() => void flush(), 5000);
+    const onOnline = () => void flush();
+    window.addEventListener("online", onOnline);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [key, store, flush]);
+
+  const push = useCallback((item: Queued) => {
+    store([...items.current, item]);
+    void flush();
+  }, [store, flush]);
+  return { queue, push };
+}
+
+/** Muestra el viaje como quedará cuando se envíen los registros en cola. */
+function withQueue(trip: Trip, queue: Queued[]): Trip {
+  if (!queue.length) return trip;
+  const fromSchool = trip.direction === "from_school";
+  const status = new globalThis.Map(trip.stops.flatMap((s) => s.students.map((x) => [x.id, x.status] as const)));
+  for (const item of queue) {
+    const current = status.get(item.studentId);
+    if (item.status !== "undo") status.set(item.studentId, item.status);
+    else status.set(item.studentId, current === "dropped" && fromSchool ? "boarded" : "expected");
+  }
+  const stops = trip.stops.map((stop) => ({ ...stop, students: stop.students.map((x) => ({ ...x, status: status.get(x.id)! })) }));
+  const counts = { expected: 0, boarded: 0, dropped: 0, no_show: 0, absent: 0, total: 0 };
+  for (const value of status.values()) (counts[value]++, counts.total++);
+  const recorded = new globalThis.Map([...status].filter(([, v]) => v === "boarded" || v === "dropped" || v === "no_show") as [string, "boarded" | "dropped" | "no_show"][]);
+  const absent = new Set([...status].filter(([, v]) => v === "absent").map(([id]) => id));
+  const index = nextStopIndex(stops.map((x) => ({ id: x.id, time: x.time, studentIds: x.students.map((y) => y.id) })), trip.direction, recorded, absent);
+  return { ...trip, stops, counts, stopIndex: fromSchool && !trip.departedAt ? trip.stopIndex : index };
+}
+
 export default function Viaje() {
   const { id } = useParams<{ id: string }>();
   const { me } = useSession();
   const tz = me!.school!.timezone;
-  const trip = useQ(api.trips.detail, { tripId: id });
-  const mark = useM(api.trips.mark);
+  const server = useQ(api.trips.detail, { tripId: id });
+  const { queue, push } = useMarkQueue(id);
+  const trip = useMemo(() => server && withQueue(server, queue), [server, queue]);
   const depart = useM(api.trips.depart);
   const finish = useM(api.trips.finish);
   const toast = useToast();
@@ -75,9 +158,7 @@ export default function Viaje() {
       toast(errorText(e), "bad");
     }
   };
-  const doMark = (studentId: string, status: Mark, method: "tap" | "face" = "tap") =>
-    mark({ tripId: id, studentId, status, method });
-  const tap = (studentId: string, status: Mark) => act(() => doMark(studentId, status));
+  const tap = (studentId: string, status: Mark) => push({ studentId, status, method: "tap" });
 
   // Qué hace el escáner según el momento del viaje.
   const scanAction = toSchool || boardingAtSchool ? "boarded" : "dropped";
@@ -120,6 +201,13 @@ export default function Viaje() {
               <span className={cx("size-2 rounded-full", gps === "ok" ? "bg-brand" : "bg-paper")} />
               {gps === "ok" ? "Ubicación activa" : gps === "denied" ? "Sin permiso de ubicación" : "Buscando ubicación"}
             </span>
+          </div>
+          <div aria-live="polite">
+            {queue.length > 0 && (
+              <p className="mt-3 rounded-2xl bg-brand px-4 py-2 text-sm text-brand-ink">
+                Sin conexión: {queue.length} {queue.length === 1 ? "registro guardado" : "registros guardados"} en el teléfono. Se envían solos al volver la señal.
+              </p>
+            )}
           </div>
           <p className="mt-4 text-sm text-paper/65">{trip.routeName}{trip.vehicle ? ` · ${trip.vehicle.name}` : ""}</p>
           {boardingAtSchool ? (
@@ -197,7 +285,7 @@ export default function Viaje() {
             tripId={id}
             pending={scanPending}
             actionLabel={scanAction === "boarded" ? "Subió" : "Bajó"}
-            onMark={async (studentId) => void (await doMark(studentId, scanAction, "face"))}
+            onMark={async (studentId) => push({ studentId, status: scanAction, method: "face" })}
           />
         )}
       </Modal>

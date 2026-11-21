@@ -105,7 +105,7 @@ function PlanPage() {
             </div>
             <div className="mt-6 grid gap-2 sm:grid-cols-2">
               <Button size="lg" loading={paying === 1} disabled={!data.canPay || paying !== null} onClick={() => pay(1)}>Pagar 1 mes</Button>
-              <Button size="lg" variant="secondary" loading={paying === 12} disabled={!data.canPay || paying !== null} onClick={() => pay(12)}>
+              <Button size="lg" variant="secondary" className="whitespace-nowrap px-4 text-sm" loading={paying === 12} disabled={!data.canPay || paying !== null} onClick={() => pay(12)}>
                 12 meses · {money(data.yearly.total)}
               </Button>
             </div>

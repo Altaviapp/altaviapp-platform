@@ -6,7 +6,9 @@ let transport: Transporter | undefined;
 export async function sendEmail(to: string, subject: string, text: string) {
   const url = process.env.SMTP_URL;
   if (!url) {
-    console.log(`[correo sin enviar] para ${to}: ${subject} — ${text}`);
+    // En producción el contenido no se escribe en el log (lleva códigos de acceso), salvo EMAIL_DEBUG=1.
+    const show = process.env.NODE_ENV !== "production" || process.env.EMAIL_DEBUG === "1";
+    console.log(show ? `[correo sin enviar] para ${to}: ${subject} — ${text}` : `[correo sin enviar] para ${to}: falta configurar SMTP_URL`);
     return;
   }
   transport ??= nodemailer.createTransport(url);

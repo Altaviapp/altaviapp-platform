@@ -1,0 +1,30 @@
+# Proxy de entrada. Con un dominio, Caddy obtiene y renueva el certificado HTTPS solo.
+# Detrás de un túnel (servidor en casa) se usa SITE_ADDRESS=:80.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Teselas del mapa y sus fuentes: archivos estáticos con peticiones por rango.
+	handle /tiles/* {
+		root * /srv
+		header Cache-Control "public, max-age=604800"
+		file_server
+	}
+
+	# Tiempo real (Server-Sent Events): sin búfer ni límite de tiempo.
+	@live path /api/live
+	reverse_proxy @live app:3000 {
+		flush_interval -1
+		transport http {
+			read_timeout 0
+		}
+	}
+
+	reverse_proxy app:3000
+
+	request_body {
+		max_size 1MB
+	}
+	header {
+		-Server
+	}
+}

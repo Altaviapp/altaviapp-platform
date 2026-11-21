@@ -1,0 +1,92 @@
+# Abordo autoalojado. Uso básico (VPS con dominio):
+#   cp .env.example .env   # y completar
+#   docker compose up -d --build
+# Perfiles opcionales:  --profile rutas (OSRM)  --profile casa (túnel de Cloudflare)
+# Respaldos: ./scripts/backup.sh (ver README)
+name: abordo
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+
+services:
+  db:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?define APP_DB_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d abordo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [interna]
+
+  app:
+    <<: *hardening
+    build:
+      context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+        NEXT_PUBLIC_PMTILES_URL: ${NEXT_PUBLIC_PMTILES_URL:-/tiles/colombia.pmtiles}
+        NEXT_PUBLIC_MAP_ASSETS_URL: ${NEXT_PUBLIC_MAP_ASSETS_URL:-/tiles/assets}
+    env_file: .env
+    environment:
+      # La app entra con un rol sin privilegios de superusuario: así aplica la seguridad por fila.
+      DATABASE_URL: postgres://abordo:${APP_DB_PASSWORD}@db:5432/abordo
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-x-forwarded-for}
+    read_only: true
+    tmpfs: ["/tmp", "/app/.next/cache"]
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [interna]
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?define SITE_ADDRESS (tu dominio, o :80 detrás de un túnel)}
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${HTTP_PORT:-80}:80"
+      - "${BIND_ADDRESS:-0.0.0.0}:${HTTPS_PORT:-443}:443"
+      - "${BIND_ADDRESS:-0.0.0.0}:${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/tiles:/srv/tiles:ro
+      - ./data/caddy:/data
+    depends_on: [app]
+    networks: [interna]
+
+  # Motor de rutas por calles. Preparar los datos antes con: ./scripts/maps.sh rutas
+  osrm:
+    <<: *hardening
+    profiles: [rutas]
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-trip-size 80 /data/colombia-latest.osrm
+    volumes: ["./data/osrm:/data:ro"]
+    networks: [interna]
+
+  # Servidor en casa: sale por un túnel de Cloudflare, sin abrir puertos del router.
+  # Usar SITE_ADDRESS=:80, BIND_ADDRESS=127.0.0.1 y CLIENT_IP_HEADER=cf-connecting-ip,
+  # y apuntar el túnel a http://caddy:80
+  tunel:
+    <<: *hardening
+    profiles: [casa]
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    networks: [interna]
+
+networks:
+  interna:

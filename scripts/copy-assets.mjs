@@ -2,6 +2,8 @@
 // los modelos de reconocimiento facial (~6 MB) y el proceso auxiliar del mapa.
 import { cpSync, existsSync, mkdirSync } from "node:fs";
 
+mkdirSync("public", { recursive: true });
+
 const faces = "node_modules/@vladmandic/face-api/model";
 if (existsSync(faces)) {
   mkdirSync("public/models", { recursive: true });

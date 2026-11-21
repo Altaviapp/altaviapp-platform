@@ -9,6 +9,8 @@ import { api, errorText, useM, useNow, useQ, useSession } from "@/components/ses
 import { Badge, Button, Card, Empty, Field, Modal, PageHeader, Spinner, inputClass, useToast } from "@/components/ui";
 import { CSV_HEADERS, type RowResult, readStudentsCsv } from "@/lib/csv";
 
+const GEOCODER = process.env.NEXT_PUBLIC_GEOCODER_URL ?? "https://nominatim.openstreetmap.org";
+
 type Student = NonNullable<(typeof api.students.list)["_returnType"]>[number];
 type Dialog =
   | { kind: "form"; student?: Student }
@@ -138,7 +140,7 @@ function StudentForm({ student, onDone }: { student?: Student; onDone: () => voi
       const bias = school.location
         ? `&viewbox=${school.location.lng - 0.4},${school.location.lat + 0.4},${school.location.lng + 0.4},${school.location.lat - 0.4}&bounded=1`
         : "";
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}${bias}`);
+      const res = await fetch(`${GEOCODER}/search?format=json&limit=1&countrycodes=co&q=${encodeURIComponent(address)}${bias}`);
       const [hit] = (await res.json()) as { lat: string; lon: string }[];
       if (hit) setHome({ lat: Number(hit.lat), lng: Number(hit.lon) });
       else setError("No encontramos esa dirección. Marca el punto tocando el mapa.");

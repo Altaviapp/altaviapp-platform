@@ -1,94 +1,163 @@
 # Abordo
 
-SaaS de rutas escolares para colegios privados. Una sola app con tres vistas:
+SaaS de rutas escolares para colegios privados, autoalojado. Una sola app con cuatro vistas:
 
-- **Coordinador** (`/admin`): la operación del día en vivo, estudiantes, rutas, equipo, historial.
+- **Coordinador** (`/admin`): la operación del día en vivo, estudiantes, rutas, equipo, historial, plan y pagos.
 - **Conductor** (`/conductor`): sus viajes de hoy y el viaje en curso, un toque por estudiante o reconocimiento facial.
 - **Familia** (`/familia`): dónde va el bus, si su hijo ya subió, ausencias y avisos.
+- **Dueño de la plataforma** (`/plataforma`): colegios, precios y pagos.
 
-Requisitos y decisiones de producto: [docs/PRD.md](docs/PRD.md).
+Producto y decisiones: [docs/PRD.md](docs/PRD.md). Plan y pendientes: [tasks/todo.md](tasks/todo.md).
 
-## Arrancar en local
+## Desarrollo local
 
-Necesitas Node 20 o superior y pnpm.
+Necesitas Node 22, pnpm y PostgreSQL 16 o superior.
 
 ```bash
 pnpm install
 ```
 
-En una terminal, el backend (crea `.env.local` la primera vez):
+Crea una base y un rol que **no** sea superusuario (la seguridad por fila no aplica a superusuarios):
 
 ```bash
-npx convex dev
+psql -U postgres -c "create role abordo login password 'dev'" -c "create database abordo owner abordo"
 ```
 
-En otra, la app:
+Crea `.env.local`:
 
 ```bash
-pnpm dev
+DATABASE_URL=postgres://abordo:dev@127.0.0.1:5432/abordo
+APP_URL=http://localhost:3000
 ```
 
-Datos de demostración (un colegio en Quito con 11 estudiantes, 2 buses y 4 rutas que corren todos los días):
+Migraciones y datos de demostración (un colegio en Bogotá con 11 estudiantes, 2 buses y 4 rutas):
 
 ```bash
 pnpm seed
 ```
 
-Entra en http://localhost:3000 con `coordinacion@demo.abordo.app`, `ramiro@demo.abordo.app` (conductor) o `lucia@demo.abordo.app` (familia). Sin `RESEND_API_KEY`, el código de acceso de 6 dígitos aparece en el log de `npx convex dev`.
+```bash
+pnpm dev
+```
+
+Entra en http://localhost:3000 con `coordinacion@demo.abordo.app`, `ramiro@demo.abordo.app` (conductor) o `lucia@demo.abordo.app` (familia). Sin `SMTP_URL`, el código de acceso aparece en la terminal de `pnpm dev`.
+
+Para la consola del dueño:
+
+```bash
+pnpm make-owner tu@correo.com Tu Nombre
+```
 
 ## Comandos
 
 | Comando | Qué hace |
 |---------|----------|
 | `pnpm dev` | App en modo desarrollo |
-| `npx convex dev` | Backend local con recarga |
-| `pnpm test` | Pruebas de reglas y de flujos del backend |
-| `pnpm type-check` | Tipos de la app y del backend |
+| `pnpm test` | Pruebas sobre PostgreSQL en memoria (no necesita base instalada) |
+| `pnpm type-check` | Tipos |
 | `pnpm build` | Compilación de producción |
+| `pnpm db:generate` | Genera una migración a partir de cambios en `db/schema.ts` |
+| `pnpm db:migrate` | Aplica migraciones pendientes |
 | `pnpm seed` | Crea el colegio de demostración |
 
-## Estructura
+## Desplegar en un servidor
 
-```
-app/            Pantallas: entrada, registro, admin/, conductor/, familia/
-components/     Sesión, componentes base, mapa, escáner y registro de rostro, push
-convex/         Esquema (14 tablas) y funciones del backend
-lib/            Reglas puras: lista del viaje, horas, orden de paradas, rostros, CSV
-tests/          rules.test.ts (reglas) y flows.test.ts (backend de punta a punta)
-docs/PRD.md     Producto
-```
+Necesitas un VPS (o servidor propio) con Docker y un dominio apuntando a él. Referencia: 2 vCPU y 4 GB de RAM alcanzan para empezar; con el motor de rutas, 8 GB.
 
-La identidad visual vive en dos archivos: `app/globals.css` (tokens de color, tipografía y mapa) y `components/ui.tsx` (componentes base).
-
-## Configuración
-
-Variables en [.env.example](.env.example). Las del backend se definen con `npx convex env set`.
-
-| Para | Variables |
-|------|-----------|
-| Enviar el código de acceso por correo | `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL` |
-| Notificaciones push | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` en Convex y `NEXT_PUBLIC_VAPID_PUBLIC_KEY` en la app |
-| Otro proveedor de mapas | `NEXT_PUBLIC_TILE_URL` |
-
-Generar las llaves push:
+1. Clona el repositorio y crea la configuración:
 
 ```bash
-npx web-push generate-vapid-keys
+cp .env.example .env
 ```
 
-Las teselas por defecto son las de OpenStreetMap, cuya política de uso no cubre tráfico de producción intenso. Antes de salir a clientes conviene contratar un proveedor de teselas y poner su URL en `NEXT_PUBLIC_TILE_URL`.
+2. Completa `.env`. Los secretos se generan así:
+
+```bash
+openssl rand -hex 24
+```
+
+```bash
+openssl rand -base64 32
+```
+
+El primero sirve para `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` y `BACKUP_PASSPHRASE`; el segundo para `FACE_KEY`. Guarda `FACE_KEY` y `BACKUP_PASSPHRASE` también fuera del servidor: sin ellas no se pueden leer los rostros ni los respaldos.
+
+3. Descarga el mapa de Colombia (datos de OpenStreetMap):
+
+```bash
+./scripts/maps.sh teselas
+```
+
+4. Levanta todo:
+
+```bash
+docker compose up -d --build
+```
+
+Caddy obtiene el certificado HTTPS solo. La app aplica las migraciones al arrancar y crea al dueño de la plataforma con `OWNER_EMAIL`.
+
+### Opcionales
+
+**Rutas por calles (OSRM).** Prepara los datos (pide unos 4 GB de RAM una sola vez), pon `OSRM_URL=http://osrm:5000` en `.env` y levanta el perfil:
+
+```bash
+./scripts/maps.sh rutas
+```
+
+```bash
+docker compose --profile rutas up -d
+```
+
+Sin OSRM la app funciona igual: ordena las paradas y estima horas en línea recta.
+
+**Servidor en casa.** Para no abrir puertos del router, usa un túnel de Cloudflare: en `.env` pon `SITE_ADDRESS=:80`, `BIND_ADDRESS=127.0.0.1`, `CLIENT_IP_HEADER=cf-connecting-ip` y `CLOUDFLARE_TUNNEL_TOKEN`, apunta el túnel a `http://caddy:80` y levanta con:
+
+```bash
+docker compose --profile casa up -d
+```
+
+Sirve para pilotos. Con datos en vivo de menores conviene un VPS: energía, conexión y respaldos no dependen de una casa.
+
+**Docker Hub con límite de descargas.** Define `NODE_IMAGE`, `POSTGRES_IMAGE` y `CADDY_IMAGE` en `.env` con un espejo, por ejemplo `mirror.gcr.io/library/node:22-alpine`.
+
+### Respaldos
+
+```bash
+./scripts/backup.sh
+```
+
+Crea un respaldo cifrado en `data/backups/` y borra los de más de 14 días. Prográmalo a diario con cron y **copia esa carpeta fuera del servidor**. Para restaurar:
+
+```bash
+./scripts/backup.sh restaurar data/backups/ARCHIVO
+```
+
+### Actualizar
+
+```bash
+git pull
+```
+
+```bash
+docker compose up -d --build
+```
+
+## Pagos con Wompi
+
+1. En el panel de Wompi (Desarrolladores) copia la llave pública, la privada, el secreto de integridad y el secreto de eventos a `.env`. Empieza con las de pruebas (`pub_test_…`).
+2. Registra como URL de eventos: `https://TU_DOMINIO/api/wompi/events`.
+3. Fija el precio por estudiante de cada colegio en `/plataforma` (o el valor por defecto con `PRICE_PER_STUDENT_COP`).
+
+El coordinador paga 1 o 12 meses desde "Plan y pagos". Un pago solo se aplica cuando llega el evento de Wompi con firma válida y monto exacto. Los pagos por transferencia se registran en `/plataforma`.
 
 ## Seguridad y datos
 
-- La identidad se resuelve siempre en el servidor a partir del token de sesión (`convex/lib.ts`). Ninguna función recibe el usuario como argumento.
-- Todo documento lleva `schoolId` y toda función filtra por el colegio de la sesión.
-- Reconocimiento facial: el modelo corre en el navegador y al servidor solo llegan vectores numéricos, nunca fotos. Requiere consentimiento registrado y el acudiente puede retirarlo. Son datos sensibles de menores: el texto de autorización debe revisarlo un abogado antes de usarse con un colegio real.
-- `convex/seed.ts` contiene utilidades internas de desarrollo (`seed:session`, `seed:wipe`). No son invocables desde un cliente, pero quien tenga la llave de despliegue puede ejecutarlas.
+- La identidad se resuelve en el servidor desde la cookie de sesión (`server/core.ts`). Ninguna función recibe el usuario como argumento.
+- Aislamiento por colegio en dos capas: el filtro del código y la seguridad por fila de PostgreSQL (`db/migrations/0001_rls.sql`). Por eso la app se conecta con un rol sin privilegios de superusuario.
+- Reconocimiento facial: el modelo corre en el navegador y al servidor solo llegan vectores numéricos, que se guardan cifrados. Requiere consentimiento y el acudiente puede retirarlo.
+- El contenedor de la app corre sin root, con sistema de archivos de solo lectura. PostgreSQL no se publica fuera de la red interna de Docker.
+- Acciones sensibles quedan en `audit_log`.
 
-## Despliegue
+## Pendiente antes de cobrar a un colegio real
 
-1. Crear un proyecto nuevo en Convex y ejecutar `npx convex deploy`.
-2. Definir las variables del backend con `npx convex env set`.
-3. Desplegar la app Next.js con `NEXT_PUBLIC_CONVEX_URL` y `NEXT_PUBLIC_VAPID_PUBLIC_KEY`.
-
-Abordo no comparte datos ni despliegue con Altaviapp, el producto anterior de este repositorio.
+Lo que no resuelve el código: factura electrónica ante la DIAN, confirmación de la tarifa de IVA con un contador, política de tratamiento de datos y registro ante la SIC (Ley 1581), y revisión legal del texto de autorización biométrica. El detalle está en [tasks/todo.md](tasks/todo.md).

@@ -3,7 +3,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
 import * as t from "@/db/schema";
-import { noArgs, userMutation, userQuery } from "./core";
+import { fail, noArgs, userMutation, userQuery } from "./core";
 
 export const mine = userQuery(noArgs, async (ctx) => {
   ctx.watch(`notif:${ctx.user.id}`);
@@ -22,10 +22,21 @@ export const readAll = userMutation(noArgs, async (ctx) => {
   return null;
 });
 
+// Servicios de push de los navegadores. El servidor solo envía a estos destinos.
+const PUSH_HOSTS = [/(^|\.)googleapis\.com$/, /(^|\.)push\.services\.mozilla\.com$/, /(^|\.)notify\.windows\.com$/, /(^|\.)push\.apple\.com$/];
+const isPushService = (endpoint: string) => {
+  try {
+    const url = new URL(endpoint);
+    return url.protocol === "https:" && PUSH_HOSTS.some((host) => host.test(url.hostname));
+  } catch {
+    return false;
+  }
+};
+
 export const subscribe = userMutation(
   z.object({ endpoint: z.url().max(1000), p256dh: z.string().max(200), auth: z.string().max(100) }),
   async (ctx, sub) => {
-    if (!sub.endpoint.startsWith("https://")) return null;
+    if (!isPushService(sub.endpoint)) fail("Este navegador usa un servicio de notificaciones que aún no admitimos.");
     await ctx.db
       .insert(t.pushSubscriptions)
       .values({ ...sub, userId: ctx.user.id })

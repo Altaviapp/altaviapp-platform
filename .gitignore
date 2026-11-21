@@ -12,3 +12,4 @@ coverage/
 next-env.d.ts
 public/models/
 public/maplibre-gl-worker.mjs
+data/

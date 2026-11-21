@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 import "./globals.css";
 import { Providers } from "@/components/session";
 
@@ -16,7 +17,9 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Cada página se sirve por petición para que lleve el valor de un solo uso de la CSP (proxy.ts).
+  await connection();
   return (
     <html lang="es">
       <body>

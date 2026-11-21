@@ -1,8 +1,7 @@
 "use client";
 import { ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
-import { api } from "@/convex/_generated/api";
-import { useQ } from "@/components/session";
+import { api, useQ } from "@/components/session";
 import { Badge, Card, DIRECTION, Empty, PageHeader, Spinner } from "@/components/ui";
 import { DAY_NAMES } from "@/lib/dates";
 
@@ -27,7 +26,7 @@ export default function Rutas() {
           {routes.map((r) => {
             const over = r.vehicle && r.students > r.vehicle.capacity;
             return (
-              <Link key={r._id} href={`/admin/rutas/${r._id}`}>
+              <Link key={r.id} href={`/admin/rutas/${r.id}`}>
                 <Card className="flex items-center gap-4 px-4 py-4 transition hover:border-ink/40">
                   <span className="w-16 font-display text-2xl tabular-nums">{r.startTime}</span>
                   <div className="min-w-0 flex-1">

@@ -1,21 +1,19 @@
 "use client";
 // Registro de un colegio nuevo con su primer coordinador.
-import { useAction } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { api } from "@/convex/_generated/api";
-import { errorText, useSession } from "@/components/session";
+import { api, errorText, useM, useSession } from "@/components/session";
 import { TIMEZONES } from "@/lib/dates";
 import { AuthFrame } from "@/components/auth-frame";
 import { Button, Field, inputClass } from "@/components/ui";
 
 export default function Registro() {
-  const register = useAction(api.auth.registerSchool);
-  const verify = useAction(api.auth.verifyCode);
-  const { signIn } = useSession();
+  const register = useM(api.auth.registerSchool, { quiet: true });
+  const verify = useM(api.auth.verifyCode, { quiet: true });
+  const { reload } = useSession();
   const router = useRouter();
-  const [form, setForm] = useState({ schoolName: "", name: "", email: "", timezone: "America/Guayaquil" });
+  const [form, setForm] = useState({ schoolName: "", name: "", email: "", timezone: "America/Bogota" });
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -32,7 +30,8 @@ export default function Registro() {
         await register(form);
         setSent(true);
       } else {
-        signIn((await verify({ email: form.email, code })).token);
+        await verify({ email: form.email, code });
+        reload();
         router.replace("/admin/ajustes");
       }
     } catch (err) {

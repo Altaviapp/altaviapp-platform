@@ -1,15 +1,14 @@
 "use client";
 // Ajustes del colegio: nombre, ubicación, zona horaria y grados.
 import { useState } from "react";
-import { api } from "@/convex/_generated/api";
 import { Map } from "@/components/map";
-import { errorText, useM, useSession } from "@/components/session";
+import { api, errorText, useM, useSession } from "@/components/session";
 import { Button, Card, Field, PageHeader, inputClass, useToast } from "@/components/ui";
 import { TIMEZONES } from "@/lib/dates";
 
 export default function Ajustes() {
   const { me } = useSession();
-  const school = me!.school;
+  const school = me!.school!;
   const save = useM(api.team.saveSchool);
   const toast = useToast();
   const [name, setName] = useState(school.name);

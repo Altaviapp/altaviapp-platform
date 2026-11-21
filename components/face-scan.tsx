@@ -3,20 +3,18 @@
 // de este viaje; coincidencia clara marca sola, la dudosa pide confirmación.
 import { Check, ScanFace } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { matchFace } from "@/lib/face";
 import { describeFace, loadFace, openCamera } from "./face";
-import { useQ } from "./session";
+import { api, useQ } from "./session";
 import { Button } from "./ui";
 
-type Candidate = { _id: Id<"students">; name: string };
+type Candidate = { id: string; name: string };
 type Props = {
-  tripId: Id<"trips">;
+  tripId: string;
   /** Estudiantes que aún pueden marcarse con la acción actual. */
   pending: Candidate[];
   actionLabel: string; // "Subió" o "Bajó"
-  onMark: (studentId: Id<"students">) => Promise<void>;
+  onMark: (studentId: string) => Promise<void>;
 };
 type State =
   | { kind: "loading" }
@@ -47,14 +45,14 @@ export function FaceScan({ tripId, pending, actionLabel, onMark }: Props) {
         if (cancelled) return;
         if (!descriptor) setState({ kind: "searching" });
         else {
-          const ids = new Set<string>(pending.map((p) => p._id));
+          const ids = new Set<string>(pending.map((p) => p.id));
           const result = matchFace(descriptor, faces.filter((f) => ids.has(f.studentId)));
-          const student = result.kind === "none" ? undefined : pending.find((p) => p._id === result.studentId);
+          const student = result.kind === "none" ? undefined : pending.find((p) => p.id === result.studentId);
           if (!student) setState({ kind: "unknown" });
           else if (result.kind === "match") {
             live.current.paused = true;
             try {
-              await onMark(student._id);
+              await onMark(student.id);
               setState({ kind: "done", student });
             } catch {
               setState({ kind: "error", text: "No se pudo registrar. Usa la lista." });
@@ -90,7 +88,7 @@ export function FaceScan({ tripId, pending, actionLabel, onMark }: Props) {
     const { student } = state;
     if (yes) {
       try {
-        await onMark(student._id);
+        await onMark(student.id);
         setState({ kind: "done", student });
       } catch {
         setState({ kind: "error", text: "No se pudo registrar. Usa la lista." });
@@ -99,7 +97,7 @@ export function FaceScan({ tripId, pending, actionLabel, onMark }: Props) {
     setTimeout(() => (live.current.paused = false), 1200);
   };
 
-  const enrolled = faces ? pending.filter((p) => faces.some((f) => f.studentId === p._id)).length : 0;
+  const enrolled = faces ? pending.filter((p) => faces.some((f) => f.studentId === p.id)).length : 0;
 
   return (
     <div className="space-y-4">

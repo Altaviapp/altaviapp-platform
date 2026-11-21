@@ -2,15 +2,14 @@
 // Hoy: la operación del día en una pantalla.
 import { AlertTriangle, ChevronRight, Clock } from "lucide-react";
 import Link from "next/link";
-import { api } from "@/convex/_generated/api";
 import { Map, type Pin } from "@/components/map";
-import { useNow, useQ, useSession } from "@/components/session";
+import { api, useNow, useQ, useSession } from "@/components/session";
 import { Badge, Card, DIRECTION, Empty, PageHeader, Spinner, formatDate, formatTime } from "@/components/ui";
 import { toMinutes } from "@/lib/dates";
 
 export default function Hoy() {
   const { me } = useSession();
-  const school = me!.school;
+  const school = me!.school!;
   const now = useNow(school.timezone);
   const data = useQ(api.trips.today, { date: now.date });
   const positions = useQ(api.trips.livePositions, {});
@@ -21,14 +20,14 @@ export default function Hoy() {
   const lateBy = (startTime: string) => now.minutes - toMinutes(startTime);
   const late = data.pending.filter((r) => lateBy(r.startTime) >= 10);
   const urgent = late.filter((r) => lateBy(r.startTime) <= 180); // después de 3 h ya no es una alerta
-  const notices = running.flatMap((t) => t.notices.map((n) => ({ ...n, routeName: t.routeName, tripId: t._id })));
+  const notices = running.flatMap((t) => t.notices.map((n) => ({ ...n, routeName: t.routeName, tripId: t.id })));
   const nothing = !data.trips.length && !data.pending.length;
 
   const pins: Pin[] = [
     ...(school.location ? [{ id: "school", kind: "school" as const, lat: school.location.lat, lng: school.location.lng, title: school.name }] : []),
     ...(positions ?? []).map((p) => ({
       id: p.tripId, kind: "bus" as const, lat: p.lat, lng: p.lng,
-      title: running.find((t) => t._id === p.tripId)?.routeName,
+      title: running.find((t) => t.id === p.tripId)?.routeName,
     })),
   ];
 
@@ -79,7 +78,7 @@ export default function Hoy() {
             {running.length > 0 && (
               <section>
                 <h2 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-muted">En curso</h2>
-                <div className="space-y-3">{running.map((t) => <TripCard key={t._id} trip={t} timezone={school.timezone} />)}</div>
+                <div className="space-y-3">{running.map((t) => <TripCard key={t.id} trip={t} timezone={school.timezone} />)}</div>
               </section>
             )}
 
@@ -106,7 +105,7 @@ export default function Hoy() {
             {done.length > 0 && (
               <section>
                 <h2 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-muted">Terminados</h2>
-                <div className="space-y-3">{done.map((t) => <TripCard key={t._id} trip={t} timezone={school.timezone} />)}</div>
+                <div className="space-y-3">{done.map((t) => <TripCard key={t.id} trip={t} timezone={school.timezone} />)}</div>
               </section>
             )}
 
@@ -115,7 +114,7 @@ export default function Hoy() {
                 <h2 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-muted">Ausencias de hoy</h2>
                 <Card className="divide-y divide-line/70">
                   {data.absences.map((a) => (
-                    <div key={a._id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{a.studentName} <span className="font-normal text-muted">· {a.grade}</span></p>
                         {a.note && <p className="truncate text-xs text-muted">{a.note}</p>}
@@ -158,7 +157,7 @@ function TripCard({ trip, timezone }: { trip: Trip; timezone: string }) {
   const running = trip.status === "in_progress";
   const progress = expected ? Math.round(((c.boarded + c.dropped + c.no_show) / expected) * 100) : 100;
   return (
-    <Link href={`/admin/viajes/${trip._id}`}>
+    <Link href={`/admin/viajes/${trip.id}`}>
       <Card className="px-4 py-3 transition hover:border-ink/40">
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">

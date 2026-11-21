@@ -3,9 +3,7 @@
 import { ArrowUpRight, Bus, MapPin, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { errorText, useM, useNow, useQ, useSession } from "@/components/session";
+import { api, errorText, useM, useNow, useQ, useSession } from "@/components/session";
 import { MobileFrame } from "@/components/shell";
 import { Button, DIRECTION, Empty, Spinner, cx, useToast } from "@/components/ui";
 
@@ -14,14 +12,14 @@ const longDate = (date: string) =>
 
 export default function MisViajes() {
   const { me } = useSession();
-  const now = useNow(me!.school.timezone);
+  const now = useNow(me!.school!.timezone);
   const routes = useQ(api.trips.myDay, { date: now.date });
   const start = useM(api.trips.start);
   const router = useRouter();
   const toast = useToast();
-  const [starting, setStarting] = useState<Id<"routes"> | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
 
-  const onStart = async (routeId: Id<"routes">) => {
+  const onStart = async (routeId: string) => {
     setStarting(routeId);
     try {
       router.push(`/conductor/viaje/${await start({ routeId })}`);
@@ -75,7 +73,7 @@ export default function MisViajes() {
                       variant={dark ? "accent" : "secondary"}
                       size="lg"
                       className="w-full"
-                      onClick={() => router.push(`/conductor/viaje/${r.trip!._id}`)}
+                      onClick={() => router.push(`/conductor/viaje/${r.trip!.id}`)}
                     >
                       {running ? "Continuar viaje" : "Ver resumen"} <ArrowUpRight className="size-5" strokeWidth={1.75} />
                     </Button>

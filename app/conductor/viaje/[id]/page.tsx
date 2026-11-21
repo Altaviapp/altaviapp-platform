@@ -4,11 +4,9 @@ import { ArrowLeft, Check, Map as MapIcon, Megaphone, Navigation, ScanFace, Undo
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { FaceScan } from "@/components/face-scan";
 import { Map, type Pin } from "@/components/map";
-import { errorText, useM, useQ, useSession } from "@/components/session";
+import { api, errorText, useM, useQ, useSession } from "@/components/session";
 import { Badge, Button, Field, Modal, STATUS, Segmented, Spinner, cx, formatTime, inputClass, useToast } from "@/components/ui";
 
 type Trip = NonNullable<(typeof api.trips.detail)["_returnType"]>;
@@ -16,8 +14,8 @@ type Student = Trip["stops"][number]["students"][number];
 type Mark = "boarded" | "dropped" | "no_show" | "undo";
 
 /** Envía la posición cada 10 s y mantiene la pantalla encendida mientras el viaje está en curso. */
-function useTracking(tripId: Id<"trips">, active: boolean) {
-  const send = useM(api.trips.position);
+function useTracking(tripId: string, active: boolean) {
+  const send = useM(api.trips.position, { quiet: true });
   const [gps, setGps] = useState<"searching" | "ok" | "denied">("searching");
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   useEffect(() => {
@@ -51,9 +49,9 @@ function useTracking(tripId: Id<"trips">, active: boolean) {
 }
 
 export default function Viaje() {
-  const { id } = useParams<{ id: Id<"trips"> }>();
+  const { id } = useParams<{ id: string }>();
   const { me } = useSession();
-  const tz = me!.school.timezone;
+  const tz = me!.school!.timezone;
   const trip = useQ(api.trips.detail, { tripId: id });
   const mark = useM(api.trips.mark);
   const depart = useM(api.trips.depart);
@@ -77,9 +75,9 @@ export default function Viaje() {
       toast(errorText(e), "bad");
     }
   };
-  const doMark = (studentId: Id<"students">, status: Mark, method: "tap" | "face" = "tap") =>
+  const doMark = (studentId: string, status: Mark, method: "tap" | "face" = "tap") =>
     mark({ tripId: id, studentId, status, method });
-  const tap = (studentId: Id<"students">, status: Mark) => act(() => doMark(studentId, status));
+  const tap = (studentId: string, status: Mark) => act(() => doMark(studentId, status));
 
   // Qué hace el escáner según el momento del viaje.
   const scanAction = toSchool || boardingAtSchool ? "boarded" : "dropped";
@@ -133,13 +131,11 @@ export default function Viaje() {
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-brand px-3 py-1 text-sm font-medium text-brand-ink">{next.eta}</span>
                 {trip.delayMin >= 5 && <span className="rounded-full bg-paper/12 px-3 py-1 text-sm">+{trip.delayMin} min</span>}
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${next.lat},${next.lng}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-paper/12 px-3 py-1 text-sm"
-                >
-                  <Navigation className="size-4" strokeWidth={1.75} /> Cómo llegar
+                <a href={`https://waze.com/ul?ll=${next.lat},${next.lng}&navigate=yes`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-paper/12 px-3 py-1 text-sm">
+                  <Navigation className="size-4" strokeWidth={1.75} /> Waze
+                </a>
+                <a href={`https://www.google.com/maps/dir/?api=1&destination=${next.lat},${next.lng}`} target="_blank" rel="noreferrer" className="rounded-full bg-paper/12 px-3 py-1 text-sm">
+                  Maps
                 </a>
               </div>
             </>
@@ -157,7 +153,7 @@ export default function Viaje() {
           {boardingAtSchool ? (
             <ul className="overflow-hidden rounded-[1.5rem] border border-line/70 bg-surface">
               {[...all].sort((a, b) => a.name.localeCompare(b.name, "es")).map((s) => (
-                <StudentRow key={s._id} student={s} big mode="board" hideNoShow onTap={tap} />
+                <StudentRow key={s.id} student={s} big mode="board" hideNoShow onTap={tap} />
               ))}
             </ul>
           ) : (
@@ -174,7 +170,7 @@ export default function Viaje() {
                   </div>
                   <ul className="border-t border-line/70">
                     {stop.students.map((s) => (
-                      <StudentRow key={s._id} student={s} big={current} mode={toSchool ? "board" : "drop"} onTap={tap} />
+                      <StudentRow key={s.id} student={s} big={current} mode={toSchool ? "board" : "drop"} onTap={tap} />
                     ))}
                   </ul>
                 </section>
@@ -208,7 +204,7 @@ export default function Viaje() {
       <Modal open={dialog === "map"} onClose={() => setDialog(null)} title="Recorrido">
         {dialog === "map" && (
           <div className="h-[60dvh] overflow-hidden rounded-[1.5rem]">
-            <Map pins={pins} line={trip.stops.map((s) => [s.lat, s.lng])} fitKey={trip._id} />
+            <Map pins={pins} line={trip.stops.map((s) => [s.lat, s.lng])} path={trip.path} fitKey={trip.id} />
           </div>
         )}
       </Modal>
@@ -243,7 +239,7 @@ function StudentRow({
   student: Student; big: boolean; mode: "board" | "drop";
   /** En el abordaje del colegio no hace falta marcar "no salió": lo resuelve "Salir del colegio". */
   hideNoShow?: boolean;
-  onTap: (id: Id<"students">, status: Mark) => void;
+  onTap: (id: string, status: Mark) => void;
 }) {
   const pending = mode === "board" ? s.status === "expected" || s.status === "absent" : s.status === "boarded";
   const canUndo = s.status === "boarded" || s.status === "dropped" || s.status === "no_show";
@@ -256,14 +252,14 @@ function StudentRow({
         </p>
       </div>
       {pending && mode === "board" && !hideNoShow && s.status !== "absent" && (
-        <button type="button" aria-label={`${s.name} no salió`} onClick={() => onTap(s._id, "no_show")} className={cx("grid shrink-0 place-items-center rounded-full border border-line text-muted hover:border-bad hover:text-bad", big ? "size-12" : "size-9")}>
+        <button type="button" aria-label={`${s.name} no salió`} onClick={() => onTap(s.id, "no_show")} className={cx("grid shrink-0 place-items-center rounded-full border border-line text-muted hover:border-bad hover:text-bad", big ? "size-12" : "size-9")}>
           <X className="size-5" strokeWidth={1.75} />
         </button>
       )}
       {pending ? (
         <button
           type="button"
-          onClick={() => onTap(s._id, mode === "board" ? "boarded" : "dropped")}
+          onClick={() => onTap(s.id, mode === "board" ? "boarded" : "dropped")}
           className={cx("shrink-0 rounded-full bg-ink font-medium text-paper active:scale-95", big ? "h-12 px-6" : "h-9 px-4 text-sm")}
         >
           {mode === "board" ? "Subió" : "Bajó"}
@@ -272,7 +268,7 @@ function StudentRow({
         <>
           <Badge tone={STATUS[s.status].tone}>{s.method === "face" && <ScanFace className="size-3.5" />}{STATUS[s.status].label}</Badge>
           {canUndo && (
-            <button type="button" aria-label={`Deshacer ${s.name}`} title="Deshacer" onClick={() => onTap(s._id, "undo")} className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-ink/6">
+            <button type="button" aria-label={`Deshacer ${s.name}`} title="Deshacer" onClick={() => onTap(s.id, "undo")} className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-ink/6">
               <Undo2 className="size-4" strokeWidth={1.75} />
             </button>
           )}
@@ -284,7 +280,7 @@ function StudentRow({
 
 const KINDS = [["delay", "Retraso"], ["breakdown", "Avería"], ["other", "Otro"]] as const;
 
-function NoticeForm({ tripId, onDone }: { tripId: Id<"trips">; onDone: () => void }) {
+function NoticeForm({ tripId, onDone }: { tripId: string; onDone: () => void }) {
   const notice = useM(api.trips.notice);
   const toast = useToast();
   const [kind, setKind] = useState<(typeof KINDS)[number][0]>("delay");
@@ -346,7 +342,7 @@ function Summary({ trip, timezone }: { trip: Trip; timezone: string }) {
           {missing.length > 0 && (
             <div className="rounded-[1.5rem] border border-line/70 bg-surface px-4 py-4">
               <p className="text-xs uppercase tracking-[0.14em] text-muted">No abordaron</p>
-              <ul className="mt-2 space-y-1">{missing.map((s) => <li key={s._id}>{s.name} <span className="text-muted">· {s.grade}</span></li>)}</ul>
+              <ul className="mt-2 space-y-1">{missing.map((s) => <li key={s.id}>{s.name} <span className="text-muted">· {s.grade}</span></li>)}</ul>
             </div>
           )}
           <Link href="/conductor" className="flex h-14 items-center justify-center rounded-full bg-ink font-medium text-paper">Volver a mis viajes</Link>

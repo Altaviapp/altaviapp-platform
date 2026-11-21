@@ -4,19 +4,18 @@ import { ArrowDown, ArrowLeft, ArrowUp, GripVertical, Plus, Search, Wand2, X } f
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { Map, type Pin } from "@/components/map";
-import { errorText, useM, useQ, useSession } from "@/components/session";
+import { api, errorText, useM, useQ, useSession } from "@/components/session";
 import { Badge, Button, Card, Field, Spinner, cx, inputClass, useToast } from "@/components/ui";
 import { DAY_NAMES } from "@/lib/dates";
 import { distance, estimateTimes, orderStops } from "@/lib/geo";
 
 type Direction = "to_school" | "from_school";
-type Stop = { id: string; name: string; lat: number; lng: number; time: string; studentIds: Id<"students">[] };
+type Stop = { id: string; name: string; lat: number; lng: number; time: string; studentIds: string[] };
 type Form = {
   name: string; direction: Direction; days: number[]; startTime: string;
-  vehicleId: Id<"vehicles"> | ""; driverId: Id<"users"> | ""; active: boolean; stops: Stop[];
+  vehicleId: string | ""; driverId: string | ""; active: boolean; stops: Stop[];
+  path?: string; // trazo por calles; se descarta cuando cambian las paradas
 };
 const SAME_STOP_METERS = 40;
 const newId = () => Math.random().toString(36).slice(2, 10);
@@ -26,11 +25,12 @@ export default function EditarRuta() {
   const isNew = id === "nueva";
   const router = useRouter();
   const { me } = useSession();
-  const school = me!.school.location;
+  const school = me!.school!.location ?? undefined;
   const routes = useQ(api.routes.list, {});
   const students = useQ(api.students.list, {});
   const team = useQ(api.team.list, {});
   const save = useM(api.routes.save);
+  const plan = useM(api.routes.plan, { quiet: true });
   const remove = useM(api.routes.remove);
   const toast = useToast();
   const [form, setForm] = useState<Form | null>(
@@ -41,12 +41,12 @@ export default function EditarRuta() {
   const [error, setError] = useState("");
   const [dragged, setDragged] = useState<number | null>(null);
 
-  const route = routes?.find((r) => r._id === id);
+  const route = routes?.find((r) => r.id === id);
   useEffect(() => {
     if (form || !route) return;
     setForm({
       name: route.name, direction: route.direction, days: route.days, startTime: route.startTime,
-      vehicleId: route.vehicleId ?? "", driverId: route.driverId ?? "", active: route.active, stops: route.stops,
+      vehicleId: route.vehicleId ?? "", driverId: route.driverId ?? "", active: route.active, stops: route.stops, path: route.path,
     });
   }, [route, form]);
 
@@ -54,28 +54,30 @@ export default function EditarRuta() {
   const taken = useMemo(() => {
     const ids = new Set<string>();
     for (const r of routes ?? []) {
-      if (r._id !== id && r.direction === form?.direction) r.stops.forEach((s) => s.studentIds.forEach((x) => ids.add(x)));
+      if (r.id !== id && r.direction === form?.direction) r.stops.forEach((s) => s.studentIds.forEach((x) => ids.add(x)));
     }
     return ids;
   }, [routes, id, form?.direction]);
 
   if (!routes || !students || !team || !form) return isNew || route || !routes ? <Spinner /> : <p className="text-muted">Esta ruta ya no existe.</p>;
 
-  const byId = new globalThis.Map(students.map((s) => [s._id, s]));
+  const byId = new globalThis.Map(students.map((s) => [s.id, s]));
   const inRoute = new Set(form.stops.flatMap((s) => s.studentIds));
   const q = search.trim().toLowerCase();
-  const available = students.filter((s) => !inRoute.has(s._id) && !taken.has(s._id) && (!q || s.name.toLowerCase().includes(q) || s.grade.toLowerCase().includes(q)));
-  const vehicle = team.vehicles.find((v) => v._id === form.vehicleId);
+  const available = students.filter((s) => !inRoute.has(s.id) && !taken.has(s.id) && (!q || s.name.toLowerCase().includes(q) || s.grade.toLowerCase().includes(q)));
+  const vehicle = team.vehicles.find((v) => v.id === form.vehicleId);
   const total = inRoute.size;
   const over = vehicle && total > vehicle.capacity;
 
-  const patch = (p: Partial<Form>) => setForm((f) => ({ ...f!, ...p }));
+  // Cambiar las paradas descarta el trazo por calles hasta volver a ordenar o guardar.
+  const patch = (p: Partial<Form>) =>
+    setForm((f) => ({ ...f!, ...p, path: "path" in p ? p.path : "stops" in p ? undefined : f!.path }));
   const retime = (stops: Stop[], f: Form = form) => {
     const times = estimateTimes(stops, f.startTime, school, f.direction);
     return stops.map((s, i) => ({ ...s, time: times[i] }));
   };
 
-  const addStudent = (studentId: Id<"students">) => {
+  const addStudent = (studentId: string) => {
     const student = byId.get(studentId)!;
     if (!student.home) return;
     const near = form.stops.find((s) => distance(s, student.home!) <= SAME_STOP_METERS);
@@ -84,7 +86,7 @@ export default function EditarRuta() {
       : [...form.stops, { id: newId(), name: student.address || student.name, ...student.home, time: form.startTime, studentIds: [studentId] }];
     patch({ stops: near ? stops : retime(stops) });
   };
-  const removeStudent = (studentId: Id<"students">) =>
+  const removeStudent = (studentId: string) =>
     patch({ stops: form.stops.map((s) => ({ ...s, studentIds: s.studentIds.filter((x) => x !== studentId) })).filter((s) => s.studentIds.length) });
   const move = (from: number, to: number) => {
     if (to < 0 || to >= form.stops.length || from === to) return;
@@ -92,9 +94,23 @@ export default function EditarRuta() {
     stops.splice(to, 0, stops.splice(from, 1)[0]);
     patch({ stops: retime(stops) });
   };
-  const optimize = () => {
+  // El servidor ordena y calcula horas con el motor de rutas por calles; sin él, por línea recta.
+  const optimize = async () => {
     if (!school) return toast("Primero ubica el colegio en Ajustes.", "bad");
-    patch({ stops: retime(orderStops(form.stops, school, form.direction)) });
+    setBusy(true);
+    try {
+      const result = await plan({
+        direction: form.direction, startTime: form.startTime, reorder: true,
+        stops: form.stops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng })),
+      });
+      const stops = result.order.map((stopId, i) => ({ ...form.stops.find((s) => s.id === stopId)!, time: result.times[i] }));
+      patch({ stops, path: result.path ?? undefined });
+      toast(result.byStreet ? "Paradas ordenadas por calles" : "Paradas ordenadas");
+    } catch (err) {
+      toast(errorText(err), "bad");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submit = async () => {
@@ -102,7 +118,7 @@ export default function EditarRuta() {
     setError("");
     try {
       await save({
-        id: isNew ? undefined : (id as Id<"routes">),
+        id: isNew ? undefined : (id as string),
         name: form.name, direction: form.direction, days: form.days, startTime: form.startTime,
         vehicleId: form.vehicleId || undefined, driverId: form.driverId || undefined, active: form.active, stops: form.stops,
       });
@@ -118,7 +134,7 @@ export default function EditarRuta() {
     if (!confirm(`¿Eliminar la ruta ${form.name}? El historial de viajes se conserva.`)) return;
     setBusy(true);
     try {
-      await remove({ id: id as Id<"routes"> });
+      await remove({ id: id as string });
       toast("Ruta eliminada");
       router.push("/admin/rutas");
     } catch (err) {
@@ -185,13 +201,13 @@ export default function EditarRuta() {
               <Field label="Bus">
                 <select className={inputClass} value={form.vehicleId} onChange={(e) => patch({ vehicleId: e.target.value as Form["vehicleId"] })}>
                   <option value="">Sin asignar</option>
-                  {team.vehicles.filter((v) => v.active).map((v) => <option key={v._id} value={v._id}>{v.name} ({v.capacity})</option>)}
+                  {team.vehicles.filter((v) => v.active).map((v) => <option key={v.id} value={v.id}>{v.name} ({v.capacity})</option>)}
                 </select>
               </Field>
               <Field label="Conductor">
                 <select className={inputClass} value={form.driverId} onChange={(e) => patch({ driverId: e.target.value as Form["driverId"] })}>
                   <option value="">Sin asignar</option>
-                  {team.members.filter((m) => m.role === "driver" && m.active).map((m) => <option key={m._id} value={m._id}>{m.name}</option>)}
+                  {team.members.filter((m) => m.role === "driver" && m.active).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               </Field>
             </div>
@@ -206,7 +222,7 @@ export default function EditarRuta() {
               <h2 className="text-sm font-medium">
                 Paradas <span className="font-normal text-muted">· {total} estudiantes{vehicle ? ` de ${vehicle.capacity}` : ""}</span>
               </h2>
-              <Button variant="secondary" size="sm" onClick={optimize} disabled={form.stops.length < 2}><Wand2 className="size-4" /> Ordenar</Button>
+              <Button variant="secondary" size="sm" onClick={optimize} disabled={form.stops.length < 2 || busy}><Wand2 className="size-4" /> Ordenar</Button>
             </div>
             {over && <p className="mb-2 rounded-2xl bg-bad-soft px-4 py-3 text-sm text-bad">Hay más estudiantes que puestos en {vehicle!.name}.</p>}
             {!form.stops.length ? (
@@ -263,7 +279,7 @@ export default function EditarRuta() {
             </div>
             <Card className="max-h-72 divide-y divide-line/70 overflow-y-auto">
               {available.map((s) => (
-                <button key={s._id} type="button" disabled={!s.home} onClick={() => addStudent(s._id)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-paper disabled:opacity-60">
+                <button key={s.id} type="button" disabled={!s.home} onClick={() => addStudent(s.id)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-paper disabled:opacity-60">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{s.name} <span className="font-normal text-muted">· {s.grade}</span></p>
                     <p className="truncate text-xs text-muted">{s.address || "Sin dirección"}</p>
@@ -283,7 +299,7 @@ export default function EditarRuta() {
         </div>
 
         <Card className="h-80 overflow-hidden lg:sticky lg:top-8 lg:h-[calc(100dvh-6rem)]">
-          <Map pins={pins} line={line} fitKey={form.stops.map((s) => s.id).join()} />
+          <Map pins={pins} line={line} path={form.path} fitKey={form.stops.map((s) => s.id).join()} />
         </Card>
       </div>
     </>

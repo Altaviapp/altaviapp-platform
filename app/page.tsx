@@ -1,19 +1,17 @@
 "use client";
 // Entrada única: correo, luego código de 6 dígitos. El rol decide a dónde se va.
-import { useAction } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api } from "@/convex/_generated/api";
-import { HOME, errorText, useSession } from "@/components/session";
+import { HOME, api, errorText, useM, useSession } from "@/components/session";
 import { AuthFrame } from "@/components/auth-frame";
 import { Button, Field, Spinner, inputClass } from "@/components/ui";
 
 export default function Entrar() {
-  const { me, signIn } = useSession();
+  const { me, reload } = useSession();
   const router = useRouter();
-  const requestCode = useAction(api.auth.requestCode);
-  const verifyCode = useAction(api.auth.verifyCode);
+  const requestCode = useM(api.auth.requestCode, { quiet: true });
+  const verifyCode = useM(api.auth.verifyCode, { quiet: true });
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -35,7 +33,8 @@ export default function Entrar() {
         await requestCode({ email });
         setStep("code");
       } else {
-        signIn((await verifyCode({ email, code })).token);
+        await verifyCode({ email, code });
+        reload();
       }
     } catch (err) {
       setError(errorText(err));

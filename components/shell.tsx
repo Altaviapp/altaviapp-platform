@@ -6,8 +6,7 @@ import { Bell, LogOut, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { api } from "@/convex/_generated/api";
-import { useM, useQ, useSession } from "./session";
+import { api, useM, useQ, useSession } from "./session";
 import { Emblem, Logo, Modal, cx, formatTime } from "./ui";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -25,7 +24,7 @@ export function Shell({ nav, children }: { nav: NavItem[]; children: React.React
     <div className="min-h-dvh lg:pl-64">
       <aside className="fixed inset-y-3 left-3 hidden w-58 flex-col rounded-[2rem] bg-ink px-4 py-6 text-paper lg:flex">
         <Logo light className="px-2" />
-        <p className="mt-2 truncate px-2 text-xs uppercase tracking-[0.14em] text-gold">{me?.school.name}</p>
+        <p className="mt-2 truncate px-2 text-xs uppercase tracking-[0.14em] text-gold">{me?.school?.name ?? "Plataforma"}</p>
         <nav className="mt-8 flex flex-1 flex-col gap-1">
           {nav.map((item) => (
             <Link
@@ -155,7 +154,7 @@ function Notifications({ dark }: { dark?: boolean }) {
         ) : (
           <ul className="divide-y divide-line/70 text-ink">
             {data.items.map((n) => (
-              <li key={n._id} className="flex gap-3 py-3.5">
+              <li key={n.id} className="flex gap-3 py-3.5">
                 <span className={cx("mt-2 size-2 shrink-0 rounded-full", n.read ? "bg-transparent" : "bg-moss")} />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{n.title}</p>
@@ -163,7 +162,7 @@ function Notifications({ dark }: { dark?: boolean }) {
                 </div>
                 <time className="shrink-0 pt-0.5 text-xs text-muted">
                   {new Date(n.at).toDateString() === new Date().toDateString()
-                    ? formatTime(n.at, me!.school.timezone)
+                    ? formatTime(n.at, me!.school!.timezone)
                     : new Date(n.at).toLocaleDateString("es", { day: "numeric", month: "short" })}
                 </time>
               </li>

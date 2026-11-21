@@ -36,10 +36,16 @@ export function rawClient(): postgres.Sql {
   return holder.client!;
 }
 
+/** Aplica las migraciones pendientes. Un candado evita que dos réplicas migren a la vez. */
 export async function runMigrations() {
   const client = postgres(url(), { max: 1, onnotice: () => {} });
-  await migrate(drizzle(client), { migrationsFolder: "db/migrations" });
-  await client.end();
+  try {
+    await client`select pg_advisory_lock(741100)`;
+    await migrate(drizzle(client), { migrationsFolder: "db/migrations" });
+  } finally {
+    await client`select pg_advisory_unlock(741100)`.catch(() => {});
+    await client.end();
+  }
 }
 
 /**

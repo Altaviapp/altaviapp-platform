@@ -2,16 +2,15 @@
 // Actividad: notificaciones push y asistencia de los últimos 30 días.
 import { BellOff, BellRing } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api } from "@/convex/_generated/api";
 import { FAMILY_NAV } from "@/components/family-nav";
 import { type PushSupport, pushSupport, subscribePush, unsubscribePush } from "@/components/push";
-import { useM, useQ, useSession } from "@/components/session";
+import { api, useM, useQ, useSession } from "@/components/session";
 import { MobileFrame } from "@/components/shell";
 import { Badge, Button, Empty, STATUS, Spinner, formatDate, formatTime, useToast } from "@/components/ui";
 
 export default function Actividad() {
   const { me } = useSession();
-  const tz = me!.school.timezone;
+  const tz = me!.school!.timezone;
   const activity = useQ(api.family.activity, {});
   const byDate = new Map<string, NonNullable<typeof activity>>();
   for (const row of activity ?? []) byDate.set(row.date, [...(byDate.get(row.date) ?? []), row]);
@@ -30,7 +29,7 @@ export default function Actividad() {
               <h2 className="mb-2 px-1 text-xs uppercase tracking-[0.14em] text-muted">{formatDate(date)}</h2>
               <ul className="divide-y divide-line/70 overflow-hidden rounded-[1.5rem] border border-line/70 bg-surface">
                 {rows.map((r) => (
-                  <li key={r._id} className="flex items-center gap-3 px-4 py-3">
+                  <li key={r.id} className="flex items-center gap-3 px-4 py-3">
                     <span className="w-12 font-display text-lg tabular-nums">{formatTime(r.at, tz)}</span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{r.studentName.split(" ")[0]}</p>

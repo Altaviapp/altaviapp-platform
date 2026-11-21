@@ -2,12 +2,10 @@
 // Estudiantes: lista, alta y edición, importación CSV, ausencias y rostro.
 import { CalendarOff, MapPin, MapPinOff, Plus, ScanFace, Search, Upload } from "lucide-react";
 import { useMemo, useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { AbsenceForm } from "@/components/absence-form";
 import { FaceEnroll } from "@/components/face-enroll";
 import { Map, type Pin } from "@/components/map";
-import { errorText, useM, useNow, useQ, useSession } from "@/components/session";
+import { api, errorText, useM, useNow, useQ, useSession } from "@/components/session";
 import { Badge, Button, Card, Empty, Field, Modal, PageHeader, Spinner, inputClass, useToast } from "@/components/ui";
 import { CSV_HEADERS, type RowResult, readStudentsCsv } from "@/lib/csv";
 
@@ -21,7 +19,7 @@ type Dialog =
 
 export default function Estudiantes() {
   const { me } = useSession();
-  const school = me!.school;
+  const school = me!.school!;
   const now = useNow(school.timezone);
   const students = useQ(api.students.list, {});
   const [search, setSearch] = useState("");
@@ -68,13 +66,13 @@ export default function Estudiantes() {
           </div>
           <Card className="divide-y divide-line/70 overflow-hidden">
             {shown.map((s) => (
-              <div key={s._id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-paper/60">
+              <div key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-paper/60">
                 <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setDialog({ kind: "form", student: s })}>
                   <p className="truncate font-medium">{s.name} <span className="font-normal text-muted">· {s.grade}</span></p>
                   <p className="truncate text-xs text-muted">{s.guardians.map((g) => g.name).join(" y ") || "Sin acudiente"} · {s.address || "Sin dirección"}</p>
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
-                  {s.routes.map((r) => <Badge key={r._id}>{r.name}</Badge>)}
+                  {s.routes.map((r) => <Badge key={r.id}>{r.name}</Badge>)}
                   {!s.routes.length && <Badge tone="warn">Sin ruta</Badge>}
                   {s.home ? <MapPin className="size-4 text-ok" aria-label="Con ubicación" /> : <MapPinOff className="size-4 text-bad" aria-label="Sin ubicación" />}
                   <button type="button" title="Reconocimiento facial" aria-label="Reconocimiento facial" onClick={() => setDialog({ kind: "face", student: s })} className="grid size-9 place-items-center rounded-full hover:bg-ink/5">
@@ -99,7 +97,7 @@ export default function Estudiantes() {
       </Modal>
       <Modal open={dialog?.kind === "face"} onClose={close} title={dialog?.kind === "face" ? `Rostro de ${dialog.student.name}` : ""}>
         {dialog?.kind === "face" && (
-          <FaceEnroll studentId={dialog.student._id} studentName={dialog.student.name} hasFace={dialog.student.hasFace} source="school" onDone={close} />
+          <FaceEnroll studentId={dialog.student.id} studentName={dialog.student.name} hasFace={dialog.student.hasFace} source="school" onDone={close} />
         )}
       </Modal>
       <Modal open={dialog?.kind === "absence"} onClose={close} title={dialog?.kind === "absence" ? `Ausencia de ${dialog.student.name}` : ""}>
@@ -114,7 +112,7 @@ const emptyGuardian: GuardianForm = { name: "", email: "", phone: "" };
 
 function StudentForm({ student, onDone }: { student?: Student; onDone: () => void }) {
   const { me } = useSession();
-  const school = me!.school;
+  const school = me!.school!;
   const save = useM(api.students.save);
   const archive = useM(api.students.archive);
   const toast = useToast();
@@ -157,7 +155,7 @@ function StudentForm({ student, onDone }: { student?: Student; onDone: () => voi
     setError("");
     try {
       await save({
-        id: student?._id, name, grade, address, home, note: note || undefined,
+        id: student?.id, name, grade, address, home, note: note || undefined,
         guardians: guardians.filter((g) => g.email.trim()).map((g) => ({ name: g.name, email: g.email, phone: g.phone || undefined })),
       });
       toast(student ? "Cambios guardados" : "Estudiante creado");
@@ -173,7 +171,7 @@ function StudentForm({ student, onDone }: { student?: Student; onDone: () => voi
     if (!student || !confirm(`¿Retirar a ${student.name}? Saldrá de sus rutas y se borrará su registro de rostro.`)) return;
     setBusy(true);
     try {
-      await archive({ id: student._id });
+      await archive({ id: student.id });
       toast("Estudiante retirado");
       onDone();
     } catch (err) {

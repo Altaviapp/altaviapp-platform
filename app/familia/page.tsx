@@ -2,20 +2,18 @@
 // Inicio de la familia: dónde está cada hijo ahora y qué sigue hoy.
 import { CalendarOff, Megaphone, Phone, ScanFace, X } from "lucide-react";
 import { useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { AbsenceForm } from "@/components/absence-form";
 import { FaceEnroll } from "@/components/face-enroll";
 import { FAMILY_NAV } from "@/components/family-nav";
 import { Map, type Pin } from "@/components/map";
-import { errorText, useM, useNow, useQ, useSession } from "@/components/session";
+import { api, errorText, useM, useNow, useQ, useSession } from "@/components/session";
 import { MobileFrame } from "@/components/shell";
 import { Button, Empty, Modal, Spinner, cx, formatDate, useToast } from "@/components/ui";
 
 type Home = NonNullable<(typeof api.family.home)["_returnType"]>;
 type Child = Home["children"][number];
 type Leg = Child["legs"][number];
-type Dialog = { kind: "absence"; childId?: Id<"students"> } | { kind: "face"; child: Child } | null;
+type Dialog = { kind: "absence"; childId?: string } | { kind: "face"; child: Child } | null;
 
 const longDate = (date: string) =>
   new Intl.DateTimeFormat("es", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
@@ -69,7 +67,7 @@ function describe(leg: Leg, first: string): { title: string; detail: string; liv
 
 export default function Inicio() {
   const { me } = useSession();
-  const now = useNow(me!.school.timezone);
+  const now = useNow(me!.school!.timezone);
   const data = useQ(api.family.home, { date: now.date });
   const [dialog, setDialog] = useState<Dialog>(null);
   const close = () => setDialog(null);
@@ -84,9 +82,9 @@ export default function Inicio() {
         <div className="space-y-4">
           {data.children.map((child, i) => {
             // Hermanos en el mismo viaje: el mapa se muestra una sola vez.
-            const tripId = currentLeg(child.legs)?.trip?._id;
-            const repeated = !!tripId && data.children.slice(0, i).some((c) => currentLeg(c.legs)?.trip?._id === tripId);
-            return <ChildCard key={child._id} child={child} school={data.school} showMap={!repeated} onDialog={setDialog} />;
+            const tripId = currentLeg(child.legs)?.trip?.id;
+            const repeated = !!tripId && data.children.slice(0, i).some((c) => currentLeg(c.legs)?.trip?.id === tripId);
+            return <ChildCard key={child.id} child={child} school={data.school} showMap={!repeated} onDialog={setDialog} />;
           })}
         </div>
       )}
@@ -94,7 +92,7 @@ export default function Inicio() {
       <Modal open={dialog?.kind === "absence"} onClose={close} title="Reportar ausencia">
         {dialog?.kind === "absence" && data && (
           <AbsenceForm
-            students={[...data.children].sort((a) => (a._id === dialog.childId ? -1 : 0)).map((c) => ({ _id: c._id, name: c.name }))}
+            students={[...data.children].sort((a) => (a.id === dialog.childId ? -1 : 0)).map((c) => ({ id: c.id, name: c.name }))}
             today={now.date}
             onDone={close}
           />
@@ -102,7 +100,7 @@ export default function Inicio() {
       </Modal>
       <Modal open={dialog?.kind === "face"} onClose={close} title={dialog?.kind === "face" ? `Rostro de ${dialog.child.name.split(" ")[0]}` : ""}>
         {dialog?.kind === "face" && (
-          <FaceEnroll studentId={dialog.child._id} studentName={dialog.child.name} hasFace={dialog.child.hasFace} source="guardian" onDone={close} />
+          <FaceEnroll studentId={dialog.child.id} studentName={dialog.child.name} hasFace={dialog.child.hasFace} source="guardian" onDone={close} />
         )}
       </Modal>
     </MobileFrame>
@@ -120,7 +118,7 @@ function ChildCard({
   const others = child.legs.filter((l) => l !== leg);
   const dark = !!leg?.trip && leg.trip.status === "in_progress";
 
-  const onCancel = async (id: Id<"absences">) => {
+  const onCancel = async (id: string) => {
     try {
       await cancel({ id });
       toast("Ausencia cancelada");
@@ -168,19 +166,19 @@ function ChildCard({
         })}
 
         {child.absences.map((a) => (
-          <div key={a._id} className="flex items-center justify-between gap-2 rounded-2xl bg-warn-soft py-2 pl-4 pr-2 text-sm text-warn">
+          <div key={a.id} className="flex items-center justify-between gap-2 rounded-2xl bg-warn-soft py-2 pl-4 pr-2 text-sm text-warn">
             <span>
               Ausencia {a.from === a.to ? `el ${formatDate(a.from)}` : `del ${formatDate(a.from)} al ${formatDate(a.to)}`}
               {a.direction !== "both" && ` · solo ${a.direction === "to_school" ? "mañana" : "tarde"}`}
             </span>
-            <button type="button" aria-label="Cancelar ausencia" title="Cancelar ausencia" onClick={() => onCancel(a._id)} className="grid size-9 shrink-0 place-items-center rounded-full hover:bg-warn/10">
+            <button type="button" aria-label="Cancelar ausencia" title="Cancelar ausencia" onClick={() => onCancel(a.id)} className="grid size-9 shrink-0 place-items-center rounded-full hover:bg-warn/10">
               <X className="size-4" />
             </button>
           </div>
         ))}
 
         <div className="flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={() => onDialog({ kind: "absence", childId: child._id })}>
+          <Button variant="secondary" className="flex-1" onClick={() => onDialog({ kind: "absence", childId: child.id })}>
             <CalendarOff className="size-4" strokeWidth={1.75} /> Reportar ausencia
           </Button>
           {leg?.driver?.phone && (
@@ -209,7 +207,7 @@ function ChildCard({
 }
 
 function LiveMap({ leg, school }: { leg: Leg; school: Home["school"] }) {
-  const position = useQ(api.trips.livePosition, { tripId: leg.trip!._id });
+  const position = useQ(api.trips.livePosition, { tripId: leg.trip!.id });
   const pins: Pin[] = [
     ...(school ? [{ id: "school", kind: "school" as const, lat: school.lat, lng: school.lng, title: "Colegio" }] : []),
     { id: "mine", kind: "mine", lat: leg.stop!.lat, lng: leg.stop!.lng, title: leg.stop!.name },
@@ -217,7 +215,7 @@ function LiveMap({ leg, school }: { leg: Leg; school: Home["school"] }) {
   ];
   return (
     <div className="relative h-56">
-      <Map pins={pins} fitKey={`${leg.trip!._id}|${position ? 1 : 0}`} />
+      <Map pins={pins} fitKey={`${leg.trip!.id}|${position ? 1 : 0}`} />
       {!position && (
         <p className="absolute inset-x-4 bottom-4 rounded-full bg-surface/95 px-4 py-2 text-center text-sm text-muted shadow">
           Esperando la ubicación del bus…

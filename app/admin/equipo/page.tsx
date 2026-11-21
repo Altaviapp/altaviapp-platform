@@ -2,8 +2,7 @@
 // Equipo (conductores y coordinadores) y buses.
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { api } from "@/convex/_generated/api";
-import { errorText, useM, useQ } from "@/components/session";
+import { api, errorText, useM, useQ } from "@/components/session";
 import { Badge, Button, Card, Empty, Field, Modal, PageHeader, Spinner, inputClass, useToast } from "@/components/ui";
 
 type Team = NonNullable<(typeof api.team.list)["_returnType"]>;
@@ -31,10 +30,10 @@ export default function Equipo() {
           {!drivers.length ? (
             <Empty title="Sin conductores" text="Agrega a quien lleva el celular en el bus: conductor o monitor." />
           ) : (
-            <Card className="divide-y divide-line/70">{drivers.map((m) => <MemberRow key={m._id} member={m} onClick={() => setDialog({ kind: "member", member: m })} />)}</Card>
+            <Card className="divide-y divide-line/70">{drivers.map((m) => <MemberRow key={m.id} member={m} onClick={() => setDialog({ kind: "member", member: m })} />)}</Card>
           )}
           <h2 className="mb-2 mt-6 text-xs font-medium uppercase tracking-[0.14em] text-muted">Coordinadores</h2>
-          <Card className="divide-y divide-line/70">{admins.map((m) => <MemberRow key={m._id} member={m} onClick={() => setDialog({ kind: "member", member: m })} />)}</Card>
+          <Card className="divide-y divide-line/70">{admins.map((m) => <MemberRow key={m.id} member={m} onClick={() => setDialog({ kind: "member", member: m })} />)}</Card>
         </section>
         <section>
           <h2 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-muted">Buses</h2>
@@ -43,7 +42,7 @@ export default function Equipo() {
           ) : (
             <Card className="divide-y divide-line/70">
               {team.vehicles.map((v) => (
-                <button key={v._id} type="button" onClick={() => setDialog({ kind: "vehicle", vehicle: v })} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-paper/60">
+                <button key={v.id} type="button" onClick={() => setDialog({ kind: "vehicle", vehicle: v })} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-paper/60">
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{v.name}</p>
                     <p className="text-xs text-muted">{v.plate || "Sin placa"} · {v.capacity} puestos</p>
@@ -91,7 +90,7 @@ function MemberForm({ member, onDone }: { member?: Member; onDone: () => void })
     setBusy(true);
     setError("");
     try {
-      await save({ id: member?._id, ...form, phone: form.phone || undefined });
+      await save({ id: member?.id, ...form, phone: form.phone || undefined });
       toast(member ? "Cambios guardados" : "Persona agregada. Le enviamos un correo de bienvenida.");
       onDone();
     } catch (err) {
@@ -131,7 +130,7 @@ function VehicleForm({ vehicle, onDone }: { vehicle?: Vehicle; onDone: () => voi
     setBusy(true);
     setError("");
     try {
-      await save({ id: vehicle?._id, ...form });
+      await save({ id: vehicle?.id, ...form });
       toast("Bus guardado");
       onDone();
     } catch (err) {

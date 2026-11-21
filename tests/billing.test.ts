@@ -58,7 +58,7 @@ describe("Wompi", () => {
     expect(verifyEvent(event("ref", "APPROVED", 4490000, "otro_secreto"))).toBe(false);
     expect(verifyEvent({ ...good, data: { transaction: { ...good.data.transaction!, amount_in_cents: 1 } } })).toBe(false);
     expect(verifyEvent({ ...good, data: { transaction: { ...good.data.transaction!, status: "DECLINED" } } })).toBe(false);
-    expect(verifyEvent({ ...good, signature: { ...good.signature, properties: [] } })).toBe(true === false);
+    expect(verifyEvent({ ...good, signature: { ...good.signature, properties: [] } })).toBe(false);
   });
 
   test("el checkout lleva monto en centavos, referencia y firma", () => {

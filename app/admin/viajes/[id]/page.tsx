@@ -4,16 +4,14 @@ import { ArrowLeft, ScanFace } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { Map, type Pin } from "@/components/map";
-import { errorText, useM, useQ, useSession } from "@/components/session";
+import { api, errorText, useM, useQ, useSession } from "@/components/session";
 import { Badge, Button, Card, DIRECTION, STATUS, Spinner, formatDate, formatTime, useToast } from "@/components/ui";
 
 export default function Viaje() {
-  const { id } = useParams<{ id: Id<"trips"> }>();
+  const { id } = useParams<{ id: string }>();
   const { me } = useSession();
-  const tz = me!.school.timezone;
+  const tz = me!.school!.timezone;
   const trip = useQ(api.trips.detail, { tripId: id });
   const position = useQ(api.trips.livePosition, trip?.status === "in_progress" ? { tripId: id } : "skip");
   const close = useM(api.trips.close);
@@ -99,7 +97,7 @@ export default function Viaje() {
               </div>
               <ul className="divide-y divide-line/70">
                 {stop.students.map((s) => (
-                  <li key={s._id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <li key={s.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
                     <p className="min-w-0 truncate text-sm">{s.name} <span className="text-muted">· {s.grade}</span></p>
                     <span className="flex shrink-0 items-center gap-2 text-xs text-muted">
                       {s.method === "face" && <ScanFace className="size-4" aria-label="Por reconocimiento facial" />}
@@ -113,7 +111,7 @@ export default function Viaje() {
           ))}
         </div>
         <Card className="h-80 overflow-hidden lg:sticky lg:top-8 lg:h-[calc(100dvh-10rem)]">
-          <Map pins={pins} line={line} fitKey={trip._id} />
+          <Map pins={pins} line={line} path={trip.path} fitKey={trip.id} />
         </Card>
       </div>
     </>

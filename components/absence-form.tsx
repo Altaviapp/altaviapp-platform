@@ -1,14 +1,12 @@
 "use client";
 // Reporte de ausencia. Lo usan la familia y el coordinador.
 import { useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { addDays } from "@/lib/dates";
-import { errorText, useM } from "./session";
+import { api, errorText, useM } from "./session";
 import { Button, Field, cx, inputClass, useToast } from "./ui";
 
 type Props = {
-  students: { _id: Id<"students">; name: string }[];
+  students: { id: string; name: string }[];
   today: string;
   onDone: () => void;
 };
@@ -22,7 +20,7 @@ const DIRECTIONS = [
 export function AbsenceForm({ students, today, onDone }: Props) {
   const report = useM(api.family.reportAbsence);
   const toast = useToast();
-  const [studentId, setStudentId] = useState(students[0]?._id);
+  const [studentId, setStudentId] = useState(students[0]?.id);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [direction, setDirection] = useState<(typeof DIRECTIONS)[number][0]>("both");
@@ -49,9 +47,9 @@ export function AbsenceForm({ students, today, onDone }: Props) {
     <form onSubmit={submit} className="space-y-4">
       {students.length > 1 && (
         <Field label="¿Quién no viaja?">
-          <select className={inputClass} value={studentId} onChange={(e) => setStudentId(e.target.value as Id<"students">)}>
+          <select className={inputClass} value={studentId} onChange={(e) => setStudentId(e.target.value as string)}>
             {students.map((s) => (
-              <option key={s._id} value={s._id}>{s.name}</option>
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
         </Field>

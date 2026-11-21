@@ -5,13 +5,15 @@
   "description": "SaaS de rutas escolares para colegios privados",
   "scripts": {
     "dev": "next dev",
-    "dev:convex": "convex dev",
     "build": "next build",
     "start": "next start",
-    "type-check": "tsc --noEmit && tsc --noEmit -p convex",
+    "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "postinstall": "node scripts/copy-models.mjs",
-    "seed": "convex run seed:demo"
+    "postinstall": "node scripts/copy-assets.mjs",
+    "seed": "tsx --env-file-if-exists=.env.local scripts/db.ts seed",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=.env.local scripts/db.ts migrate",
+    "make-owner": "tsx --env-file-if-exists=.env.local scripts/db.ts owner"
   },
   "packageManager": "pnpm@10.24.0",
   "engines": {

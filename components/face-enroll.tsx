@@ -2,16 +2,14 @@
 // Registro del rostro de un estudiante, con consentimiento explícito.
 import { Camera, ImageUp, ShieldCheck, SwitchCamera } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { describeFace, imageFromFile, loadFace, openCamera } from "./face";
-import { errorText, useM } from "./session";
+import { api, errorText, useM } from "./session";
 import { Button, useToast } from "./ui";
 
 const SAMPLES = 3;
 
 type Props = {
-  studentId: Id<"students">;
+  studentId: string;
   studentName: string;
   hasFace: boolean;
   /** Quién registra: el acudiente autoriza; el colegio declara tener la autorización escrita. */

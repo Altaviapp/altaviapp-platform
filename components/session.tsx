@@ -1,69 +1,195 @@
 "use client";
-// Sesión del usuario y acceso a Convex. El token vive en el dispositivo y viaja en cada llamada.
-import { ConvexProvider, ConvexReactClient, useMutation, useQuery } from "convex/react";
-import { FunctionReference } from "convex/server";
-import { ConvexError } from "convex/values";
+// Cliente de la API y sesión. Las consultas se guardan en memoria y se repiten solas
+// cuando el servidor avisa (Server-Sent Events) que cambiaron los datos de los que dependen.
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api } from "@/convex/_generated/api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import type { Api } from "@/server/api";
+import type { Fn } from "@/server/core";
 import { localNow } from "@/lib/dates";
 import { ToastProvider } from "./ui";
 
-const KEY = "abordo.token";
-type Me = NonNullable<(typeof api.auth.me)["_returnType"]>;
+// ───────────── Referencias tipadas a las funciones del servidor ─────────────
+
+export type Ref<A = unknown, R = unknown> = { name: string; _args: A; _returnType: R };
+type ClientApi = { [M in keyof Api]: { [F in keyof Api[M]]: Api[M][F] extends Fn<infer A, infer R> ? Ref<A, R> : never } };
+
+/** `api.trips.today` es solo el nombre "trips.today" con sus tipos; no trae código del servidor. */
+export const api = new Proxy({} as ClientApi, {
+  get: (_, module: string) => new Proxy({}, { get: (_m, fn: string) => ({ name: `${module}.${fn}` }) }),
+});
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+/** Llama una función del servidor. */
+export async function callApi<A, R>(ref: Ref<A, R>, args: A): Promise<R> {
+  return (await request(ref.name, args)).data as R;
+}
+
+async function request(name: string, args: unknown): Promise<{ data: unknown; tags: string[] }> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/rpc/${name}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ args }),
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError("Sin conexión. Revisa tu internet e intenta de nuevo.", 0);
+  }
+  const body = (await res.json().catch(() => ({}))) as { data?: unknown; tags?: string[]; error?: string };
+  if (!res.ok) throw new ApiError(body.error ?? "Algo salió mal. Intenta de nuevo.", res.status);
+  return { data: body.data, tags: body.tags ?? [] };
+}
+
+// ───────────── Caché de consultas con invalidación por etiquetas ─────────────
+
+type Entry = { name: string; args: unknown; data: unknown; text?: string; tags: string[]; listeners: Set<() => void>; loading?: boolean };
+const entries = new Map<string, Entry>();
+
+async function load(key: string) {
+  const entry = entries.get(key);
+  if (!entry || entry.loading) return;
+  entry.loading = true;
+  try {
+    const { data, tags } = await request(entry.name, entry.args);
+    entry.tags = tags;
+    // Si la respuesta es idéntica se conserva el objeto anterior: nada se vuelve a pintar.
+    const text = JSON.stringify(data);
+    if (text !== entry.text) {
+      entry.text = text;
+      entry.data = data;
+      entry.listeners.forEach((notify) => notify());
+    }
+  } catch (error) {
+    // Sesión vencida: se olvida todo y la app vuelve a la entrada.
+    if (error instanceof ApiError && error.status === 401 && entry.name !== "auth.me") refresh(["*"]);
+  } finally {
+    entry.loading = false;
+  }
+}
+
+/** Repite las consultas visibles que dependen de alguna de las etiquetas ("*" = todas). */
+function refresh(tags: string[]) {
+  for (const [key, entry] of entries) {
+    if (!entry.listeners.size) continue;
+    if (tags.includes("*") || entry.tags.some((tag) => tags.includes(tag))) void load(key);
+  }
+}
+
+function subscribeEntry(key: string | null, name: string, args: unknown) {
+  return (notify: () => void) => {
+    if (!key) return () => {};
+    let entry = entries.get(key);
+    if (!entry) entries.set(key, (entry = { name, args, data: undefined, tags: [], listeners: new Set() }));
+    entry.listeners.add(notify);
+    void load(key);
+    return () => {
+      entry.listeners.delete(notify);
+      // Sin nadie mirando se descarta, para no mostrar datos viejos al volver.
+      if (!entry.listeners.size) setTimeout(() => !entry.listeners.size && entries.delete(key), 30_000);
+    };
+  };
+}
+
+/** Consulta en vivo. Con "skip" no consulta. Devuelve undefined mientras carga. */
+export function useQ<A, R>(ref: Ref<A, R>, args: A | "skip"): R | undefined {
+  const key = args === "skip" ? null : `${ref.name}:${JSON.stringify(args)}`;
+  const subscribe = useMemo(() => subscribeEntry(key, ref.name, args), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return useSyncExternalStore(
+    subscribe,
+    () => (key ? (entries.get(key)?.data as R | undefined) : undefined),
+    () => undefined,
+  );
+}
+
+/**
+ * Mutación. Al terminar se repiten las consultas visibles, sin esperar el aviso del servidor.
+ * `quiet` lo evita para llamadas muy frecuentes (la posición del bus).
+ */
+export function useM<A, R>(ref: Ref<A, R>, options?: { quiet?: boolean }) {
+  const quiet = options?.quiet;
+  return useCallback(
+    async (args: A): Promise<R> => {
+      const { data } = await request(ref.name, args);
+      if (!quiet) refresh(["*"]);
+      return data as R;
+    },
+    [ref.name, quiet],
+  );
+}
+
+/** Texto de un error para mostrar al usuario. */
+export function errorText(error: unknown): string {
+  return error instanceof ApiError ? error.message : "Algo salió mal. Revisa tu conexión e intenta de nuevo.";
+}
+
+// ───────────── Sesión ─────────────
+
+type Me = NonNullable<ClientApi["auth"]["me"]["_returnType"]>;
 type Session = {
-  token: string | null;
   me: Me | null | undefined; // undefined = cargando
-  signIn: (token: string) => void;
-  signOut: () => void;
+  /** Vuelve a leer la sesión (después de entrar con el código). */
+  reload: () => void;
+  signOut: () => Promise<void>;
 };
 
 const SessionContext = createContext<Session | null>(null);
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [client] = useState(() => new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!));
   return (
-    <ConvexProvider client={client}>
-      <SessionProvider>
-        <ToastProvider>{children}</ToastProvider>
-      </SessionProvider>
-    </ConvexProvider>
+    <SessionProvider>
+      <ToastProvider>{children}</ToastProvider>
+    </SessionProvider>
   );
 }
 
 function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null | undefined>(undefined);
-  useEffect(() => setToken(localStorage.getItem(KEY)), []);
-  const me = useQuery(api.auth.me, token ? { token } : "skip");
-  const end = useMutation(api.auth.signOut);
+  const me = useQ(api.auth.me, {});
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const userId = me?.user.id;
 
-  const signIn = useCallback((t: string) => {
-    localStorage.setItem(KEY, t);
-    setToken(t);
-  }, []);
-  const signOut = useCallback(() => {
-    const current = localStorage.getItem(KEY);
-    if (current) void end({ token: current });
-    localStorage.removeItem(KEY);
-    setToken(null);
-  }, [end]);
-
-  // Sesión vencida o revocada: se olvida el token.
+  // Canal en vivo: el servidor dice qué etiquetas cambiaron.
   useEffect(() => {
-    if (token && me === null) {
-      localStorage.removeItem(KEY);
-      setToken(null);
-    }
-  }, [token, me]);
+    if (!userId) return;
+    const source = new EventSource("/api/live");
+    let opened = false;
+    source.onmessage = (event) => refresh(JSON.parse(event.data) as string[]);
+    // Al reconectar puede haberse perdido algún aviso: se repite todo.
+    source.onopen = () => {
+      if (opened) refresh(["*"]);
+      opened = true;
+    };
+    const onVisible = () => document.visibilityState === "visible" && refresh(["*"]);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onVisible);
+    return () => {
+      source.close();
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onVisible);
+    };
+  }, [userId]);
 
   const value = useMemo<Session>(
     () => ({
-      token: token ?? null,
-      me: token === undefined ? undefined : token === null ? null : me,
-      signIn,
-      signOut,
+      me: mounted ? me : undefined,
+      reload: () => refresh(["*"]),
+      signOut: async () => {
+        await request("auth.signOut", {}).catch(() => {});
+        for (const entry of entries.values()) {
+          entry.data = entry.name === "auth.me" ? null : undefined;
+          entry.text = undefined;
+          entry.listeners.forEach((notify) => notify());
+        }
+        refresh(["*"]);
+      },
     }),
-    [token, me, signIn, signOut],
+    [me, mounted],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
@@ -72,35 +198,12 @@ export function useSession(): Session {
   return useContext(SessionContext)!;
 }
 
-type WithoutToken<F extends FunctionReference<"query" | "mutation">> = Omit<F["_args"], "token">;
-
-/** useQuery que agrega el token. Con "skip" o sin sesión no consulta. */
-export function useQ<F extends FunctionReference<"query">>(
-  fn: F,
-  args: WithoutToken<F> | "skip",
-): F["_returnType"] | undefined {
-  const { token, me } = useSession();
-  const ready = token && me && args !== "skip";
-  return useQuery(fn, (ready ? { ...args, token } : "skip") as never);
+/** Colegio de la sesión (coordinador, conductor o familia siempre tienen uno). */
+export function useSchool() {
+  return useSession().me!.school!;
 }
 
-/** useMutation que agrega el token. */
-export function useM<F extends FunctionReference<"mutation">>(fn: F) {
-  const { token } = useSession();
-  const run = useMutation(fn);
-  return useCallback(
-    (args: WithoutToken<F>): Promise<F["_returnType"]> => run({ ...args, token } as never),
-    [run, token],
-  );
-}
-
-/** Texto de un error para mostrar al usuario. */
-export function errorText(error: unknown): string {
-  if (error instanceof ConvexError && typeof error.data === "string") return error.data;
-  return "Algo salió mal. Revisa tu conexión e intenta de nuevo.";
-}
-
-export const HOME = { admin: "/admin", driver: "/conductor", parent: "/familia" } as const;
+export const HOME = { admin: "/admin", driver: "/conductor", parent: "/familia", owner: "/plataforma" } as const;
 
 /** Exige sesión con el rol dado; si no, manda a la entrada o a la vista que corresponde. */
 export function useRole(role: Me["user"]["role"]): Me | null {

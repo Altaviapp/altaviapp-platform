@@ -9,16 +9,26 @@
 #
 # Requisitos: Docker, y Tailscale conectado en esta máquina con MagicDNS y certificados
 # HTTPS activados en el panel de la tailnet (DNS → Enable HTTPS).
+# En Windows se corre dentro de WSL, con el proyecto en la carpeta de Linux (no en /mnt/c),
+# Tailscale instalado en Windows y Docker Desktop con la integración de WSL activada.
 set -eu
 cd "$(dirname "$0")/.."
 PORT=${DEV_PORT:-3000}
 COMPOSE="docker compose -f docker-compose.dev.yml"
 
-# En macOS la app de Tailscale no siempre deja el comando en el PATH.
-TS=${TAILSCALE:-tailscale}
-if ! command -v "$TS" >/dev/null 2>&1; then
+# Dónde está Tailscale: en Linux es `tailscale`; en WSL se usa el de Windows (`tailscale.exe`);
+# en macOS la app no siempre deja el comando en el PATH.
+TS=${TAILSCALE:-}
+if [ -z "$TS" ]; then
   MAC=/Applications/Tailscale.app/Contents/MacOS/Tailscale
-  if [ -x "$MAC" ]; then TS=$MAC; else echo "No encuentro Tailscale. Instálalo y conéctate: https://tailscale.com/download" >&2; exit 1; fi
+  if command -v tailscale >/dev/null 2>&1; then TS=tailscale
+  elif command -v tailscale.exe >/dev/null 2>&1; then TS=tailscale.exe
+  elif [ -x "$MAC" ]; then TS=$MAC
+  else
+    echo "No encuentro Tailscale. Instálalo y conéctate: https://tailscale.com/download" >&2
+    echo "En WSL: instala Tailscale en Windows, ábrelo e inicia sesión." >&2
+    exit 1
+  fi
 fi
 
 case "${1:-}" in
@@ -33,7 +43,7 @@ parar)
 esac
 
 # Nombre de esta máquina en la tailnet, p. ej. servidor.tu-tailnet.ts.net
-STATUS=$("$TS" status --json 2>/dev/null || true)
+STATUS=$("$TS" status --json 2>/dev/null | tr -d '\r' || true)
 if command -v jq >/dev/null 2>&1; then
   NAME=$(printf '%s' "$STATUS" | jq -r '.Self.DNSName // empty')
 elif command -v python3 >/dev/null 2>&1; then

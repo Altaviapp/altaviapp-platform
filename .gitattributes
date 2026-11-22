@@ -1,0 +1,4 @@
+# Los guiones corren en Linux (y en WSL): siempre con fin de línea LF.
+*.sh text eol=lf
+*.mjs text eol=lf
+deploy/Caddyfile text eol=lf

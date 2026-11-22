@@ -58,6 +58,8 @@ Requisitos: Docker, y Tailscale conectado en esa máquina con MagicDNS y certifi
 ./scripts/dev-tailnet.sh
 ```
 
+En Windows se corre dentro de WSL: instala Tailscale en Windows (el guion lo usa desde WSL), activa la integración de WSL en Docker Desktop y clona el proyecto en la carpeta de Linux (`~`), no en `/mnt/c`.
+
 Muestra la dirección (`https://tu-maquina.tu-tailnet.ts.net`). Ábrela en el celular, que debe estar en la misma tailnet. La primera vez tarda unos minutos instalando dependencias.
 
 En desarrollo el código de acceso no llega por correo. Se ve con:
